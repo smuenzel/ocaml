@@ -123,7 +123,6 @@ module I = struct
   let bts x y = emit (BTS (x, y))
   let call x = emit (CALL x)
   let cdq () = emit CDQ
-  let cdqe () = emit CDQE
   let cmp x y = emit (CMP (x, y))
   let cmpxchg x y = emit (CMPXCHG (x, y))
   let lock_cmpxchg x y = emit (LOCK_CMPXCHG (x, y))

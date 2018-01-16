@@ -125,7 +125,6 @@ let print_instr b = function
   | BTS (arg1, arg2) -> i2_s b "bts" arg1 arg2
   | CALL arg  -> i1_call_jmp b "call" arg
   | CDQ -> i0 b "cltd"
-  | CDQE -> i0 b "cdqe"
   | CMOV (c, arg1, arg2) -> i2 b ("cmov" ^ string_of_condition c) arg1 arg2
   | CMP (arg1, arg2) -> i2_s b "cmp" arg1 arg2
   | CMPXCHG (arg1, arg2) -> i2_s b "cmpxchg" arg1 arg2

@@ -115,7 +115,6 @@ type instruction =
   | BTS of arg * arg
   | CALL of arg
   | CDQ
-  | CDQE
   | CMOV of condition * arg * arg
   | CMP of arg * arg
   | CMPXCHG of arg * arg

@@ -116,7 +116,6 @@ module I : sig
   val bts: arg -> arg -> unit
   val call: arg -> unit
   val cdq: unit -> unit
-  val cdqe: unit -> unit
   val cmp: arg -> arg -> unit
   val cmpxchg: arg -> arg -> unit
   val lock_cmpxchg: arg -> arg -> unit
