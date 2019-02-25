@@ -339,6 +339,23 @@ let mk_not dbg cmm =
       (* 1 -> 3, 3 -> 1 *)
       Cop(Csubi, [Cconst_int (4, dbg); c], dbg)
 
+let mk_compare_ints dbg a1 a2 =
+  match (a1,a2) with
+  | Cconst_int c1, Cconst_int c2 -> begin
+      if c1 = c2 then int_const 0
+      else if c1 < c2 then int_const (-1)
+      else int_const 1
+    end
+  | Cconst_natint c1, Cconst_natint c2 -> begin
+      if c1 = c2 then int_const 0
+      else if c1 < c2 then int_const (-1)
+      else int_const 1
+    end
+  | a1, a2 -> begin
+      let op1 = Cop(Ccmpi(Cgt), [a1; a2], dbg) in
+      let op2 = Cop(Ccmpi(Clt), [a1; a2], dbg) in
+      tag_int(sub_int op1 op2 dbg) dbg
+    end
 
 let create_loop body dbg =
   let cont = next_raise_count () in
@@ -1619,6 +1636,7 @@ let simplif_primitive_32bits = function
   | Pbintcomp(Pint64, Lambda.Cgt) -> Pccall (default_prim "caml_greaterthan")
   | Pbintcomp(Pint64, Lambda.Cle) -> Pccall (default_prim "caml_lessequal")
   | Pbintcomp(Pint64, Lambda.Cge) -> Pccall (default_prim "caml_greaterequal")
+  | Pcompare_bints Pint64 -> Pccall (default_prim "caml_int64_compare")
   | Pbigarrayref(_unsafe, n, Pbigarray_int64, _layout) ->
       Pccall (default_prim ("caml_ba_get_" ^ Int.to_string n))
   | Pbigarrayset(_unsafe, n, Pbigarray_int64, _layout) ->
@@ -2203,6 +2221,7 @@ let rec transl env e =
          | Psetfield (_, _, _) | Psetfield_computed (_, _)
          | Pfloatfield _ | Psetfloatfield (_, _) | Pduprecord (_, _)
          | Praise _ | Pdivint _ | Pmodint _ | Pintcomp _ | Poffsetint _
+         | Pcompare_ints | Pcompare_floats | Pcompare_bints _
          | Poffsetref _ | Pfloatcomp _ | Parraylength _
          | Parrayrefu _ | Parraysetu _ | Parrayrefs _ | Parraysets _
          | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _) | Pnegbint _
@@ -2497,6 +2516,7 @@ and transl_prim_1 env p arg dbg =
     | Pmakeblock (_, _, _) | Psetfield (_, _, _) | Psetfield_computed (_, _)
     | Psetfloatfield (_, _) | Pduprecord (_, _) | Pccall _ | Pdivint _
     | Pmodint _ | Pintcomp _ | Pfloatcomp _ | Pmakearray (_, _)
+    | Pcompare_ints | Pcompare_floats | Pcompare_bints _
     | Pduparray (_, _) | Parrayrefu _ | Parraysetu _
     | Parrayrefs _ | Parraysets _ | Paddbint _ | Psubbint _ | Pmulbint _
     | Pdivbint _ | Pmodbint _ | Pandbint _ | Porbint _ | Pxorbint _
@@ -2602,6 +2622,23 @@ and transl_prim_2 env p arg1 arg2 dbg =
   | Pintcomp cmp ->
       tag_int(Cop(Ccmpi(transl_int_comparison cmp),
                   [transl env arg1; transl env arg2], dbg)) dbg
+  | Pcompare_ints ->
+      (* Compare directly on tagged ints *)
+      let a1 = transl env arg1 in
+      let a2 = transl env arg2 in
+      mk_compare_ints dbg a1 a2
+  | Pcompare_bints bi ->
+      let a1 = transl_unbox_int dbg env bi arg1 in
+      let a2 = transl_unbox_int dbg env bi arg2 in
+      mk_compare_ints dbg a1 a2
+  | Pcompare_floats ->
+      let a1 = transl_unbox_float dbg env arg1 in
+      let a2 = transl_unbox_float dbg env arg2 in
+      let op1 = Cop(Ccmpf(CFgt), [a1; a2], dbg) in
+      let op2 = Cop(Ccmpf(CFlt), [a1; a2], dbg) in
+      let op3 = Cop(Ccmpf(CFeq), [a1; a1], dbg) in
+      let op4 = Cop(Ccmpf(CFeq), [a2; a2], dbg) in
+      tag_int (add_int (sub_int op1 op2 dbg) (sub_int op3 op4 dbg) dbg) dbg
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
   (* Float operations *)
@@ -2933,6 +2970,7 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
   | Pbswap16 | Pint_as_pointer | Popaque | Pread_symbol _ | Pmakeblock (_, _, _)
   | Pfield _ | Psetfield (_, _, _) | Pfloatfield _ | Psetfloatfield (_, _)
   | Pduprecord (_, _) | Pccall _ | Praise _ | Pdivint _ | Pmodint _ | Pintcomp _
+  | Pcompare_ints | Pcompare_floats | Pcompare_bints _
   | Poffsetint _ | Poffsetref _ | Pfloatcomp _ | Pmakearray (_, _)
   | Pduparray (_, _) | Parraylength _ | Parrayrefu _ | Parrayrefs _
   | Pbintofint _ | Pintofbint _ | Pcvtbint (_, _) | Pnegbint _ | Paddbint _
