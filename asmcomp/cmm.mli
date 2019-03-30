@@ -219,3 +219,8 @@ val ccatch :
   -> expression
 
 val reset : unit -> unit
+
+val map_tail : (expression -> expression) -> expression -> expression
+val fold_tails : ('a -> expression -> 'a) -> 'a -> expression -> 'a
+
+val apply_tails : unit

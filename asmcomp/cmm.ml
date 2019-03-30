@@ -222,3 +222,150 @@ let ccatch (i, ids, e1, e2, dbg) =
 
 let reset () =
   label_counter := 99
+
+let rec map_tail f = function
+  | Cphantom_let(var, pde, body) ->
+      Cphantom_let(var, pde, map_tail f body)
+  | Clet(id, exp, body) ->
+      Clet(id, exp, map_tail f body)
+  | Cifthenelse(cond, dbg_cond, e1, dbg_e1, e2, dbg_e2) ->
+      Cifthenelse
+        (
+          cond, dbg_cond,
+          map_tail f e1, dbg_e1,
+          map_tail f e2, dbg_e2
+        )
+  | Csequence(e1, e2) ->
+      Csequence(e1, map_tail f e2)
+  | Cswitch(e, tbl, el, dbg') ->
+      Cswitch(e, tbl, Array.map (fun (e, dbg) -> map_tail f e, dbg) el, dbg')
+  | Ccatch(rec_flag, handlers, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_tail f handler, dbg) in
+      Ccatch(rec_flag, List.map map_h handlers, map_tail f body)
+  | Ctrywith(e1, id, e2, dbg) ->
+      Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
+  | Cop (Craise _, _, _) as cmm ->
+      cmm
+  | c ->
+      f c
+
+let rec fold_tails f init = function
+  | Cphantom_let(_var, _pde, body) ->
+      fold_tails f init body
+  | Clet(_id, _exp, body) ->
+      fold_tails f init body
+  | Cifthenelse(_cond, _dbg_cond, e1, _dbg_e1, e2, _dbg_e2) ->
+      let init = fold_tails f init e1 in
+      fold_tails f init e2
+  | Csequence(_e1, e2) ->
+      fold_tails f init e2
+  | Cswitch(_e, _tbl, el, _dbg') ->
+      Array.fold_left (fun init (exp,_dbg) -> fold_tails f init exp) init el
+  | Ccatch(_rec_flag, handlers, body) ->
+      List.fold_left
+        (fun init (_n, _ids, handler, _dbg) -> fold_tails f init handler)
+        (fold_tails f init body)
+        handlers
+  | Ctrywith(e1, _id, e2, _dbg) ->
+      let init = fold_tails f init e1 in
+      fold_tails f init e2
+  | Cop (Craise _, _, _) ->
+      init
+  | c ->
+      f init c
+
+let rec apply_tails = function
+  | Cphantom_let(var, pde, body) ->
+      let all_tails, next_apply_fun = apply_tails body in
+      let apply_fun newtail =
+        let body, cs = next_apply_fun newtail in
+        Cphantom_let(var, pde, body)
+      , cs
+      in
+      all_tails, apply_fun
+  | Clet(id, exp, body) ->
+      let all_tails, next_apply_fun = apply_tails body in
+      let apply_fun newtail =
+        let body, cs = next_apply_fun newtail in
+        Clet(id, exp, body)
+      , cs
+      in
+      all_tails, apply_fun
+  | Csequence(e1, e2) ->
+      let all_tails, next_apply_fun = apply_tails e2 in
+      let apply_fun newtail =
+        let e2, cs = next_apply_fun newtail in
+        Csequence(e1, e2)
+      , cs
+      in
+      all_tails, apply_fun
+  | Cifthenelse(cond, dbg_cond, e1, dbg_e1, e2, dbg_e2) ->
+      let all_tails_e1, next_apply_fun_e1 = apply_tails e1 in
+      let all_tails_e2, next_apply_fun_e2 = apply_tails e2 in
+      let apply_fun newtail =
+        let e1, cs = next_apply_fun_e1 newtail in
+        let e2, cs = next_apply_fun_e2 cs in
+        Cifthenelse
+          (
+            cond, dbg_cond,
+            e1, dbg_e1,
+            e2, dbg_e2
+          )
+      , cs
+      in
+      let all_tails = List.append all_tails_e1 all_tails_e2 in
+      all_tails, apply_fun
+  | Cswitch(e, tbl, el, dbg') ->
+      let sub_apply_tails
+        , sub_apply_next_apply_funs = 
+        let length = Array.length el in
+        let tls = Array.make length [] in
+        let nap = Array.make length ((fun _ -> assert false), Debuginfo.none) in
+        Array.iteri
+          (fun i (e, dbg) -> 
+             let tl, na = apply_tails e in
+             Array.unsafe_set tls i tl;
+             Array.unsafe_set nap i (na, dbg);
+          ) el;
+        tls, nap
+      in
+      let apply_fun newtail =
+        let newtail = ref newtail in
+        let el =
+          Array.map
+            (fun (af, dbg) ->
+               let e, cs = af !newtail in
+               newtail := cs;
+               e, dbg
+            ) sub_apply_next_apply_funs
+        in
+        Cswitch(e, tbl, el, dbg')
+      , !newtail
+      in
+      let all_tails = List.concat (Array.to_list sub_apply_tails) in
+      all_tails, apply_fun
+  | c ->
+      [ c ]
+    , function 
+      | c :: cs -> c, cs
+      | _ -> assert false
+      (*
+  | Ccatch(rec_flag, handlers, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_tail f handler, dbg) in
+      Ccatch(rec_flag, List.map map_h handlers, map_tail f body)
+  | Ctrywith(e1, id, e2, dbg) ->
+      Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
+  | Cop (Craise _, _, _) as cmm ->
+      cmm
+  | c ->
+      f c
+         *)
+
+let apply_tails expr =
+  let tails, mapper = apply_tails expr in
+  let mapper elist =
+    let e, remainder = mapper elist in
+    assert (remainder = [] );
+    e
+  in
+  tails, mapper

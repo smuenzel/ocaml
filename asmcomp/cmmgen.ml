@@ -34,6 +34,62 @@ module V = Backend_var
 module VP = Backend_var.With_provenance
 
 
+let rec expression_equal_no_dbg e1 e2 =
+  match e1, e2 with
+  | Cconst_int (i1,_), Cconst_int (i2, _) ->
+      i1 = i2
+  | Cconst_natint (i1,_), Cconst_natint (i2,_) ->
+      i1 = i2
+  | Cconst_float (f1,_), Cconst_float (f2,_) ->
+      f1 = f2
+  | Cconst_symbol (s1,_), Cconst_symbol (s2,_) ->
+      s1 = s2
+  | Cconst_pointer (p1,_), Cconst_pointer (p2,_) ->
+      p1 = p2
+  | Cconst_natpointer (p1,_), Cconst_natpointer (p2,_) ->
+      p1 = p2
+  | Cblockheader (b1,_), Cblockheader (b2, _) ->
+      b1 = b2
+  | Cvar v1, Cvar v2 ->
+      v1 = v2
+  | Clet _ as cl1, (Clet _ as cl2) ->
+      let fmt = Format.std_formatter in
+      Printcmm.expression fmt cl1;
+      Printcmm.expression fmt cl2;
+      false
+  | Cphantom_let _, _ | _, Cphantom_let _ ->
+      false
+  | Cassign (b1,e1), Cassign (b2,e2) ->
+      (b1 = b2) && (expression_equal_no_dbg e1 e2)
+  | Ctuple e1s, Ctuple e2s ->
+      begin try List.for_all2 expression_equal_no_dbg e1s e2s with
+      | Invalid_argument _ -> false
+      end
+  | Cop (op1, e1s, _), Cop (op2, e2s, _) ->
+      let fmt = Format.std_formatter in
+      print_endline "-----";
+      Printcmm.expression fmt e1;
+      Format.pp_print_newline fmt ();
+      print_endline "///";
+      Printcmm.expression fmt e2;
+      Format.pp_print_newline fmt ();
+      let result =
+        (op1 = op2)
+        &&
+        begin try List.for_all2 expression_equal_no_dbg e1s e2s with
+        | Invalid_argument _ -> false
+        end
+      in
+      if result then print_endline "true"
+      else print_endline "false";
+      result
+  | Csequence (s1e1, s1e2), Csequence (s2e1,s2e2) ->
+      (expression_equal_no_dbg s1e1 s2e1)
+      &&
+      (expression_equal_no_dbg s1e2 s2e2)
+  | _, _ -> false
+
+
 let instr_file = ref None 
 let log_debug kind dbg =
   match dbg with
@@ -206,11 +262,88 @@ let rec map_result ~inrec exp cont =
   | body ->
       cont inrec body
 
-(*
 type 'result shared_head =
   | Shend of 'result
-  | Shop of operation * expression list * Debuginfo.t * 'result shared_head
-   *)
+  | Shop of operation * shparams * Debuginfo.t * 'result shared_head
+and shparams =
+  | Spnone
+  | Spleft of expression
+  | Spright of expression
+
+let rec _sh_len = function
+  | Shend _ -> 0
+  | Shop (_,_,_,next) -> 1 + (_sh_len next)
+
+type ash =
+  | Asplain
+  | Asop of operation * Debuginfo.t * ash
+
+let rec ash_to_string = function
+  | Asplain -> ""
+  | Asop (op, dbg, ash) ->
+      "/" ^ (Printcmm.operation dbg op) ^ ash_to_string ash
+
+let log_ash ash name dbg =
+  match ash with
+  | Asplain -> ()
+  | ash ->
+    log_debug (name ^ (ash_to_string ash)) dbg
+
+let rec apply_shared_head ash head ash_dbg f =
+  match head with
+  | Shend result ->
+      log_ash ash "ASH" ash_dbg;
+      f result
+  | Shop (operation, params, dbg, next) ->
+      let next_ash = Asop (operation, dbg, ash) in
+      let next = apply_shared_head next_ash next ash_dbg f in
+      let arglist =
+        match params with
+        | Spnone -> [ next ]
+        | Spleft left -> [ left ; next ]
+        | Spright right -> [ next ; right ]
+      in
+      Cop (operation, arglist, dbg)
+
+let apply_shared_head head dbg f =
+  apply_shared_head Asplain head dbg f
+
+let debug_combine dbg1 _dbg2 =
+  dbg1
+
+let rec share_head h1 h2 =
+  match h1, h2 with
+  | Cop(op1, [ o1p1 ], dbg1)
+  , Cop(op2, [ o2p1 ], dbg2) ->
+      if op1 = op2
+      then begin
+        let dbg = debug_combine dbg1 dbg2 in
+        let next = share_head o1p1 o2p1 in
+        Shop(op1, Spnone, dbg, next)
+      end
+      else Shend (h1,h2)
+  | Cop(op1, [ o1p1; o1p2 ], dbg1)
+  , Cop(op2, [ o2p1; o2p2 ], dbg2) ->
+      if op1 = op2
+      then begin
+        let dbg = debug_combine dbg1 dbg2 in
+        if expression_equal_no_dbg o1p1 o2p1
+        then begin
+          let next2 =
+            share_head o1p2 o2p2
+          in
+          Shop(op1, Spleft o1p1, dbg, next2)
+        end
+        else if expression_equal_no_dbg o1p2 o2p2
+        then begin
+          let next1 = share_head o1p1 o2p1 in
+          Shop(op1, Spright o1p2, dbg, next1)
+        end
+        else Shend (h1,h2)
+      end
+      else Shend (h1,h2)
+  | _, _ ->
+      Shend (h1,h2)
 
 let rec add_const c n dbg =
   map_result ~inrec:Plain c
@@ -454,7 +587,11 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
            log_inrec inrec "Mk_if_the_else/Ifso" dbg;
            ifso
        | _ ->
-           Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+           let shared_head = share_head ifso ifnot in
+           apply_shared_head shared_head dbg
+             (fun (ifso, ifnot) ->
+                Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+             )
     )
 
 let mk_not dbg cmm =
@@ -1327,10 +1464,9 @@ let rec unbox_int bi arg dbg =
       contents
   | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body dbg)
   | Cifthenelse(cond, ifso_dbg, e1, ifnot_dbg, e2, dbg) ->
-      Cifthenelse(cond,
-        ifso_dbg, unbox_int bi e1 ifso_dbg,
-        ifnot_dbg, unbox_int bi e2 ifnot_dbg,
-        dbg)
+      mk_if_then_else dbg cond
+        ifso_dbg (unbox_int bi e1 ifso_dbg)
+        ifnot_dbg (unbox_int bi e2 ifnot_dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
   | Cswitch(e, tbl, el, dbg') ->
       Cswitch(e, tbl,
