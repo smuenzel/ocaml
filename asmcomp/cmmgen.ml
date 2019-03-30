@@ -206,150 +206,128 @@ let rec map_result ~inrec exp cont =
   | body ->
       cont inrec body
 
-let rec add_const ~inrec c n dbg =
-  if n = 0 then c
-  else match c with
-  | Clet (id, exp, body) ->
-    Clet (id, exp, add_const ~inrec:(Let inrec) body n dbg)
-  | Cphantom_let (var, defining_expr, body) ->
-    Cphantom_let (var, defining_expr, add_const ~inrec:(Phantom inrec) body n dbg)
-  | Cconst_int (x, _) when no_overflow_add x n -> Cconst_int (x + n, dbg)
-  | Cop(Caddi, [Cconst_int (x, _); c], _)
-    when no_overflow_add n x ->
-      log_inrec inrec "Add_const/Caddi1" dbg;
-      add_no_overflow n x c dbg
-  | Cop(Caddi, [c; Cconst_int (x, _)], _)
-    when no_overflow_add n x ->
-      log_inrec inrec "Add_const/Caddi2" dbg;
-      add_no_overflow n x c dbg
-  | Cop(Csubi, [Cconst_int (x, _); c], _) when no_overflow_add n x ->
-      log_inrec inrec "Add_const/Csubi1" dbg;
-      Cop(Csubi, [Cconst_int (n + x, dbg); c], dbg)
-  | Cop(Csubi, [c; Cconst_int (x, _)], _) when no_overflow_sub n x ->
-      log_inrec inrec "Add_const/Csubi2" dbg;
-      add_const ~inrec:Plain c (n - x) dbg
-  | c -> Cop(Caddi, [c; Cconst_int (n, dbg)], dbg)
+(*
+type 'result shared_head =
+  | Shend of 'result
+  | Shop of operation * expression list * Debuginfo.t * 'result shared_head
+   *)
 
-let add_const c n dbg =
-  add_const ~inrec:Plain c n dbg
+let rec add_const c n dbg =
+  map_result ~inrec:Plain c
+    (fun inrec c ->
+       if n = 0 then c
+       else match c with
+         | Cconst_int (x, _) when no_overflow_add x n -> Cconst_int (x + n, dbg)
+         | Cop(Caddi, [Cconst_int (x, _); c], _)
+           when no_overflow_add n x ->
+             log_inrec inrec "Add_const/Caddi1" dbg;
+             add_no_overflow n x c dbg
+         | Cop(Caddi, [c; Cconst_int (x, _)], _)
+           when no_overflow_add n x ->
+             log_inrec inrec "Add_const/Caddi2" dbg;
+             add_no_overflow n x c dbg
+         | Cop(Csubi, [Cconst_int (x, _); c], _) when no_overflow_add n x ->
+             log_inrec inrec "Add_const/Csubi1" dbg;
+             Cop(Csubi, [Cconst_int (n + x, dbg); c], dbg)
+         | Cop(Csubi, [c; Cconst_int (x, _)], _) when no_overflow_sub n x ->
+             log_inrec inrec "Add_const/Csubi2" dbg;
+             add_const c (n - x) dbg
+         | c -> Cop(Caddi, [c; Cconst_int (n, dbg)], dbg)
+    )
 
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
-let rec add_int ~inrec c1 c2 dbg =
-  match (c1, c2) with
-  | Clet (id, exp, body), _ ->
-    Clet (id, exp, add_int ~inrec:(Let inrec) body c2 dbg)
-  | _, Clet (id, exp, body) ->
-    Clet (id, exp, add_int ~inrec:(Let inrec) c1 body dbg)
-  | Cphantom_let (var, defining_expr, body), _ ->
-    Cphantom_let (var, defining_expr, add_int ~inrec:(Phantom inrec) body c2 dbg)
-  | _, Cphantom_let (var, defining_expr, body) ->
-    Cphantom_let (var, defining_expr, add_int ~inrec:(Phantom inrec) c1 body dbg)
-  | (Cconst_int (n, _), c) | (c, Cconst_int (n, _)) ->
-    log_inrec inrec "Add_int/Cconst_int" dbg;
-      add_const c n dbg
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
-    log_inrec inrec "Add_int/Caddi1" dbg;
-      add_const (add_int ~inrec:Plain c1 c2 dbg) n1 dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) ->
-    log_inrec inrec "Add_int/Caddi2" dbg;
-      add_const (add_int ~inrec:Plain c1 c2 dbg) n2 dbg
-  | (_, _) ->
-      Cop(Caddi, [c1; c2], dbg)
+let rec add_int c1 c2 dbg =
+  map_result ~inrec:Plain c1
+    (fun inrec c1 ->
+       map_result ~inrec c2
+         (fun inrec c2 ->
+            match (c1, c2) with
+            | (Cconst_int (n, _), c) | (c, Cconst_int (n, _)) ->
+                log_inrec inrec "Add_int/Cconst_int" dbg;
+                add_const c n dbg
+            | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
+                log_inrec inrec "Add_int/Caddi1" dbg;
+                add_const (add_int c1 c2 dbg) n1 dbg
+            | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) ->
+                log_inrec inrec "Add_int/Caddi2" dbg;
+                add_const (add_int c1 c2 dbg) n2 dbg
+            | (_, _) ->
+                Cop(Caddi, [c1; c2], dbg)
+         )
+    )
 
-let add_int c1 c2 dbg =
-  add_int ~inrec:Plain c1 c2 dbg
+let rec sub_int c1 c2 dbg =
+  map_result ~inrec:Plain c1
+    (fun inrec c1 ->
+       map_result ~inrec c2
+         (fun inrec c2 ->
+            match (c1, c2) with
+            | (c1, Cconst_int (n2, _)) when n2 <> min_int ->
+                log_inrec inrec "Sub_int/Cconst_int" dbg;
+                add_const c1 (-n2) dbg
+            | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) when n2 <> min_int ->
+                log_inrec inrec "Sub_int/Caddi1" dbg;
+                add_const (sub_int c1 c2 dbg) (-n2) dbg
+            | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
+                log_inrec inrec "Sub_int/Caddi2" dbg;
+                add_const (sub_int c1 c2 dbg) n1 dbg
+            | (c1, c2) ->
+                Cop(Csubi, [c1; c2], dbg)
+         )
+    )
 
-let rec sub_int ~inrec c1 c2 dbg =
-  match (c1, c2) with
-  | Clet (id, exp, body), _ ->
-    Clet (id, exp, sub_int ~inrec:(Let inrec) body c2 dbg)
-  | _, Clet (id, exp, body) ->
-    Clet (id, exp, sub_int ~inrec:(Let inrec) c1 body dbg)
-  | Cphantom_let (var, defining_expr, body), _ ->
-    Cphantom_let (var, defining_expr, sub_int ~inrec:(Phantom inrec) body c2 dbg)
-  | _, Cphantom_let (var, defining_expr, body) ->
-    Cphantom_let (var, defining_expr, sub_int ~inrec:(Phantom inrec) c1 body dbg)
-  | (c1, Cconst_int (n2, _)) when n2 <> min_int ->
-    log_inrec inrec "Sub_int/Cconst_int" dbg;
-      add_const c1 (-n2) dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) when n2 <> min_int ->
-    log_inrec inrec "Sub_int/Caddi1" dbg;
-      add_const (sub_int ~inrec:Plain c1 c2 dbg) (-n2) dbg
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
-    log_inrec inrec "Sub_int/Caddi2" dbg;
-      add_const (sub_int ~inrec:Plain c1 c2 dbg) n1 dbg
-  | (c1, c2) ->
-      Cop(Csubi, [c1; c2], dbg)
-
-let sub_int c1 c2 dbg =
-  sub_int ~inrec:Plain c1 c2 dbg
-
-let rec lsl_int ~inrec c1 c2 dbg =
-  match (c1, c2) with
-  | Clet (id, exp, body), _ ->
-    Clet (id, exp, lsl_int ~inrec:(Let inrec) body c2 dbg)
-  | _, Clet (id, exp, body) ->
-    Clet (id, exp, lsl_int ~inrec:(Let inrec) c1 body dbg)
-  | Cphantom_let (var, defining_expr, body), _ ->
-    Cphantom_let (var, defining_expr, lsl_int ~inrec:(Phantom inrec) body c2 dbg)
-  | _, Cphantom_let (var, defining_expr, body) ->
-    Cphantom_let (var, defining_expr, lsl_int ~inrec:(Phantom inrec) c1 body dbg)
-  | (Cop(Clsl, [c; Cconst_int (n1, _)], _), Cconst_int (n2, _))
-    when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
-    log_inrec inrec "Lsl_int/Clsl" dbg;
-      Cop(Clsl, [c; Cconst_int (n1 + n2, dbg)], dbg)
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), Cconst_int (n2, _))
-    when no_overflow_lsl n1 n2 ->
-    log_inrec inrec "Lsl_int/Caddi" dbg;
-      add_const (lsl_int ~inrec:Plain c1 c2 dbg) (n1 lsl n2) dbg
-  | (_, _) ->
-      Cop(Clsl, [c1; c2], dbg)
-
-let lsl_int c1 c2 dbg =
-  lsl_int ~inrec:Plain c1 c2 dbg
+let rec lsl_int c1 c2 dbg =
+  map_result ~inrec:Plain c1
+    (fun inrec c1 ->
+       match (c1, c2) with
+       | (Cop(Clsl, [c; Cconst_int (n1, _)], _), Cconst_int (n2, _))
+         when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
+           log_inrec inrec "Lsl_int/Clsl" dbg;
+           Cop(Clsl, [c; Cconst_int (n1 + n2, dbg)], dbg)
+       | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), Cconst_int (n2, _))
+         when no_overflow_lsl n1 n2 ->
+           log_inrec inrec "Lsl_int/Caddi" dbg;
+           add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
+       | (_, _) ->
+           Cop(Clsl, [c1; c2], dbg)
+    )
 
 let is_power2 n = n = 1 lsl Misc.log2 n
 
 and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n, dbg)) dbg
 
-let rec mul_int ~inrec c1 c2 dbg =
-  match (c1, c2) with
-  | Clet (id, exp, body), _ ->
-    Clet (id, exp, mul_int ~inrec:(Let inrec) body c2 dbg)
-  | _, Clet (id, exp, body) ->
-    Clet (id, exp, mul_int ~inrec:(Let inrec) c1 body dbg)
-  | Cphantom_let (var, defining_expr, body), _ ->
-    Cphantom_let (var, defining_expr, mul_int ~inrec:(Phantom inrec) body c2 dbg)
-  | _, Cphantom_let (var, defining_expr, body) ->
-    Cphantom_let (var, defining_expr, mul_int ~inrec:(Phantom inrec) c1 body dbg)
-  | (c, Cconst_int (0, _)) | (Cconst_int (0, _), c) ->
-    log_inrec inrec "Mul_int/Cconst_int1" dbg;
-      Csequence (c, Cconst_int (0, dbg))
-  | (c, Cconst_int (1, _)) | (Cconst_int (1, _), c) ->
-    log_inrec inrec "Mul_int/Cconst_int2" dbg;
-      c
-  | (c, Cconst_int(-1, _)) | (Cconst_int(-1, _), c) ->
-    log_inrec inrec "Mul_int/Cconst_int3" dbg;
-      sub_int (Cconst_int (0, dbg)) c dbg
-  | (c, Cconst_int (n, _)) when is_power2 n ->
-    log_inrec inrec "Mul_int/mult_pow2_1" dbg;
-    mult_power2 c n dbg
-  | (Cconst_int (n, _), c) when is_power2 n ->
-    log_inrec inrec "Mul_int/mult_pow2_2" dbg;
-    mult_power2 c n dbg
-  | (Cop(Caddi, [c; Cconst_int (n, _)], _), Cconst_int (k, _)) |
-    (Cconst_int (k, _), Cop(Caddi, [c; Cconst_int (n, _)], _))
-    when no_overflow_mul n k ->
-    log_inrec inrec "Mul_int/Add_const" dbg;
-      add_const (mul_int ~inrec:Plain c (Cconst_int (k, dbg)) dbg) (n * k) dbg
-  | (c1, c2) ->
-      Cop(Cmuli, [c1; c2], dbg)
-
-let mul_int c1 c2 dbg =
-  mul_int ~inrec:Plain c1 c2 dbg
-
+let rec mul_int c1 c2 dbg =
+  map_result ~inrec:Plain c1
+    (fun inrec c1 ->
+       map_result ~inrec c2
+         (fun inrec c2 ->
+            match (c1, c2) with
+            | (c, Cconst_int (0, _)) | (Cconst_int (0, _), c) ->
+                log_inrec inrec "Mul_int/Cconst_int1" dbg;
+                Csequence (c, Cconst_int (0, dbg))
+            | (c, Cconst_int (1, _)) | (Cconst_int (1, _), c) ->
+                log_inrec inrec "Mul_int/Cconst_int2" dbg;
+                c
+            | (c, Cconst_int(-1, _)) | (Cconst_int(-1, _), c) ->
+                log_inrec inrec "Mul_int/Cconst_int3" dbg;
+                sub_int (Cconst_int (0, dbg)) c dbg
+            | (c, Cconst_int (n, _)) when is_power2 n ->
+                log_inrec inrec "Mul_int/mult_pow2_1" dbg;
+                mult_power2 c n dbg
+            | (Cconst_int (n, _), c) when is_power2 n ->
+                log_inrec inrec "Mul_int/mult_pow2_2" dbg;
+                mult_power2 c n dbg
+            | (Cop(Caddi, [c; Cconst_int (n, _)], _), Cconst_int (k, _)) |
+              (Cconst_int (k, _), Cop(Caddi, [c; Cconst_int (n, _)], _))
+              when no_overflow_mul n k ->
+                log_inrec inrec "Mul_int/Add_const" dbg;
+                add_const (mul_int c (Cconst_int (k, dbg)) dbg) (n * k) dbg
+            | (c1, c2) ->
+                Cop(Cmuli, [c1; c2], dbg)
+         )
+    )
 
 let ignore_low_bit_int body dbg = 
   map_result ~inrec:Plain body
