@@ -175,30 +175,36 @@ type plet =
   | Plain
   | Let of plet
   | Phantom of plet
+  | Seq of plet
 
 let rec plet_to_string = function
   | Plain -> ""
   | Let x -> "/Let" ^ plet_to_string x
   | Phantom x -> "/Phantom" ^ plet_to_string x
+  | Seq x -> "/Seq" ^ plet_to_string x
 
 let log_inrec plet name dbg =
   match plet with
   | Plain -> ()
-  | Let _ | Phantom _ ->
+  | Let _ | Phantom _ | Seq _ ->
     log_debug (name ^ (plet_to_string plet)) dbg
 
-let rec inspect_result ~inrec exp cont =
+let rec map_result ~inrec exp cont =
   match exp with
   | Clet (id, exp, body) ->
-    let inrec = Let inrec in
-    let result = inspect_result ~inrec body cont in
-    Clet (id, exp, result)
+      let inrec = Let inrec in
+      let result = map_result ~inrec body cont in
+      Clet (id, exp, result)
   | Cphantom_let (var, defining_expr, body) ->
-    let inrec = Phantom inrec in
-    let result = inspect_result ~inrec body cont in
-    Cphantom_let (var, defining_expr, result)
+      let inrec = Phantom inrec in
+      let result = map_result ~inrec body cont in
+      Cphantom_let (var, defining_expr, result)
+  | Csequence (s1, s2) ->
+      let inrec = Seq inrec in
+      let result = map_result ~inrec s2 cont in
+      Csequence (s1, result)
   | body ->
-    cont inrec body
+      cont inrec body
 
 let rec add_const ~inrec c n dbg =
   if n = 0 then c
@@ -346,7 +352,7 @@ let mul_int c1 c2 dbg =
 
 
 let ignore_low_bit_int body dbg = 
-  inspect_result ~inrec:Plain body
+  map_result ~inrec:Plain body
     (fun inrec body ->
       match body with
       | Cop(Caddi,
@@ -362,7 +368,7 @@ let ignore_low_bit_int body dbg =
     )
 
 let lsr_int c1 c2 dbg =
-  inspect_result ~inrec:Plain c2
+  map_result ~inrec:Plain c2
     (fun inrec c2 ->
       match c2 with
       | Cconst_int (0, _) ->
@@ -376,7 +382,7 @@ let lsr_int c1 c2 dbg =
     )
 
 let asr_int c1 c2 dbg =
-  inspect_result ~inrec:Plain c2
+  map_result ~inrec:Plain c2
     (fun inrec c2 ->
       match c2 with
       | Cconst_int (0, _) ->
@@ -390,7 +396,7 @@ let asr_int c1 c2 dbg =
     )
 
 let tag_int i dbg =
-  inspect_result ~inrec:Plain i
+  map_result ~inrec:Plain i
     (fun inrec i ->
       match i with
       | Cconst_int (n, _) ->
@@ -416,7 +422,7 @@ let force_tag_int i dbg =
       Cop(Cor, [lsl_int c (Cconst_int (1, dbg)) dbg; Cconst_int (1, dbg)], dbg)
 
 let untag_int i dbg =
-  inspect_result ~inrec:Plain i
+  map_result ~inrec:Plain i
     (fun inrec i ->
        match i with
        | Cconst_int (n, _) -> 
@@ -462,13 +468,13 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
     Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
 
 let mk_not dbg cmm =
-  inspect_result ~inrec:Plain cmm
+  map_result ~inrec:Plain cmm
     (fun inrec cmm ->
        match cmm with
        | Cop(Caddi,
              [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
            begin
-             inspect_result ~inrec c
+             map_result ~inrec c
                (fun inrec c ->
                   match c with
                   | Cop(Ccmpi cmp, [c1; c2], dbg'') ->
@@ -607,9 +613,9 @@ let raise_symbol dbg symb =
   raise_regular dbg (Cconst_symbol (symb, dbg))
 
 let rec div_int c1 c2 is_safe dbg =
-  inspect_result ~inrec:Plain c1
+  map_result ~inrec:Plain c1
     (fun inrec c1 ->
-       inspect_result ~inrec c2
+       map_result ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
             | (c1, Cconst_int (0, _)) ->
@@ -746,7 +752,7 @@ let safe_mod_bi is_safe =
 (* Bool *)
 
 let test_bool dbg cmm =
-  inspect_result ~inrec:Plain cmm
+  map_result ~inrec:Plain cmm
     (fun inrec cmm ->
        match cmm with
        | Cop(Caddi, [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) ->
