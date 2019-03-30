@@ -376,28 +376,33 @@ let asr_int c1 c2 dbg =
 let tag_int i dbg =
   map_result ~inrec:Plain i
     (fun inrec i ->
-      match i with
-      | Cconst_int (n, _) ->
-        log_inrec inrec "Tag_int/Cconst_int1" dbg;
-        int_const dbg n
-      | Cop(Casr, [c; Cconst_int (n, _)], _) when n > 0 ->
-        log_inrec inrec "Tag_int/Casr" dbg;
-        Cop(Cor,
-            [asr_int c (Cconst_int (n - 1, dbg)) dbg; Cconst_int (1, dbg)],
-            dbg)
-      | c ->
-        incr_int (lsl_int c (Cconst_int (1, dbg)) dbg) dbg
+       match i with
+       | Cconst_int (n, _) ->
+           log_inrec inrec "Tag_int/Cconst_int1" dbg;
+           int_const dbg n
+       | Cop(Casr, [c; Cconst_int (n, _)], _) when n > 0 ->
+           log_inrec inrec "Tag_int/Casr" dbg;
+           Cop(Cor,
+               [asr_int c (Cconst_int (n - 1, dbg)) dbg; Cconst_int (1, dbg)],
+               dbg)
+       | c ->
+           incr_int (lsl_int c (Cconst_int (1, dbg)) dbg) dbg
     )
 
 let force_tag_int i dbg =
-  match i with
-    Cconst_int (n, _) ->
-      int_const dbg n
-  | Cop(Casr, [c; Cconst_int (n, _)], dbg') when n > 0 ->
-      Cop(Cor, [asr_int c (Cconst_int (n - 1, dbg)) dbg'; Cconst_int (1, dbg)],
-        dbg)
-  | c ->
-      Cop(Cor, [lsl_int c (Cconst_int (1, dbg)) dbg; Cconst_int (1, dbg)], dbg)
+  map_result ~inrec:Plain i
+    (fun inrec i ->
+       match i with
+       | Cconst_int (n, _) ->
+           log_inrec inrec "Force_tag_int/Cconst_int1" dbg;
+           int_const dbg n
+       | Cop(Casr, [c; Cconst_int (n, _)], dbg') when n > 0 ->
+           log_inrec inrec "Force_tag_int/Casr" dbg;
+           Cop(Cor, [asr_int c (Cconst_int (n - 1, dbg)) dbg'; Cconst_int (1, dbg)],
+               dbg)
+       | c ->
+           Cop(Cor, [lsl_int c (Cconst_int (1, dbg)) dbg; Cconst_int (1, dbg)], dbg)
+    )
 
 let untag_int i dbg =
   map_result ~inrec:Plain i
@@ -439,11 +444,18 @@ let invert_then_else = function
   | Unknown -> Unknown
 
 let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
-  match cond with
-  | Cconst_int (0, _) -> ifnot
-  | Cconst_int (1, _) -> ifso
-  | _ ->
-    Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+  map_result ~inrec:Plain cond
+    (fun inrec cond ->
+       match cond with
+       | Cconst_int (0, _) ->
+           log_inrec inrec "Mk_if_the_else/Ifnot" dbg;
+           ifnot
+       | Cconst_int (1, _) ->
+           log_inrec inrec "Mk_if_the_else/Ifso" dbg;
+           ifso
+       | _ ->
+           Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+    )
 
 let mk_not dbg cmm =
   map_result ~inrec:Plain cmm
@@ -658,44 +670,54 @@ let rec div_int c1 c2 is_safe dbg =
          ))
 
 let mod_int c1 c2 is_safe dbg =
-  match (c1, c2) with
-    (c1, Cconst_int (0, _)) ->
-      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
-  | (c1, Cconst_int ((1 | (-1)), _)) ->
-      Csequence(c1, Cconst_int (0, dbg))
-  | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
-      Cconst_int (n1 mod n2, dbg)
-  | (c1, (Cconst_int (n, _) as c2)) when n <> min_int ->
-      let l = Misc.log2 n in
-      if n = 1 lsl l then
-        (* Algorithm:
-              t = shift-right-signed(c1, l - 1)
-              t = shift-right(t, W - l)
-              t = c1 + t
-              t = bit-and(t, -n)
-              res = c1 - t
-         *)
-        bind "dividend" c1 (fun c1 ->
-          let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
-          let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
-          let t = add_int c1 t dbg in
-          let t = Cop(Cand, [t; Cconst_int (-n, dbg)], dbg) in
-          sub_int c1 t dbg)
-      else
-        bind "dividend" c1 (fun c1 ->
-          sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
-  | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
-      (* Flambda already generates that test *)
-      Cop(Cmodi, [c1; c2], dbg)
-  | (c1, c2) ->
-      bind "divisor" c2 (fun c2 ->
-        bind "dividend" c1 (fun c1 ->
-          Cifthenelse(c2,
-                      dbg,
-                      Cop(Cmodi, [c1; c2], dbg),
-                      dbg,
-                      raise_symbol dbg "caml_exn_Division_by_zero",
-                      dbg)))
+  map_result ~inrec:Plain c1
+    (fun inrec c1 ->
+       map_result ~inrec c2
+         (fun inrec c2 ->
+            match (c1, c2) with
+              (c1, Cconst_int (0, _)) ->
+                log_inrec inrec "Mod_int/Cconst_int1" dbg;
+                Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
+            | (c1, Cconst_int ((1 | (-1)), _)) ->
+                log_inrec inrec "Mod_int/Cconst_int2" dbg;
+                Csequence(c1, Cconst_int (0, dbg))
+            | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
+                log_inrec inrec "Mod_int/Cconst_int3" dbg;
+                Cconst_int (n1 mod n2, dbg)
+            | (c1, (Cconst_int (n, _) as c2)) when n <> min_int ->
+                log_inrec inrec "Mod_int/Cconst_int4" dbg;
+                let l = Misc.log2 n in
+                if n = 1 lsl l then
+                  (* Algorithm:
+                        t = shift-right-signed(c1, l - 1)
+                        t = shift-right(t, W - l)
+                        t = c1 + t
+                        t = bit-and(t, -n)
+                        res = c1 - t
+                  *)
+                  bind "dividend" c1 (fun c1 ->
+                      let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
+                      let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
+                      let t = add_int c1 t dbg in
+                      let t = Cop(Cand, [t; Cconst_int (-n, dbg)], dbg) in
+                      sub_int c1 t dbg)
+                else
+                  bind "dividend" c1 (fun c1 ->
+                      sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
+            | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
+                (* Flambda already generates that test *)
+                Cop(Cmodi, [c1; c2], dbg)
+            | (c1, c2) ->
+                bind "divisor" c2 (fun c2 ->
+                    bind "dividend" c1 (fun c1 ->
+                        Cifthenelse(c2,
+                                    dbg,
+                                    Cop(Cmodi, [c1; c2], dbg),
+                                    dbg,
+                                    raise_symbol dbg "caml_exn_Division_by_zero",
+                                    dbg)))
+         )
+    )
 
 (* Division or modulo on boxed integers.  The overflow case min_int / -1
    can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
@@ -906,31 +928,39 @@ let lsl_const c n dbg =
    (this is the case for bigarray indexing), we give type Int instead. *)
 
 let array_indexing ?typ log2size ptr ofs dbg =
-  let add =
-    match typ with
-    | None | Some Addr -> Cadda
-    | Some Int -> Caddi
-    | _ -> assert false in
-  match ofs with
-  | Cconst_int (n, _) ->
-      let i = n asr 1 in
-      if i = 0 then ptr
-      else Cop(add, [ptr; Cconst_int(i lsl log2size, dbg)], dbg)
-  | Cop(Caddi,
-        [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
-      Cop(add, [ptr; lsl_const c log2size dbg], dbg')
-  | Cop(Caddi, [c; Cconst_int (n, _)], dbg') when log2size = 0 ->
-      Cop(add,
-        [Cop(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1, dbg)],
-        dbg')
-  | Cop(Caddi, [c; Cconst_int (n, _)], _) ->
-      Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
-                    Cconst_int((n-1) lsl (log2size - 1), dbg)], dbg)
-  | _ when log2size = 0 ->
-      Cop(add, [ptr; untag_int ofs dbg], dbg)
-  | _ ->
-      Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg);
-                    Cconst_int((-1) lsl (log2size - 1), dbg)], dbg)
+  map_result ~inrec:Plain ofs
+    (fun inrec ofs ->
+       let add =
+         match typ with
+         | None | Some Addr -> Cadda
+         | Some Int -> Caddi
+         | _ -> assert false in
+       match ofs with
+       | Cconst_int (n, _) ->
+
+           log_inrec inrec "Array_indexing/Cconst_int" dbg;
+           let i = n asr 1 in
+           if i = 0 then ptr
+           else Cop(add, [ptr; Cconst_int(i lsl log2size, dbg)], dbg)
+       | Cop(Caddi,
+             [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
+           log_inrec inrec "Array_indexing/Caddi1" dbg;
+           Cop(add, [ptr; lsl_const c log2size dbg], dbg')
+       | Cop(Caddi, [c; Cconst_int (n, _)], dbg') when log2size = 0 ->
+           log_inrec inrec "Array_indexing/Caddi2" dbg;
+           Cop(add,
+               [Cop(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1, dbg)],
+               dbg')
+       | Cop(Caddi, [c; Cconst_int (n, _)], _) ->
+           log_inrec inrec "Array_indexing/Caddi3" dbg;
+           Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
+                     Cconst_int((n-1) lsl (log2size - 1), dbg)], dbg)
+       | _ when log2size = 0 ->
+           Cop(add, [ptr; untag_int ofs dbg], dbg)
+       | _ ->
+           Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg);
+                     Cconst_int((-1) lsl (log2size - 1), dbg)], dbg)
+    )
 
 let addr_array_ref arr ofs dbg =
   Cop(Cload (Word_val, Mutable),
