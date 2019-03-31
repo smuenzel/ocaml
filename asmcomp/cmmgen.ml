@@ -52,10 +52,8 @@ let rec expression_equal_no_dbg e1 e2 =
       b1 = b2
   | Cvar v1, Cvar v2 ->
       v1 = v2
-  | Clet _ as cl1, (Clet _ as cl2) ->
-      let fmt = Format.std_formatter in
-      Printcmm.expression fmt cl1;
-      Printcmm.expression fmt cl2;
+  | Clet _, Clet _ ->
+      (* TODO: extract shared things??? *)
       false
   | Cphantom_let _, _ | _, Cphantom_let _ ->
       false
@@ -82,19 +80,23 @@ let rec expression_equal_no_dbg e1 e2 =
 
 
 let instr_file = ref None 
+let enable_log_debug = true
 
 let log_debug kind dinfo_file dinfo_line =
-  let instr_file =
-    match !instr_file with
-    | None ->
-        let file_suffix = Hashtbl.hash dinfo_file in
-        let filename = Printf.sprintf "/tmp/bool_instr_%i" file_suffix in
-        let c = open_out_gen [ Open_append; Open_creat; Open_text ] 0o666 filename in
-        instr_file := Some c;
-        c
-    | Some file -> file
-  in
-  Printf.fprintf instr_file "%s: %s %i\n" kind dinfo_file dinfo_line
+  if enable_log_debug
+  then begin
+    let instr_file =
+      match !instr_file with
+      | None ->
+          let file_suffix = Hashtbl.hash dinfo_file in
+          let filename = Printf.sprintf "/tmp/bool_instr_%i" file_suffix in
+          let c = open_out_gen [ Open_append; Open_creat; Open_text ] 0o666 filename in
+          instr_file := Some c;
+          c
+      | Some file -> file
+    in
+    Printf.fprintf instr_file "%s: %s %i\n" kind dinfo_file dinfo_line
+  end
 
 let log_debug kind dbg =
   match dbg with
@@ -372,6 +374,7 @@ let rec share_head2 h1 h2 =
   | Cop(op1, [ o1p1 ], dbg1)
   , Cop(op2, [ o2p1 ], dbg2) ->
       if op1 = op2
+      && (match op1 with | Cload _ -> false | _ -> true)
       then begin
         let dbg = debug_combine dbg1 dbg2 in
         let next = share_head2 o1p1 o2p1 in
@@ -405,6 +408,8 @@ let share_head2 h1 h2 =
   | Shend _ -> None
   | other -> Some other
 
+let debug_shared_head = false
+
 let extract_shared_head_and_apply_tails from ~default tails inject_new_tails dbg =
   match tails with
   | [] -> default tails
@@ -427,25 +432,28 @@ let extract_shared_head_and_apply_tails from ~default tails inject_new_tails dbg
             let result =
               apply_shared_head sh dbg inject_new_tails
             in
-            Printf.eprintf  "SHARE HEADER %s %i\n" from (sh_len sh);
-            begin match dbg with
-            | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
-                Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
-            | _ -> ()
-            end;
+            if debug_shared_head
+            then begin
+              Printf.eprintf  "SHARE HEADER %s %i\n" from (sh_len sh);
+              begin match dbg with
+              | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
+                  Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
+              | _ -> ()
+              end;
             (*
             Printcmm.expression Format.str_formatter expr ;
             Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
                *)
-            List.iteri
-              (fun i exp ->
-                 Printcmm.expression Format.str_formatter exp ;
-                 Printf.eprintf "old%i=\n%s\n" i (Format.flush_str_formatter ()) ;
-              )
-              tails
-            ;
-            Printcmm.expression Format.str_formatter result;
-            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+              List.iteri
+                (fun i exp ->
+                   Printcmm.expression Format.str_formatter exp ;
+                   Printf.eprintf "old%i=\n%s\n" i (Format.flush_str_formatter ()) ;
+                )
+                tails
+              ;
+              Printcmm.expression Format.str_formatter result;
+              Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+            end;
             result
           with 
           | Exit -> default tails
