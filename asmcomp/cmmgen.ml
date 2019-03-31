@@ -308,19 +308,24 @@ let rec unshare_heads head =
         )
         nexts
 
-let rec apply_shared_head ash head ash_dbg f =
+let rec apply_shared_head ?from ash head ash_dbg f =
   match head with
   | Shend result ->
-      log_ash ash "ASH" ash_dbg;
+      let str =
+        match from with
+        | None -> "ASH"
+        | Some from -> "ASH" ^ from
+      in
+      log_ash ash str ash_dbg;
       f result
   | Shop (operation, params, dbg, next) ->
       let next_ash = Asop (operation, (sparity params), dbg, ash) in
-      let next = apply_shared_head next_ash next ash_dbg f in
+      let next = apply_shared_head ?from next_ash next ash_dbg f in
       let arglist = params_to_arglist params next in
       Cop (operation, arglist, dbg)
 
-let apply_shared_head head dbg f =
-  apply_shared_head Asplain head dbg f
+let apply_shared_head ?from head dbg f =
+  apply_shared_head ?from Asplain head dbg f
 
 let debug_combine dbg1 dbg2 =
   List.append dbg1 dbg2
@@ -510,7 +515,7 @@ let extract_shared_head_and_apply_tails from ~default tails inject_new_tails dbg
                 tlrest
             in
             let result =
-              apply_shared_head sh dbg inject_new_tails
+              apply_shared_head ~from sh dbg inject_new_tails
             in
             if debug_shared_head
             then begin
@@ -861,6 +866,7 @@ let create_loop body dbg =
   let call_cont = Cexit (cont, []) in
   let body = Csequence (body, call_cont) in
   Ccatch (Recursive, [cont, [], body, dbg], call_cont)
+  |> extract_shared_head "Loop" dbg
 
 (* Turning integer divisions into multiply-high then shift.
    The [division_parameters] function is used in module Emit for
@@ -2790,6 +2796,7 @@ let rec transl env e =
   | Utrywith(body, exn, handler) ->
       let dbg = Debuginfo.none in
       Ctrywith(transl env body, exn, transl env handler, dbg)
+      |> extract_shared_head "Trywith" dbg
   | Uifthenelse(cond, ifso, ifnot) ->
       let ifso_dbg = Debuginfo.none in
       let ifnot_dbg = Debuginfo.none in
