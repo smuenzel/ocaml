@@ -117,6 +117,8 @@ module Stdlib : sig
         the [n] first elements of [l] and [after] the remaining ones.
         If [l] has less than [n] elements, raises Invalid_argument. *)
 
+    val split3_at : int -> 'a t -> 'a t * 'a * 'a t
+
     val is_prefix
        : equal:('a -> 'a -> bool)
       -> 'a list

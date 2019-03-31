@@ -250,6 +250,25 @@ and shparams =
   | Spnone
   | Spleft of expression
   | Spright of expression
+  | Spmult of 
+      { n_total : int
+      ; n_left : int
+      ; lefts : expression list
+      ; rights : expression list
+      }
+
+let sparity = function
+  | Spnone -> 1
+  | Spleft _ | Spright _ -> 2
+  | Spmult { n_total ; _} -> n_total
+
+let params_to_arglist params next =
+  match params with
+  | Spnone -> [ next ]
+  | Spleft left -> [ left ; next ]
+  | Spright right -> [ next ; right ]
+  | Spmult { lefts;  rights; _} ->
+      List.concat [ lefts; [ next ]; rights ]
 
 let rec sh_len = function
   | Shend _ -> 0
@@ -259,12 +278,16 @@ let _ = sh_len
 
 type ash =
   | Asplain
-  | Asop of operation * Debuginfo.t * ash
+  | Asop of operation * int *Debuginfo.t * ash
 
 let rec ash_to_string = function
   | Asplain -> ""
-  | Asop (op, dbg, ash) ->
-      "/" ^ (Printcmm.operation dbg op) ^ ash_to_string ash
+  | Asop (op, arity, dbg, ash) ->
+      Printf.sprintf 
+        "/%s(%i)%s"
+        (Printcmm.operation dbg op)
+        arity
+        (ash_to_string ash)
 
 let log_ash ash name dbg =
   match ash with
@@ -280,12 +303,7 @@ let rec unshare_heads head =
       let nexts = unshare_heads next in
       List.map 
         (fun next ->
-           let arglist =
-             match params with
-             | Spnone -> [ next ]
-             | Spleft left -> [ left ; next ]
-             | Spright right -> [ next ; right ]
-           in
+           let arglist = params_to_arglist params next in
            Cop (operation, arglist, dbg)
         )
         nexts
@@ -296,14 +314,9 @@ let rec apply_shared_head ash head ash_dbg f =
       log_ash ash "ASH" ash_dbg;
       f result
   | Shop (operation, params, dbg, next) ->
-      let next_ash = Asop (operation, dbg, ash) in
+      let next_ash = Asop (operation, (sparity params), dbg, ash) in
       let next = apply_shared_head next_ash next ash_dbg f in
-      let arglist =
-        match params with
-        | Spnone -> [ next ]
-        | Spleft left -> [ left ; next ]
-        | Spright right -> [ next ; right ]
-      in
+      let arglist = params_to_arglist params next in
       Cop (operation, arglist, dbg)
 
 let apply_shared_head head dbg f =
@@ -360,6 +373,32 @@ let rec share_head_extend sh h =
         let unshared_heads = unshare_heads next in
         Shend (List.append unshared_heads [h])
       end
+  | Shop(operation, (Spmult { n_total; n_left; lefts; rights } as param) , dbg, next)
+  , Cop(op2, o2p, dbg2) ->
+      if operation = op2
+      && (0 = List.compare_length_with o2p n_total)
+      then begin
+        let oleft,omid,oright =
+          Misc.Stdlib.List.split3_at n_left o2p 
+        in
+        if List.for_all2 expression_equal_no_dbg lefts oleft
+        && List.for_all2 expression_equal_no_dbg rights oright
+        then begin
+          let dbg = debug_combine dbg dbg2 in
+          let next =
+            share_head_extend next omid
+          in
+          Shop (operation, param , dbg, next) 
+        end
+        else begin
+          let unshared_heads = unshare_heads next in
+          Shend (List.append unshared_heads [h])
+        end
+      end 
+      else begin
+        let unshared_heads = unshare_heads next in
+        Shend (List.append unshared_heads [h])
+      end
   | sh, h ->
       let unshared_heads = unshare_heads sh in
       Shend (List.append unshared_heads [h])
@@ -398,6 +437,47 @@ let rec share_head2 h1 h2 =
           Shop(op1, Spright o1p2, dbg, next1)
         end
         else Shend [h1;h2]
+      end
+      else Shend [h1;h2]
+  | Cop(op1, o1p, dbg1)
+  , Cop(op2, o2p, dbg2) ->
+      if op1 = op2
+      then begin
+        let dbg = debug_combine dbg1 dbg2 in
+        try 
+          let lefts, (mid1,mid2), rights =
+            List.fold_left2 
+              (fun acc o1p o2p ->
+                 if expression_equal_no_dbg o1p o2p 
+                 then begin
+                   match acc with
+                   | `Left acc ->
+                       `Left (o1p :: acc)
+                   | `Right (lefts, mid, rights) ->
+                       `Right (lefts, mid, o1p :: rights)
+                 end
+                 else begin
+                   match acc with
+                   | `Left acc ->
+                       `Right (List.rev acc, (o1p, o2p), [])
+                   | `Right _ ->
+                       raise_notrace Exit
+                 end
+              )
+              (`Left [])
+              o1p o2p 
+            |> function
+            | `Left _ -> raise_notrace Exit
+            | `Right (lefts, mids, rev_rights) ->
+                lefts, mids, List.rev rev_rights
+          in
+          let n_total = List.length o1p in
+          let n_left = List.length lefts in
+          let next2 = share_head2 mid1 mid2 in
+          Shop (op1, Spmult {n_total; n_left; lefts; rights}, dbg, next2)
+        with
+        | Invalid_argument _
+        | Exit -> Shend [h1;h2]
       end
       else Shend [h1;h2]
   | _, _ ->

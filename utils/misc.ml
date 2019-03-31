@@ -151,6 +151,22 @@ module Stdlib = struct
       in
       aux n [] l
 
+    let split3_at n l =
+      let rec aux n acc l =
+        if n = 0
+        then begin
+          match l with
+          | [] -> raise (Invalid_argument "split_at")
+          | t :: q ->
+              List.rev acc, t, q
+        end
+        else
+          match l with
+          | [] -> raise (Invalid_argument "split_at")
+          | t::q -> aux (n-1) (t::acc) q
+      in
+      aux n [] l
+
     let rec is_prefix ~equal t ~of_ =
       match t, of_ with
       | [], [] -> true
