@@ -405,55 +405,13 @@ let share_head2 h1 h2 =
   | Shend _ -> None
   | other -> Some other
 
-let extract_shared_head dbg expr =
-  let tails, inject_new_tails = apply_tails expr in
+let extract_shared_head_and_apply_tails from ~default tails inject_new_tails dbg =
   match tails with
-  | [] -> expr
-  | [tl] ->
-      if tl == expr
-      then expr
-      else begin
-        match tl with
-        | Cop(Calloc, [Cblockheader _ as blkhead; c], dbg_alloc) as old when false ->
-            let as_new =
-              Cop(Calloc, [blkhead; inject_new_tails [c]], dbg_alloc)
-            in
-            Printf.eprintf  "SHARE HEADER\n" ;
-            Printcmm.expression Format.str_formatter expr ;
-            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter old ;
-            Printf.eprintf "old=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter as_new;
-            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-            expr
-        | _ -> expr
-      end
-  | [tl1;tl2] ->
-      begin match share_head2 tl1 tl2 with
-      | None -> expr
-      | Some sh ->
-          let result =
-            apply_shared_head sh dbg inject_new_tails
-          in
-          Printf.eprintf  "SHARE HEADER %i\n" (sh_len sh);
-          begin match dbg with
-          | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
-              Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
-          | _ -> ()
-          end;
-          Printcmm.expression Format.str_formatter expr ;
-          Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-          Printcmm.expression Format.str_formatter tl1 ;
-          Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
-          Printcmm.expression Format.str_formatter tl2 ;
-          Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
-          Printcmm.expression Format.str_formatter result;
-          Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-          result
-      end
+  | [] -> default tails
+  | _ :: [] -> default tails
   | tl1 :: tl2 :: tlrest ->
       begin match share_head2 tl1 tl2 with
-      | None -> expr
+      | None -> default tails
       | Some sh ->
           try
             let sh =
@@ -469,14 +427,16 @@ let extract_shared_head dbg expr =
             let result =
               apply_shared_head sh dbg inject_new_tails
             in
-            Printf.eprintf  "SHARE HEADER %i\n" (sh_len sh);
+            Printf.eprintf  "SHARE HEADER %s %i\n" from (sh_len sh);
             begin match dbg with
             | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
                 Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
             | _ -> ()
             end;
+            (*
             Printcmm.expression Format.str_formatter expr ;
             Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+               *)
             List.iteri
               (fun i exp ->
                  Printcmm.expression Format.str_formatter exp ;
@@ -488,8 +448,15 @@ let extract_shared_head dbg expr =
             Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
             result
           with 
-          | Exit -> expr
+          | Exit -> default tails
       end
+
+
+let extract_shared_head from dbg expr =
+  let tails, inject_new_tails = apply_tails expr in
+  extract_shared_head_and_apply_tails
+    from
+    ~default:(fun _ -> expr) tails inject_new_tails dbg
 
 let rec map_result dbg ~inrec exp cont =
   match exp with
@@ -509,8 +476,8 @@ let rec map_result dbg ~inrec exp cont =
       cont inrec body
 
 let map_result dbg ~inrec exp cont =
-  map_result dbg ~inrec (extract_shared_head dbg exp) cont
-  |> extract_shared_head dbg
+  map_result dbg ~inrec (extract_shared_head "Map_in" dbg exp) cont
+  |> extract_shared_head "Map_out" dbg
 
 let _ = share_head2
 let _ = apply_shared_head
@@ -758,7 +725,7 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
            ifso
        | _ ->
            Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
-           |> extract_shared_head dbg
+           |> extract_shared_head "ITE" dbg
     )
 
 let mk_not dbg cmm =
@@ -2141,33 +2108,48 @@ let transl_isout h arg dbg = tag_int (Cop(Ccmpa Clt, [h ; arg], dbg)) dbg
 
 (* Build an actual switch (ie jump table) *)
 
-let make_switch arg cases actions dbg =
-  let is_const = function
-    (* Constant integers loaded from a table should end in 1,
-       so that Cload never produces untagged integers *)
-    | Cconst_int (n, _)
-    | Cconst_pointer (n, _) -> (n land 1) = 1
-    | Cconst_natint (n, _)
-    | Cconst_natpointer (n, _) -> (Nativeint.(to_int (logand n one) = 1))
-    | Cconst_symbol _ -> true
-    | _ -> false in
-  if Array.for_all (fun (expr, _dbg) -> is_const expr) actions then
-    let to_data_item (expr, _dbg) =
-      match expr with
+let make_switch arg cases orig_actions dbg =
+  let aux actions =
+    let actions = Array.of_list actions in
+    let actions =
+      Array.mapi
+        (fun i exp -> exp, snd orig_actions.(i))
+        actions
+    in
+    let is_const = function
+      (* Constant integers loaded from a table should end in 1,
+         so that Cload never produces untagged integers *)
       | Cconst_int (n, _)
-      | Cconst_pointer (n, _) -> Cint (Nativeint.of_int n)
+      | Cconst_pointer (n, _) -> (n land 1) = 1
       | Cconst_natint (n, _)
-      | Cconst_natpointer (n, _) -> Cint n
-      | Cconst_symbol (s, _) -> Csymbol_address s
-      | _ -> assert false in
-    let const_actions = Array.map to_data_item actions in
-    let table = Compilenv.new_const_symbol () in
-    Cmmgen_state.add_constant table (Const_table (Local,
-        Array.to_list (Array.map (fun act ->
-          const_actions.(act)) cases)));
-    addr_array_ref (Cconst_symbol (table, dbg)) (tag_int arg dbg) dbg
-  else
-    Cswitch (arg,cases,actions,dbg)
+      | Cconst_natpointer (n, _) -> (Nativeint.(to_int (logand n one) = 1))
+      | Cconst_symbol _ -> true
+      | _ -> false in
+    if Array.for_all (fun (expr, _dbg) -> is_const expr) actions then
+      let to_data_item (expr, _dbg) =
+        match expr with
+        | Cconst_int (n, _)
+        | Cconst_pointer (n, _) -> Cint (Nativeint.of_int n)
+        | Cconst_natint (n, _)
+        | Cconst_natpointer (n, _) -> Cint n
+        | Cconst_symbol (s, _) -> Csymbol_address s
+        | _ -> assert false in
+      let const_actions = Array.map to_data_item actions in
+      let table = Compilenv.new_const_symbol () in
+      Cmmgen_state.add_constant table (Const_table (Local,
+                                                    Array.to_list (Array.map (fun act ->
+                                                        const_actions.(act)) cases)));
+      addr_array_ref (Cconst_symbol (table, dbg)) (tag_int arg dbg) dbg
+    else
+      Cswitch (arg,cases,actions,dbg)
+  in
+  let actions = Array.to_list orig_actions |> List.map fst in
+  extract_shared_head_and_apply_tails
+    ~default:aux
+    "Switch"
+    actions
+    aux
+    dbg
 
 module SArgBlocks =
 struct
@@ -2192,6 +2174,7 @@ struct
   let make_if cond ifso ifnot =
     Cifthenelse (cond, Debuginfo.none, ifso, Debuginfo.none, ifnot,
       Debuginfo.none)
+    |> extract_shared_head "SwitcherITE" Debuginfo.none
   let make_switch loc arg cases actions =
     let dbg = Debuginfo.from_location loc in
     let actions = Array.map (fun expr -> expr, dbg) actions in
