@@ -177,6 +177,17 @@ module Stdlib = struct
           }
       in
       find_prefix ~longest_common_prefix_rev:[] first second
+
+    let map_unzip f l =
+      let rec aux f l acc1 acc2 =
+        match l with
+        | [] -> List.rev acc1, List.rev acc2
+        | x :: xs ->
+            let r1, r2 = f x in
+            aux f xs (r1::acc1) (r2::acc2)
+      in
+      aux f l [] []
+
   end
 
   module Option = struct
@@ -203,6 +214,28 @@ module Stdlib = struct
         else if p (Array.unsafe_get a1 i) (Array.unsafe_get a2 i) then true
         else loop (succ i) in
       loop 0
+
+    let mapi_unzip f a =
+      let n = Array.length a in
+      if n = 0
+      then [||],[||]
+      else begin
+        let vl, vr = f 0 (Array.unsafe_get a 0) in
+        let al = Array.make n vl in
+        let ar = Array.make n vr in
+        for i = 1 to pred n do
+          let vl, vr = f i (Array.unsafe_get a i) in
+          Array.unsafe_set al i vl;
+          Array.unsafe_set ar i vr;
+        done;
+        al, ar
+      end
+
+    let map_unzip f a =
+      mapi_unzip (fun _ v -> f v) a
+
+    let unzip a =
+      mapi_unzip (fun _ v -> v) a
   end
 
   module String = struct

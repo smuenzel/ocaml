@@ -139,6 +139,8 @@ module Stdlib : sig
     (** Returns the longest list that, with respect to the provided equality
         function, is a prefix of both of the given lists.  The input lists,
         each with such longest common prefix removed, are also returned. *)
+
+    val map_unzip : ('a -> 'b * 'c) -> 'a list -> ('b list) * ('c list)
   end
 
   module Option : sig
@@ -158,6 +160,11 @@ module Stdlib : sig
     (* Same as [Array.exists], but for a two-argument predicate. Raise
        Invalid_argument if the two arrays are determined to have
        different lengths. *)
+
+    val map_unzip : ('a -> 'b * 'c) -> 'a array -> ('b array) * ('c array)
+    val mapi_unzip : (int -> 'a -> 'b * 'c) -> 'a array -> ('b array) * ('c array)
+
+    val unzip : ('a * 'b) array -> ('a array) * ('b array)
   end
 
   module String : sig

@@ -245,6 +245,54 @@ let log_inrec plet name dbg =
   | Let _ | Phantom _ | Seq _ ->
     log_debug (name ^ (plet_to_string plet)) dbg
 
+let extract_shared_head expr =
+  let tails, inject_new_tails = apply_tails expr in
+  match tails with
+  | [] -> expr
+  | [tl] ->
+      if tl == expr
+      then expr
+      else begin
+        match tl with
+        | Cop(Calloc, [Cblockheader _ as blkhead; c], dbg_alloc) as old when false ->
+            let as_new =
+              Cop(Calloc, [blkhead; inject_new_tails [c]], dbg_alloc)
+            in
+            Printf.eprintf  "SHARE HEADER\n" ;
+            Printcmm.expression Format.str_formatter expr ;
+            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter old ;
+            Printf.eprintf "old=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter as_new;
+            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+            expr
+        | _ -> expr
+      end
+  | [tl1;tl2] ->
+      begin match tl1, tl2 with
+      | Cop(Calloc, [Cblockheader (blkhead1, _) as h; c1], dbg_alloc1)
+      , Cop(Calloc, [Cblockheader (blkhead2, _); c2], _dbg_alloc2) ->
+          if blkhead1 = blkhead2 
+          then begin
+            let newexpr =
+              Cop(Calloc, [h; inject_new_tails [c1; c2]], dbg_alloc1)
+            in
+            Printf.eprintf  "SHARE HEADER\n" ;
+            Printcmm.expression Format.str_formatter expr ;
+            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter tl1 ;
+            Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter tl2 ;
+            Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter newexpr;
+            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+            newexpr
+          end
+          else expr
+      | _ -> expr
+      end
+  | _ -> expr
+
 let rec map_result ~inrec exp cont =
   match exp with
   | Clet (id, exp, body) ->
@@ -261,6 +309,10 @@ let rec map_result ~inrec exp cont =
       Csequence (s1, result)
   | body ->
       cont inrec body
+
+let map_result ~inrec exp cont =
+  map_result ~inrec exp cont
+  |> extract_shared_head
 
 type 'result shared_head =
   | Shend of 'result
