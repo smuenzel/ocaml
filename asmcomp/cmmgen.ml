@@ -66,13 +66,6 @@ let rec expression_equal_no_dbg e1 e2 =
       | Invalid_argument _ -> false
       end
   | Cop (op1, e1s, _), Cop (op2, e2s, _) ->
-      let fmt = Format.std_formatter in
-      print_endline "-----";
-      Printcmm.expression fmt e1;
-      Format.pp_print_newline fmt ();
-      print_endline "///";
-      Printcmm.expression fmt e2;
-      Format.pp_print_newline fmt ();
       let result =
         (op1 = op2)
         &&
@@ -80,8 +73,6 @@ let rec expression_equal_no_dbg e1 e2 =
         | Invalid_argument _ -> false
         end
       in
-      if result then print_endline "true"
-      else print_endline "false";
       result
   | Csequence (s1e1, s1e2), Csequence (s2e1,s2e2) ->
       (expression_equal_no_dbg s1e1 s2e1)
@@ -91,25 +82,30 @@ let rec expression_equal_no_dbg e1 e2 =
 
 
 let instr_file = ref None 
-let log_debug kind dbg =
-  match dbg with
-  | [] -> ()
-  | { Debuginfo.
-      dinfo_file
-    ; dinfo_line
-    ; _
-    } :: _ ->
-    let instr_file =
-      match !instr_file with
-      | None ->
+
+let log_debug kind dinfo_file dinfo_line =
+  let instr_file =
+    match !instr_file with
+    | None ->
         let file_suffix = Hashtbl.hash dinfo_file in
         let filename = Printf.sprintf "/tmp/bool_instr_%i" file_suffix in
         let c = open_out_gen [ Open_append; Open_creat; Open_text ] 0o666 filename in
         instr_file := Some c;
         c
-      | Some file -> file
-    in
-    Printf.fprintf instr_file "%s: %s %i\n" kind dinfo_file dinfo_line
+    | Some file -> file
+  in
+  Printf.fprintf instr_file "%s: %s %i\n" kind dinfo_file dinfo_line
+
+let log_debug kind dbg =
+  match dbg with
+  | [] ->
+      log_debug kind "UNKNOWN" 0
+  | { Debuginfo.
+      dinfo_file
+    ; dinfo_line
+    ; _
+    } :: _ ->
+      log_debug kind dinfo_file dinfo_line
 
 (* Environments used for translation to Cmm. *)
 
@@ -245,75 +241,6 @@ let log_inrec plet name dbg =
   | Let _ | Phantom _ | Seq _ ->
     log_debug (name ^ (plet_to_string plet)) dbg
 
-let extract_shared_head expr =
-  let tails, inject_new_tails = apply_tails expr in
-  match tails with
-  | [] -> expr
-  | [tl] ->
-      if tl == expr
-      then expr
-      else begin
-        match tl with
-        | Cop(Calloc, [Cblockheader _ as blkhead; c], dbg_alloc) as old when false ->
-            let as_new =
-              Cop(Calloc, [blkhead; inject_new_tails [c]], dbg_alloc)
-            in
-            Printf.eprintf  "SHARE HEADER\n" ;
-            Printcmm.expression Format.str_formatter expr ;
-            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter old ;
-            Printf.eprintf "old=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter as_new;
-            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-            expr
-        | _ -> expr
-      end
-  | [tl1;tl2] ->
-      begin match tl1, tl2 with
-      | Cop(Calloc, [Cblockheader (blkhead1, _) as h; c1], dbg_alloc1)
-      , Cop(Calloc, [Cblockheader (blkhead2, _); c2], _dbg_alloc2) ->
-          if blkhead1 = blkhead2 
-          then begin
-            let newexpr =
-              Cop(Calloc, [h; inject_new_tails [c1; c2]], dbg_alloc1)
-            in
-            Printf.eprintf  "SHARE HEADER\n" ;
-            Printcmm.expression Format.str_formatter expr ;
-            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter tl1 ;
-            Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter tl2 ;
-            Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
-            Printcmm.expression Format.str_formatter newexpr;
-            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-            newexpr
-          end
-          else expr
-      | _ -> expr
-      end
-  | _ -> expr
-
-let rec map_result ~inrec exp cont =
-  match exp with
-  | Clet (id, exp, body) ->
-      let inrec = Let inrec in
-      let result = map_result ~inrec body cont in
-      Clet (id, exp, result)
-  | Cphantom_let (var, defining_expr, body) ->
-      let inrec = Phantom inrec in
-      let result = map_result ~inrec body cont in
-      Cphantom_let (var, defining_expr, result)
-  | Csequence (s1, s2) ->
-      let inrec = Seq inrec in
-      let result = map_result ~inrec s2 cont in
-      Csequence (s1, result)
-  | body ->
-      cont inrec body
-
-let map_result ~inrec exp cont =
-  map_result ~inrec exp cont
-  |> extract_shared_head
-
 type 'result shared_head =
   | Shend of 'result
   | Shop of operation * shparams * Debuginfo.t * 'result shared_head
@@ -322,9 +249,11 @@ and shparams =
   | Spleft of expression
   | Spright of expression
 
-let rec _sh_len = function
+let rec sh_len = function
   | Shend _ -> 0
-  | Shop (_,_,_,next) -> 1 + (_sh_len next)
+  | Shop (_,_,_,next) -> 1 + (sh_len next)
+
+let _ = sh_len
 
 type ash =
   | Asplain
@@ -363,14 +292,14 @@ let apply_shared_head head dbg f =
 let debug_combine dbg1 _dbg2 =
   dbg1
 
-let rec share_head h1 h2 =
+let rec share_head2 h1 h2 =
   match h1, h2 with
   | Cop(op1, [ o1p1 ], dbg1)
   , Cop(op2, [ o2p1 ], dbg2) ->
       if op1 = op2
       then begin
         let dbg = debug_combine dbg1 dbg2 in
-        let next = share_head o1p1 o2p1 in
+        let next = share_head2 o1p1 o2p1 in
         Shop(op1, Spnone, dbg, next)
       end
       else Shend (h1,h2)
@@ -381,14 +310,12 @@ let rec share_head h1 h2 =
         let dbg = debug_combine dbg1 dbg2 in
         if expression_equal_no_dbg o1p1 o2p1
         then begin
-          let next2 =
-            share_head o1p2 o2p2
-          in
+          let next2 = share_head2 o1p2 o2p2 in
           Shop(op1, Spleft o1p1, dbg, next2)
         end
         else if expression_equal_no_dbg o1p2 o2p2
         then begin
-          let next1 = share_head o1p1 o2p1 in
+          let next1 = share_head2 o1p1 o2p1 in
           Shop(op1, Spright o1p2, dbg, next1)
         end
         else Shend (h1,h2)
@@ -397,8 +324,129 @@ let rec share_head h1 h2 =
   | _, _ ->
       Shend (h1,h2)
 
+let share_head2 h1 h2 =
+  match share_head2 h1 h2 with
+  | Shend _ -> None
+  | other -> Some other
+
+let extract_shared_head dbg expr =
+  let tails, inject_new_tails = apply_tails expr in
+  match tails with
+  | [] -> expr
+  | [tl] ->
+      if tl == expr
+      then expr
+      else begin
+        match tl with
+        | Cop(Calloc, [Cblockheader _ as blkhead; c], dbg_alloc) as old when false ->
+            let as_new =
+              Cop(Calloc, [blkhead; inject_new_tails [c]], dbg_alloc)
+            in
+            Printf.eprintf  "SHARE HEADER\n" ;
+            Printcmm.expression Format.str_formatter expr ;
+            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter old ;
+            Printf.eprintf "old=\n%s\n" (Format.flush_str_formatter ()) ;
+            Printcmm.expression Format.str_formatter as_new;
+            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+            expr
+        | _ -> expr
+      end
+  | [tl1;tl2] ->
+      begin match share_head2 tl1 tl2 with
+      | None -> expr
+      | Some sh ->
+          let result =
+            apply_shared_head sh Debuginfo.none (fun (e1,e2) -> inject_new_tails [e1;e2])
+          in
+          Printf.eprintf  "SHARE HEADER %i\n" (sh_len sh);
+          begin match dbg with
+          | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
+              Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
+          | _ -> ()
+          end;
+          Printcmm.expression Format.str_formatter expr ;
+          Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+          Printcmm.expression Format.str_formatter tl1 ;
+          Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
+          Printcmm.expression Format.str_formatter tl2 ;
+          Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
+          Printcmm.expression Format.str_formatter result;
+          Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+          result
+      end
+      (*
+      begin match tl1, tl2 with
+      | Cop(cop1, [op1p1; op1p2], dbg_op1)
+      , Cop(cop2, [op2p1; op2p2], _dbg_op2) ->
+          if (cop1 = cop2)
+          then begin
+            if expression_equal_no_dbg op1p1 op2p1
+            then begin
+              let newexpr =
+                Cop(cop1, [op1p1; inject_new_tails [op1p2; op2p2]], dbg_op1)
+              in
+              Printf.eprintf  "SHARE HEADER\n" ;
+              Printcmm.expression Format.str_formatter expr ;
+              Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter tl1 ;
+              Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter tl2 ;
+              Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter newexpr;
+              Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+              extract_shared_head newexpr
+            end
+            else if expression_equal_no_dbg op1p2 op2p2
+            then begin
+              let newexpr =
+                Cop(cop1, [inject_new_tails [op1p1; op2p1]; op1p2], dbg_op1)
+              in
+              Printf.eprintf  "FFFFSHARE HEADER\n" ;
+              Printcmm.expression Format.str_formatter expr ;
+              Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter tl1 ;
+              Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter tl2 ;
+              Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
+              Printcmm.expression Format.str_formatter newexpr;
+              Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+              extract_shared_head newexpr
+            end
+            else expr
+          end
+          else expr
+      | _ -> expr
+      end
+         *)
+  | _ -> expr
+
+let rec map_result dbg ~inrec exp cont =
+  match exp with
+  | Clet (id, exp, body) ->
+      let inrec = Let inrec in
+      let result = map_result dbg ~inrec body cont in
+      Clet (id, exp, result)
+  | Cphantom_let (var, defining_expr, body) ->
+      let inrec = Phantom inrec in
+      let result = map_result dbg ~inrec body cont in
+      Cphantom_let (var, defining_expr, result)
+  | Csequence (s1, s2) ->
+      let inrec = Seq inrec in
+      let result = map_result dbg ~inrec s2 cont in
+      Csequence (s1, result)
+  | body ->
+      cont inrec body
+
+let map_result dbg ~inrec exp cont =
+  map_result dbg ~inrec (extract_shared_head dbg exp) cont
+  |> extract_shared_head dbg
+
+let _ = share_head2
+let _ = apply_shared_head
+
 let rec add_const c n dbg =
-  map_result ~inrec:Plain c
+  map_result dbg ~inrec:Plain c
     (fun inrec c ->
        if n = 0 then c
        else match c with
@@ -424,9 +472,9 @@ let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
 let rec add_int c1 c2 dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
-       map_result ~inrec c2
+       map_result dbg ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
             | (Cconst_int (n, _), c) | (c, Cconst_int (n, _)) ->
@@ -444,9 +492,9 @@ let rec add_int c1 c2 dbg =
     )
 
 let rec sub_int c1 c2 dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
-       map_result ~inrec c2
+       map_result dbg ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
             | (c1, Cconst_int (n2, _)) when n2 <> min_int ->
@@ -464,7 +512,7 @@ let rec sub_int c1 c2 dbg =
     )
 
 let rec lsl_int c1 c2 dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
        match (c1, c2) with
        | (Cop(Clsl, [c; Cconst_int (n1, _)], _), Cconst_int (n2, _))
@@ -484,9 +532,9 @@ let is_power2 n = n = 1 lsl Misc.log2 n
 and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n, dbg)) dbg
 
 let rec mul_int c1 c2 dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
-       map_result ~inrec c2
+       map_result dbg ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
             | (c, Cconst_int (0, _)) | (Cconst_int (0, _), c) ->
@@ -515,7 +563,7 @@ let rec mul_int c1 c2 dbg =
     )
 
 let ignore_low_bit_int body dbg = 
-  map_result ~inrec:Plain body
+  map_result dbg ~inrec:Plain body
     (fun inrec body ->
       match body with
       | Cop(Caddi,
@@ -531,7 +579,7 @@ let ignore_low_bit_int body dbg =
     )
 
 let lsr_int c1 c2 dbg =
-  map_result ~inrec:Plain c2
+  map_result dbg ~inrec:Plain c2
     (fun inrec c2 ->
       match c2 with
       | Cconst_int (0, _) ->
@@ -545,7 +593,7 @@ let lsr_int c1 c2 dbg =
     )
 
 let asr_int c1 c2 dbg =
-  map_result ~inrec:Plain c2
+  map_result dbg ~inrec:Plain c2
     (fun inrec c2 ->
       match c2 with
       | Cconst_int (0, _) ->
@@ -559,7 +607,7 @@ let asr_int c1 c2 dbg =
     )
 
 let tag_int i dbg =
-  map_result ~inrec:Plain i
+  map_result dbg ~inrec:Plain i
     (fun inrec i ->
        match i with
        | Cconst_int (n, _) ->
@@ -575,7 +623,7 @@ let tag_int i dbg =
     )
 
 let force_tag_int i dbg =
-  map_result ~inrec:Plain i
+  map_result dbg ~inrec:Plain i
     (fun inrec i ->
        match i with
        | Cconst_int (n, _) ->
@@ -590,7 +638,7 @@ let force_tag_int i dbg =
     )
 
 let untag_int i dbg =
-  map_result ~inrec:Plain i
+  map_result dbg ~inrec:Plain i
     (fun inrec i ->
        match i with
        | Cconst_int (n, _) -> 
@@ -629,7 +677,7 @@ let invert_then_else = function
   | Unknown -> Unknown
 
 let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
-  map_result ~inrec:Plain cond
+  map_result dbg ~inrec:Plain cond
     (fun inrec cond ->
        match cond with
        | Cconst_int (0, _) ->
@@ -639,21 +687,18 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
            log_inrec inrec "Mk_if_the_else/Ifso" dbg;
            ifso
        | _ ->
-           let shared_head = share_head ifso ifnot in
-           apply_shared_head shared_head dbg
-             (fun (ifso, ifnot) ->
-                Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
-             )
+           Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg)
+           |> extract_shared_head dbg
     )
 
 let mk_not dbg cmm =
-  map_result ~inrec:Plain cmm
+  map_result dbg ~inrec:Plain cmm
     (fun inrec cmm ->
        match cmm with
        | Cop(Caddi,
              [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
            begin
-             map_result ~inrec c
+             map_result dbg ~inrec c
                (fun inrec c ->
                   match c with
                   | Cop(Ccmpi cmp, [c1; c2], dbg'') ->
@@ -792,9 +837,9 @@ let raise_symbol dbg symb =
   raise_regular dbg (Cconst_symbol (symb, dbg))
 
 let rec div_int c1 c2 is_safe dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
-       map_result ~inrec c2
+       map_result dbg ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
             | (c1, Cconst_int (0, _)) ->
@@ -859,9 +904,9 @@ let rec div_int c1 c2 is_safe dbg =
          ))
 
 let mod_int c1 c2 is_safe dbg =
-  map_result ~inrec:Plain c1
+  map_result dbg ~inrec:Plain c1
     (fun inrec c1 ->
-       map_result ~inrec c2
+       map_result dbg ~inrec c2
          (fun inrec c2 ->
             match (c1, c2) with
               (c1, Cconst_int (0, _)) ->
@@ -941,7 +986,7 @@ let safe_mod_bi is_safe =
 (* Bool *)
 
 let test_bool dbg cmm =
-  map_result ~inrec:Plain cmm
+  map_result dbg ~inrec:Plain cmm
     (fun inrec cmm ->
        match cmm with
        | Cop(Caddi, [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) ->
@@ -1117,7 +1162,7 @@ let lsl_const c n dbg =
    (this is the case for bigarray indexing), we give type Int instead. *)
 
 let array_indexing ?typ log2size ptr ofs dbg =
-  map_result ~inrec:Plain ofs
+  map_result dbg ~inrec:Plain ofs
     (fun inrec ofs ->
        let add =
          match typ with
