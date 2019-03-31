@@ -270,6 +270,24 @@ let log_ash ash name dbg =
   | ash ->
     log_debug (name ^ (ash_to_string ash)) dbg
 
+let rec unshare_heads head =
+  match head with
+  | Shend result ->
+      result
+  | Shop (operation, params, dbg, next) ->
+      let nexts = unshare_heads next in
+      List.map 
+        (fun next ->
+           let arglist =
+             match params with
+             | Spnone -> [ next ]
+             | Spleft left -> [ left ; next ]
+             | Spright right -> [ next ; right ]
+           in
+           Cop (operation, arglist, dbg)
+        )
+        nexts
+
 let rec apply_shared_head ash head ash_dbg f =
   match head with
   | Shend result ->
@@ -289,8 +307,65 @@ let rec apply_shared_head ash head ash_dbg f =
 let apply_shared_head head dbg f =
   apply_shared_head Asplain head dbg f
 
-let debug_combine dbg1 _dbg2 =
-  dbg1
+let debug_combine dbg1 dbg2 =
+  List.append dbg1 dbg2
+
+let rec share_head_extend sh h =
+  match sh, h with
+  | Shend shs, h ->
+      Shend (List.append shs [h])
+  | Shop (operation, Spnone, dbg, next)
+  , Cop(op2, [ o2p1 ], dbg2) ->
+      if operation = op2 
+      then begin
+        let dbg = debug_combine dbg dbg2 in
+        let next =
+          share_head_extend next o2p1
+        in
+        Shop (operation, Spnone, dbg, next) 
+      end 
+      else begin
+        let unshared_heads = unshare_heads next in
+        Shend (List.append unshared_heads [h])
+      end
+  | Shop (operation, Spleft o1p1, dbg, next)
+  , Cop(op2, [ o2p1; o2p2 ], dbg2) ->
+      if operation = op2
+      && expression_equal_no_dbg o1p1 o2p1
+      then begin
+        let dbg = debug_combine dbg dbg2 in
+        let next =
+          share_head_extend next o2p2
+        in
+        Shop (operation, Spleft o1p1, dbg, next) 
+      end 
+      else begin
+        let unshared_heads = unshare_heads next in
+        Shend (List.append unshared_heads [h])
+      end
+  | Shop(operation, Spright o1p2, dbg, next)
+  , Cop(op2, [ o2p1; o2p2 ], dbg2) ->
+      if operation = op2
+      && expression_equal_no_dbg o1p2 o2p2
+      then begin
+        let dbg = debug_combine dbg dbg2 in
+        let next =
+          share_head_extend next o2p1
+        in
+        Shop (operation, Spright o1p2, dbg, next) 
+      end 
+      else begin
+        let unshared_heads = unshare_heads next in
+        Shend (List.append unshared_heads [h])
+      end
+  | sh, h ->
+      let unshared_heads = unshare_heads sh in
+      Shend (List.append unshared_heads [h])
+
+let share_head_extend sh h =
+  match share_head_extend sh h with
+  | Shend _ -> None
+  | other -> Some other
 
 let rec share_head2 h1 h2 =
   match h1, h2 with
@@ -302,7 +377,7 @@ let rec share_head2 h1 h2 =
         let next = share_head2 o1p1 o2p1 in
         Shop(op1, Spnone, dbg, next)
       end
-      else Shend (h1,h2)
+      else Shend [h1;h2]
   | Cop(op1, [ o1p1; o1p2 ], dbg1)
   , Cop(op2, [ o2p1; o2p2 ], dbg2) ->
       if op1 = op2
@@ -310,6 +385,7 @@ let rec share_head2 h1 h2 =
         let dbg = debug_combine dbg1 dbg2 in
         if expression_equal_no_dbg o1p1 o2p1
         then begin
+          (* TODO: Merge debug into equal expression *)
           let next2 = share_head2 o1p2 o2p2 in
           Shop(op1, Spleft o1p1, dbg, next2)
         end
@@ -318,11 +394,11 @@ let rec share_head2 h1 h2 =
           let next1 = share_head2 o1p1 o2p1 in
           Shop(op1, Spright o1p2, dbg, next1)
         end
-        else Shend (h1,h2)
+        else Shend [h1;h2]
       end
-      else Shend (h1,h2)
+      else Shend [h1;h2]
   | _, _ ->
-      Shend (h1,h2)
+      Shend [h1;h2]
 
 let share_head2 h1 h2 =
   match share_head2 h1 h2 with
@@ -357,7 +433,7 @@ let extract_shared_head dbg expr =
       | None -> expr
       | Some sh ->
           let result =
-            apply_shared_head sh Debuginfo.none (fun (e1,e2) -> inject_new_tails [e1;e2])
+            apply_shared_head sh dbg inject_new_tails
           in
           Printf.eprintf  "SHARE HEADER %i\n" (sh_len sh);
           begin match dbg with
@@ -375,51 +451,45 @@ let extract_shared_head dbg expr =
           Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
           result
       end
-      (*
-      begin match tl1, tl2 with
-      | Cop(cop1, [op1p1; op1p2], dbg_op1)
-      , Cop(cop2, [op2p1; op2p2], _dbg_op2) ->
-          if (cop1 = cop2)
-          then begin
-            if expression_equal_no_dbg op1p1 op2p1
-            then begin
-              let newexpr =
-                Cop(cop1, [op1p1; inject_new_tails [op1p2; op2p2]], dbg_op1)
-              in
-              Printf.eprintf  "SHARE HEADER\n" ;
-              Printcmm.expression Format.str_formatter expr ;
-              Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter tl1 ;
-              Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter tl2 ;
-              Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter newexpr;
-              Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-              extract_shared_head newexpr
-            end
-            else if expression_equal_no_dbg op1p2 op2p2
-            then begin
-              let newexpr =
-                Cop(cop1, [inject_new_tails [op1p1; op2p1]; op1p2], dbg_op1)
-              in
-              Printf.eprintf  "FFFFSHARE HEADER\n" ;
-              Printcmm.expression Format.str_formatter expr ;
-              Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter tl1 ;
-              Printf.eprintf "old1=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter tl2 ;
-              Printf.eprintf "old2=\n%s\n" (Format.flush_str_formatter ()) ;
-              Printcmm.expression Format.str_formatter newexpr;
-              Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
-              extract_shared_head newexpr
-            end
-            else expr
-          end
-          else expr
-      | _ -> expr
+  | tl1 :: tl2 :: tlrest ->
+      begin match share_head2 tl1 tl2 with
+      | None -> expr
+      | Some sh ->
+          try
+            let sh =
+              List.fold_left
+                (fun acc expr ->
+                   match share_head_extend acc expr with
+                   | None -> raise_notrace Exit
+                   | Some sh -> sh
+                )
+                sh
+                tlrest
+            in
+            let result =
+              apply_shared_head sh dbg inject_new_tails
+            in
+            Printf.eprintf  "SHARE HEADER %i\n" (sh_len sh);
+            begin match dbg with
+            | { Debuginfo. dinfo_file; dinfo_line; _ } :: _ -> 
+                Printf.eprintf "%s:%i\n" dinfo_file dinfo_line;
+            | _ -> ()
+            end;
+            Printcmm.expression Format.str_formatter expr ;
+            Printf.eprintf "expr=\n%s\n" (Format.flush_str_formatter ()) ;
+            List.iteri
+              (fun i exp ->
+                 Printcmm.expression Format.str_formatter exp ;
+                 Printf.eprintf "old%i=\n%s\n" i (Format.flush_str_formatter ()) ;
+              )
+              tails
+            ;
+            Printcmm.expression Format.str_formatter result;
+            Printf.eprintf "new=\n%s\n\n" (Format.flush_str_formatter ()) ;
+            result
+          with 
+          | Exit -> expr
       end
-         *)
-  | _ -> expr
 
 let rec map_result dbg ~inrec exp cont =
   match exp with
