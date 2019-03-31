@@ -2796,7 +2796,6 @@ let rec transl env e =
   | Utrywith(body, exn, handler) ->
       let dbg = Debuginfo.none in
       Ctrywith(transl env body, exn, transl env handler, dbg)
-      |> extract_shared_head "Trywith" dbg
   | Uifthenelse(cond, ifso, ifnot) ->
       let ifso_dbg = Debuginfo.none in
       let ifnot_dbg = Debuginfo.none in
