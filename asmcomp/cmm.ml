@@ -312,7 +312,29 @@ let rec apply_tails = function
       in
       let all_tails = List.concat (Array.to_list sub_apply_tails) in
       all_tails, apply_fun
-  | Ctrywith(e1, id, e2, dbg) ->
+  | Ctrywith(e1, id, e2, dbg) when false ->
+      (* Ctrywith is only safe when the tail cannot throw! 
+         e.g. if the tails are:
+         (app{typing/ctype.ml:875,6-37} "camlCtype__update_level_3216" env/7926
+           level/7925 1a ty/7928 val)
+         AND
+         (app{typing/ctype.ml:878,6-36} "camlCtype__update_level_3216" env/7926
+          level/7925 3a ty/7928 val)
+
+         we could end up with nonsense like:
+         (app{typing/ctype.ml:875,6-37;typing/ctype.ml:878,6-36}
+            "camlCtype__update_level_3216" env/7926 level/7925
+            (try 1a with exn/7935
+              (if (== (load_mut val exn/7935) "camlCtype__Pmakeblock_22225")
+                (let
+                  (param/7942 (load_mut val (+a snap/7934 8))
+                   sequence/7944
+                     (app{typing/ctype.ml:877,6-20} "camlBtype__backtrack_3098"
+                       (load_mut val snap/7934) param/7942 val))
+                  3a)
+                (raise_withtrace exn/7935)))
+            ty/7928 val)
+      *)
       apply_body2 e1 e2
         (fun e1 e2 -> Ctrywith(e1, id, e2, dbg))
   | Ccatch(rec_flag, handlers, body) ->
