@@ -2638,6 +2638,15 @@ and transl_prim_2 env p arg1 arg2 dbg =
       let op2 = Cop(Ccmpf(CFlt), [a1; a2], dbg) in
       let op3 = Cop(Ccmpf(CFeq), [a1; a1], dbg) in
       let op4 = Cop(Ccmpf(CFeq), [a2; a2], dbg) in
+      (* If both operands a1 and a2 are not NaN, then op3 = op4 = 1,
+         and the result is op1 - op2.
+         If at least one of the operands is NaN,
+         then op1 = op2 = 0, and the result is op3 - op4,
+         which orders NaN before other values.
+         To detect if the operand is NaN, we use the property:
+         for all x, NaN is not equal to x, even if x is NaN.
+         Therefore, op3 is 0 if and only if a1 is NaN,
+         and op4 is 0 if and only if a2 is NaN. *)
       tag_int (add_int (sub_int op1 op2 dbg) (sub_int op3 op4 dbg) dbg) dbg
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
