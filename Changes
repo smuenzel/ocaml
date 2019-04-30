@@ -244,6 +244,9 @@ OCaml 4.09.0
   (Thomas Refis, review by David Allsopp, Florian Angeletti, Gabriel Radanne,
    Gabriel Scherer and Xavier Leroy)
 
+- #2324: Replace caml_int_compare and caml_float_compare with primitives.
+  (Greta Yorsh, reviewed by Stephen Dolan)
+
 ### Runtime system:
 
 - #1725, #2279: Deprecate Obj.set_tag and Obj.truncate
