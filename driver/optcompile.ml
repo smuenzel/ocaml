@@ -86,6 +86,7 @@ let clambda i backend typed =
        Compilenv.save_unit_info (cmx i))
 
 let implementation ~backend ~source_file ~output_prefix =
+  Log_perf.set_filename_exn source_file;
   let backend info typed =
     Compilenv.reset ?packname:!Clflags.for_package info.module_name;
     if Config.flambda

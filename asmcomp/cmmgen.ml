@@ -471,6 +471,7 @@ let rec div_int c1 c2 is_safe dbg =
   | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
       Cconst_int (n1 / n2, dbg)
   | (c1, Cconst_int (n, _)) when n <> min_int ->
+      Log_perf.log dbg Lps_cmm_div_int_const;
       let l = Misc.log2 n in
       if n = 1 lsl l then
         (* Algorithm:
