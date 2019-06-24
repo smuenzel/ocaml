@@ -210,3 +210,71 @@ let ccatch (i, ids, e1, e2, dbg) =
 
 let reset () =
   label_counter := 99
+
+let rec apply_pass f expr =
+  let result_base = f expr in
+  match result_base with
+  | Cconst_int _
+  | Cconst_natint _
+  | Cconst_float _
+  | Cconst_symbol _
+  | Cconst_pointer _
+  | Cconst_natpointer _
+  | Cblockheader _
+  | Cvar _
+    -> result_base
+  | Clet (bv,e1,e2) ->
+      let e1' = apply_pass f e1 in
+      let e2' = apply_pass f e2 in
+      if not (e1' == e1 && e2' == e2)
+      then Clet (bv, e1', e2')
+      else result_base
+  | Cphantom_let (bv, pde, e1) ->
+      let e1' = apply_pass f e1 in
+      if not (e1' == e1)
+      then Cphantom_let (bv, pde, e1')
+      else result_base
+  | Cassign (bv, e1) ->
+      let e1' = apply_pass f e1 in
+      if not (e1' == e1)
+      then Cassign (bv, e1')
+      else result_base
+  | Ctuple el ->
+      let el' = List.map (apply_pass f) el in
+      Ctuple el'
+  | Cop (op, el, dbg) ->
+      let el' = List.map (apply_pass f) el in
+      Cop (op, el', dbg)
+  | Csequence (e1, e2) ->
+      let e1' = apply_pass f e1 in
+      let e2' = apply_pass f e2 in
+      if not (e1' == e1 && e2' == e2)
+      then Csequence (e1', e2')
+      else result_base
+  | Cifthenelse (e1, dbg1, e2, dbg2, e3, dbg3) ->
+      let e1' = apply_pass f e1 in
+      let e2' = apply_pass f e2 in
+      let e3' = apply_pass f e3 in
+      if not (e1' == e1 && e2' == e2 && e3 == e3')
+      then Cifthenelse (e1',dbg1,e2',dbg2,e3',dbg3)
+      else result_base
+  | Cswitch (e1, iar, expar, dbg) ->
+      let e1' = apply_pass f e1 in
+      let expar' = Array.map (fun (e,dbg) -> apply_pass f e, dbg) expar in
+      Cswitch (e1', iar, expar', dbg)
+  | Ccatch (rf, handlers, e1) ->
+      let e1' = apply_pass f e1 in
+      let handlers' =
+        List.map (fun (i,bvps, e, dbg) -> i,bvps,(apply_pass f e), dbg) handlers
+      in
+      Ccatch (rf, handlers', e1')
+  | Cexit (i, exprs) ->
+      let exprs' = List.map (apply_pass f) exprs in
+      Cexit (i, exprs')
+  | Ctrywith (e1,bvp, e2, dbg) ->
+      let e1' = apply_pass f e1 in
+      let e2' = apply_pass f e2 in
+      if not (e1' == e1 && e2' == e2)
+      then Ctrywith (e1', bvp, e2', dbg)
+      else result_base
+

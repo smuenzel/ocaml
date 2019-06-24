@@ -3288,10 +3288,16 @@ let transl_function f =
   let body = f.body in
   let cmm_body =
     let env = create_env ~environment_param:f.env in
+    let transl_body =
+      Cmm.apply_pass
+        Cmm_simplify.reduce_cmm
+        (transl env body)
+    in
     if !Clflags.afl_instrument then
-      Afl_instrument.instrument_function (transl env body) f.dbg
+      Afl_instrument.instrument_function transl_body f.dbg
     else
-      transl env body in
+      transl_body
+  in
   let fun_codegen_options =
     if !Clflags.optimize_for_speed then
       []

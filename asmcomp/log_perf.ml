@@ -10,9 +10,30 @@ exception Unknown_logging_scope of string
 
 type scope =
   | Lps_cmm_div_int_const
+  | Lps_cmm_simp_nested_cmp
+  | Lps_cmm_simp_nested_eq_1
+  | Lps_cmm_simp_nested_eq_3
+  | Lps_cmm_simp_nested_neq_0
+  | Lps_cmm_simp_tag_and
+  | Lps_cmm_simp_tag_or
+  | Lps_cmm_simp_tag_xor
 
-let scope_to_string = function
-  | Lps_cmm_div_int_const -> "cmm_div_int_const"
+let conversion_table =
+  [ Lps_cmm_div_int_const, "cmm_div_int_const"
+  ; Lps_cmm_simp_nested_cmp, "cmm_simp_nested_cmp"
+  ; Lps_cmm_simp_nested_eq_1, "cmm_simp_nested_eq1"
+  ; Lps_cmm_simp_nested_eq_3, "cmm_simp_nested_eq3"
+  ; Lps_cmm_simp_nested_neq_0, "cmm_simp_nested_neq0"
+  ; Lps_cmm_simp_tag_and, "cmm_simp_tag_and"
+  ; Lps_cmm_simp_tag_or, "cmm_simp_tag_or"
+  ; Lps_cmm_simp_tag_xor, "cmm_simp_tag_xor"
+  ]
+
+let scope_to_string scope =
+  List.find
+    (fun (scope',_) -> scope = scope')
+    conversion_table
+  |> snd
 
 let logging_scope =
   lazy begin
@@ -22,12 +43,20 @@ let logging_scope =
         let table = Hashtbl.create 17 in
         List.iter
           (fun scope ->
-             let scope = 
-               match String.lowercase_ascii scope with
-               | "cmm_div_int_const" -> Lps_cmm_div_int_const
-               | other -> raise (Unknown_logging_scope other)
-             in
-             Hashtbl.add table scope ()
+             let scope = String.lowercase_ascii scope in
+             match scope with
+             | "all" ->
+                 List.iter
+                   (fun (scope,_) -> Hashtbl.add table scope ())
+                   conversion_table
+             | _ ->
+                 let scope = 
+                   match List.find_opt (fun (_,str') -> scope = str') conversion_table with
+                   | None ->
+                       raise (Unknown_logging_scope scope)
+                   | Some (scope,_) -> scope
+                 in
+                 Hashtbl.add table scope ()
           )
           (String.split_on_char ',' perf_log_scope)
         ;

@@ -215,3 +215,5 @@ val ccatch :
   -> expression
 
 val reset : unit -> unit
+
+val apply_pass : (expression -> expression) -> expression -> expression

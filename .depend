@@ -2147,6 +2147,16 @@ asmcomp/cmm.cmi : \
     lambda/debuginfo.cmi \
     middle_end/backend_var.cmi \
     parsing/asttypes.cmi
+asmcomp/cmm_simplify.cmo : \
+    asmcomp/log_perf.cmo \
+    asmcomp/cmm.cmi \
+    asmcomp/cmm_simplify.cmi
+asmcomp/cmm_simplify.cmx : \
+    asmcomp/log_perf.cmx \
+    asmcomp/cmm.cmx \
+    asmcomp/cmm_simplify.cmi
+asmcomp/cmm_simplify.cmi : \
+    asmcomp/cmm.cmi
 asmcomp/cmmgen.cmo : \
     typing/types.cmi \
     utils/targetint.cmi \
@@ -2165,6 +2175,7 @@ asmcomp/cmmgen.cmo : \
     file_formats/cmxs_format.cmi \
     file_formats/cmx_format.cmi \
     asmcomp/cmmgen_state.cmi \
+    asmcomp/cmm_simplify.cmi \
     asmcomp/cmm.cmi \
     utils/clflags.cmi \
     middle_end/clambda_primitives.cmi \
@@ -2192,6 +2203,7 @@ asmcomp/cmmgen.cmx : \
     file_formats/cmxs_format.cmi \
     file_formats/cmx_format.cmi \
     asmcomp/cmmgen_state.cmx \
+    asmcomp/cmm_simplify.cmx \
     asmcomp/cmm.cmx \
     utils/clflags.cmx \
     middle_end/clambda_primitives.cmx \

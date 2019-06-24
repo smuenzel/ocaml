@@ -161,6 +161,7 @@ ASMCOMP=\
   asmcomp/afl_instrument.cmo \
   asmcomp/strmatch.cmo \
 	asmcomp/log_perf.cmo \
+	asmcomp/cmm_simplify.cmo \
   asmcomp/cmmgen_state.cmo \
   asmcomp/cmmgen.cmo \
   asmcomp/interval.cmo \
