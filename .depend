@@ -2147,6 +2147,38 @@ asmcomp/cmm.cmi : \
     lambda/debuginfo.cmi \
     middle_end/backend_var.cmi \
     parsing/asttypes.cmi
+asmcomp/cmm_share_heads.cmo : \
+    typing/types.cmi \
+    asmcomp/printcmm.cmi \
+    typing/primitive.cmi \
+    utils/misc.cmi \
+    asmcomp/log_perf.cmo \
+    lambda/lambda.cmi \
+    lambda/debuginfo.cmi \
+    file_formats/cmxs_format.cmi \
+    file_formats/cmx_format.cmi \
+    asmcomp/cmm.cmi \
+    middle_end/clambda_primitives.cmi \
+    middle_end/clambda.cmi \
+    middle_end/backend_var.cmi \
+    parsing/asttypes.cmi \
+    asmcomp/arch.cmo
+asmcomp/cmm_share_heads.cmx : \
+    typing/types.cmx \
+    asmcomp/printcmm.cmx \
+    typing/primitive.cmx \
+    utils/misc.cmx \
+    asmcomp/log_perf.cmx \
+    lambda/lambda.cmx \
+    lambda/debuginfo.cmx \
+    file_formats/cmxs_format.cmi \
+    file_formats/cmx_format.cmi \
+    asmcomp/cmm.cmx \
+    middle_end/clambda_primitives.cmx \
+    middle_end/clambda.cmx \
+    middle_end/backend_var.cmx \
+    parsing/asttypes.cmi \
+    asmcomp/arch.cmx
 asmcomp/cmm_simplify.cmo : \
     asmcomp/log_perf.cmo \
     asmcomp/cmm.cmi \

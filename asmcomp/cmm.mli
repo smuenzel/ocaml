@@ -217,3 +217,10 @@ val ccatch :
 val reset : unit -> unit
 
 val apply_pass : (expression -> expression) -> expression -> expression
+
+val equal_no_dbg : expression -> expression -> bool
+
+val map_tail : (expression -> expression) -> expression -> expression
+val fold_tails : ('a -> expression -> 'a) -> 'a -> expression -> 'a
+
+val apply_tails : expression -> expression list * (expression list -> expression)

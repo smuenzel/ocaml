@@ -162,6 +162,7 @@ ASMCOMP=\
   asmcomp/strmatch.cmo \
 	asmcomp/log_perf.cmo \
 	asmcomp/cmm_simplify.cmo \
+	asmcomp/cmm_share_heads.cmo \
   asmcomp/cmmgen_state.cmo \
   asmcomp/cmmgen.cmo \
   asmcomp/interval.cmo \

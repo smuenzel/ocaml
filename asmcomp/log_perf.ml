@@ -17,6 +17,7 @@ type scope =
   | Lps_cmm_simp_tag_and
   | Lps_cmm_simp_tag_or
   | Lps_cmm_simp_tag_xor
+  | Lps_cmm_shared_head
 
 let conversion_table =
   [ Lps_cmm_div_int_const, "cmm_div_int_const"
@@ -27,6 +28,7 @@ let conversion_table =
   ; Lps_cmm_simp_tag_and, "cmm_simp_tag_and"
   ; Lps_cmm_simp_tag_or, "cmm_simp_tag_or"
   ; Lps_cmm_simp_tag_xor, "cmm_simp_tag_xor"
+  ; Lps_cmm_shared_head, "cmm_shared_head"
   ]
 
 let scope_to_string scope =
@@ -94,4 +96,14 @@ let log dbg event =
       "%s:%s\n"
       (scope_to_string event)
       (abbrev_debug_info dbg)
+  end
+
+let log_ext dbg event str =
+  if Hashtbl.mem (Lazy.force logging_scope) event
+  then begin
+    Printf.fprintf (Lazy.force logging_file)
+      "%s:%s:%s\n"
+      (scope_to_string event)
+      (abbrev_debug_info dbg)
+      str
   end

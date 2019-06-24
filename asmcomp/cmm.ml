@@ -278,3 +278,233 @@ let rec apply_pass f expr =
       then Ctrywith (e1', bvp, e2', dbg)
       else result_base
 
+let rec equal_no_dbg e1 e2 =
+  match e1, e2 with
+  | Cconst_int (i1,_), Cconst_int (i2, _) ->
+      i1 = i2
+  | Cconst_natint (i1,_), Cconst_natint (i2,_) ->
+      i1 = i2
+  | Cconst_float (f1,_), Cconst_float (f2,_) ->
+      f1 = f2
+  | Cconst_symbol (s1,_), Cconst_symbol (s2,_) ->
+      s1 = s2
+  | Cconst_pointer (p1,_), Cconst_pointer (p2,_) ->
+      p1 = p2
+  | Cconst_natpointer (p1,_), Cconst_natpointer (p2,_) ->
+      p1 = p2
+  | Cblockheader (b1,_), Cblockheader (b2, _) ->
+      b1 = b2
+  | Cvar v1, Cvar v2 ->
+      v1 = v2
+  | Clet _, Clet _ ->
+      (* TODO: extract shared things??? *)
+      false
+  | Cphantom_let _, _ | _, Cphantom_let _ ->
+      false
+  | Cassign (b1,e1), Cassign (b2,e2) ->
+      (b1 = b2) && (equal_no_dbg e1 e2)
+  | Ctuple e1s, Ctuple e2s ->
+      begin try List.for_all2 equal_no_dbg e1s e2s with
+      | Invalid_argument _ -> false
+      end
+  | Cop (op1, e1s, _), Cop (op2, e2s, _) ->
+      let result =
+        (op1 = op2)
+        &&
+        begin try List.for_all2 equal_no_dbg e1s e2s with
+        | Invalid_argument _ -> false
+        end
+      in
+      result
+  | Csequence (s1e1, s1e2), Csequence (s2e1,s2e2) ->
+      (equal_no_dbg s1e1 s2e1)
+      &&
+      (equal_no_dbg s1e2 s2e2)
+  | Cifthenelse (s1e1, _, s1e2, _, s1e3, _)
+  , Cifthenelse (s2e1, _, s2e2, _, s2e3, _) ->
+      (equal_no_dbg s1e1 s2e1)
+      &&
+      (equal_no_dbg s1e2 s2e2)
+      &&
+      (equal_no_dbg s1e3 s2e3)
+  | _, _ -> false
+
+let rec map_tail f = function
+  | Cphantom_let(var, pde, body) ->
+      Cphantom_let(var, pde, map_tail f body)
+  | Clet(id, exp, body) ->
+      Clet(id, exp, map_tail f body)
+  | Cifthenelse(cond, dbg_cond, e1, dbg_e1, e2, dbg_e2) ->
+      Cifthenelse
+        (
+          cond, dbg_cond,
+          map_tail f e1, dbg_e1,
+          map_tail f e2, dbg_e2
+        )
+  | Csequence(e1, e2) ->
+      Csequence(e1, map_tail f e2)
+  | Cswitch(e, tbl, el, dbg') ->
+      Cswitch(e, tbl, Array.map (fun (e, dbg) -> map_tail f e, dbg) el, dbg')
+  | Ccatch(rec_flag, handlers, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_tail f handler, dbg) in
+      Ccatch(rec_flag, List.map map_h handlers, map_tail f body)
+  | Ctrywith(e1, id, e2, dbg) ->
+      Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
+  | Cop (Craise _, _, _) as cmm ->
+      cmm
+  | c ->
+      f c
+
+let rec fold_tails f init = function
+  | Cphantom_let(_var, _pde, body) ->
+      fold_tails f init body
+  | Clet(_id, _exp, body) ->
+      fold_tails f init body
+  | Cifthenelse(_cond, _dbg_cond, e1, _dbg_e1, e2, _dbg_e2) ->
+      let init = fold_tails f init e1 in
+      fold_tails f init e2
+  | Csequence(_e1, e2) ->
+      fold_tails f init e2
+  | Cswitch(_e, _tbl, el, _dbg') ->
+      Array.fold_left (fun init (exp,_dbg) -> fold_tails f init exp) init el
+  | Ccatch(_rec_flag, handlers, body) ->
+      List.fold_left
+        (fun init (_n, _ids, handler, _dbg) -> fold_tails f init handler)
+        (fold_tails f init body)
+        handlers
+  | Ctrywith(e1, _id, e2, _dbg) ->
+      let init = fold_tails f init e1 in
+      fold_tails f init e2
+  | Cop (Craise _, _, _) ->
+      init
+  | c ->
+      f init c
+
+let rec apply_tails = function
+  | Cphantom_let(var, pde, body) ->
+      apply_body1 body
+        (fun body -> Cphantom_let(var, pde, body))
+  | Clet(id, exp, body) ->
+      apply_body1 body
+        (fun body -> Clet(id, exp, body))
+  | Csequence(e1, e2) ->
+      apply_body1 e2
+        (fun e2 -> Csequence(e1,e2))
+  | Cifthenelse(cond, dbg_cond, e1, dbg_e1, e2, dbg_e2) ->
+      apply_body2 e1 e2
+        (fun e1 e2 -> Cifthenelse (cond, dbg_cond, e1, dbg_e1,e2, dbg_e2))
+  | Cswitch(e, tbl, el, dbg') ->
+      let sub_apply_tails
+        , sub_apply_next_apply_funs
+        = 
+        Misc.Stdlib.Array.map_unzip
+          (fun (e, dbg) ->
+             let tl, na = apply_tails e in
+             tl, (na, dbg)
+          ) el
+      in
+      let apply_fun newtail =
+        let newtail = ref newtail in
+        let el =
+          Array.map
+            (fun (af, dbg) ->
+               let e, cs = af !newtail in
+               newtail := cs;
+               e, dbg
+            ) sub_apply_next_apply_funs
+        in
+        Cswitch(e, tbl, el, dbg')
+      , !newtail
+      in
+      let all_tails = List.concat (Array.to_list sub_apply_tails) in
+      all_tails, apply_fun
+  | Ctrywith(e1, id, e2, dbg) when false ->
+      (* Ctrywith is only safe when the tail cannot throw! 
+         e.g. if the tails are:
+         (app{typing/ctype.ml:875,6-37} "camlCtype__update_level_3216" env/7926
+           level/7925 1a ty/7928 val)
+         AND
+         (app{typing/ctype.ml:878,6-36} "camlCtype__update_level_3216" env/7926
+          level/7925 3a ty/7928 val)
+
+         we could end up with nonsense like:
+         (app{typing/ctype.ml:875,6-37;typing/ctype.ml:878,6-36}
+            "camlCtype__update_level_3216" env/7926 level/7925
+            (try 1a with exn/7935
+              (if (== (load_mut val exn/7935) "camlCtype__Pmakeblock_22225")
+                (let
+                  (param/7942 (load_mut val (+a snap/7934 8))
+                   sequence/7944
+                     (app{typing/ctype.ml:877,6-20} "camlBtype__backtrack_3098"
+                       (load_mut val snap/7934) param/7942 val))
+                  3a)
+                (raise_withtrace exn/7935)))
+            ty/7928 val)
+      *)
+      apply_body2 e1 e2
+        (fun e1 e2 -> Ctrywith(e1, id, e2, dbg))
+  | Ccatch(rec_flag, handlers, body) ->
+      let all_tails_body, next_apply_fun_body = apply_tails body in
+      let sub_apply_tails
+        , sub_apply_next_apply_funs
+        =
+        Misc.Stdlib.List.map_unzip
+          (fun (n, ids, handler, dbg) ->
+             let tl, na = apply_tails handler in
+             tl, (n, ids, na, dbg)
+          )
+          handlers
+      in
+      let apply_fun newtail =
+        let body, newtail = next_apply_fun_body newtail in
+        let newtail = ref newtail in
+        let handlers =
+          List.map
+            (fun (n, ids, af, dbg) ->
+               let e, cs = af !newtail in
+               newtail := cs;
+               (n, ids, e, dbg)
+            )
+            sub_apply_next_apply_funs
+        in
+        Ccatch(rec_flag, handlers, body)
+      , !newtail
+      in
+      let all_tails = all_tails_body @ (List.concat sub_apply_tails) in
+      all_tails, apply_fun
+  | Cop (Craise _, _, _) as cmm ->
+      [ ]
+    , fun cs -> cmm, cs
+  | c ->
+      [ c ]
+    , function 
+      | c :: cs -> c, cs
+      | _ -> assert false
+and apply_body1 body f =
+  let all_tails, next_apply_fun = apply_tails body in
+  let apply_fun newtail =
+    let body, cs = next_apply_fun newtail in
+    f body
+  , cs
+  in
+  all_tails, apply_fun
+and apply_body2 body1 body2 f =
+  let all_tails_body1, next_apply_fun_body1 = apply_tails body1 in
+  let all_tails_body2, next_apply_fun_body2 = apply_tails body2 in
+  let apply_fun newtail =
+    let body1, cs = next_apply_fun_body1 newtail in
+    let body2, cs = next_apply_fun_body2 cs in
+    f body1 body2
+  , cs
+  in
+  let all_tails = List.append all_tails_body1 all_tails_body2 in
+  all_tails, apply_fun
+
+let apply_tails expr =
+  let tails, mapper = apply_tails expr in
+  let mapper elist =
+    let e, remainder = mapper elist in
+    assert (remainder = [] );
+    e
+  in
+  tails, mapper
