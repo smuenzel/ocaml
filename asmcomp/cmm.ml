@@ -384,9 +384,12 @@ let rec apply_tails = function
   | Cphantom_let(var, pde, body) ->
       apply_body1 body
         (fun body -> Cphantom_let(var, pde, body))
-  | Clet(id, exp, body) ->
-      apply_body1 body
-        (fun body -> Clet(id, exp, body))
+  (* To properly do this, we need to keep track of bound variables
+     {[
+       | Clet(id, exp, body) ->
+         apply_body1 body
+           (fun body -> Clet(id, exp, body))
+     ]} *)
   | Csequence(e1, e2) ->
       apply_body1 e2
         (fun e2 -> Csequence(e1,e2))
