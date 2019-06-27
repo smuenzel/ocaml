@@ -208,6 +208,7 @@ let arg16 i n = emit_subreg reg_low_16_name WORD i.arg.(n)
 let arg32 i n = emit_subreg reg_low_32_name DWORD i.arg.(n)
 let arg64 i n = reg64 i.arg.(n)
 
+let res8 i n = emit_subreg reg_low_8_name BYTE i.res.(n)
 let res16 i n = emit_subreg reg_low_16_name WORD i.res.(n)
 let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
@@ -729,6 +730,7 @@ let emit_instr fallthrough i =
       I.jbe (label lbl)
   | Lop(Iintop_imm (Iand, n)) when n >= 0 && n < 0x01_0000_0000 ->
     begin match i.res.(0).loc with
+    | Reg _ when n = 0xFF -> I.movzx (res8 i 0) (res i 0)
     | Reg _ -> I.and_ (int n) (res32 i 0)
     | _     -> I.and_ (int n) (res i 0)
     end
