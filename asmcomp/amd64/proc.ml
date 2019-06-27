@@ -114,7 +114,15 @@ let register_name r =
 
 (* Pack registers starting at %rax so as to reduce the number of REX
    prefixes and thus improve code density *)
-let rotate_registers = false
+let rotate_registers ~rotation_index reg =
+  (* Rotate the first 6 registers only *)
+  let compact_registers = 6 in
+  if reg < compact_registers
+  then (rotation_index + reg) mod compact_registers
+  else if reg >= 100 && reg < 116
+  then begin
+    100 + ((reg - 100 + rotation_index) mod 16)
+  end else reg
 
 (* Representation of hard registers by pseudo-registers *)
 

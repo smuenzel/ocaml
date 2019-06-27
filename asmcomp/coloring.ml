@@ -84,10 +84,7 @@ let allocate_registers() =
     List.iter (fun (r, w) -> walk r w) reg.prefer;
     reg.visited <- false in
 
-  (* Where to start the search for a suitable register.
-     Used to introduce some "randomness" in the choice between registers
-     with equal scores. This offers more opportunities for scheduling. *)
-  let start_register = Array.make Proc.num_register_classes 0 in
+  let rotation_index = ref 0 in
 
   (* Assign a location to a register, the best we can. *)
   let assign_location reg =
@@ -96,7 +93,6 @@ let allocate_registers() =
     let num_regs = Proc.num_available_registers.(cl) in
     let score = Array.make num_regs 0 in
     let best_score = ref (-1000000) and best_reg = ref (-1) in
-    let start = start_register.(cl) in
     if num_regs <> 0 then begin
       (* Favor the registers that have been assigned to pseudoregs for which
          we have a preference. If these pseudoregs have not been assigned
@@ -142,25 +138,19 @@ let allocate_registers() =
             neighbour)
         reg.interf;
       (* Pick the register with the best score *)
-      for n = start to num_regs - 1 do
-        if score.(n) > !best_score then begin
-          best_score := score.(n);
-          best_reg := n
-        end
-      done;
-      for n = 0 to start - 1 do
-        if score.(n) > !best_score then begin
-          best_score := score.(n);
-          best_reg := n
-        end
+      for n = 0 to num_regs - 1 do
+        let rotated_register = Proc.rotate_registers ~rotation_index:!rotation_index n in
+        let current_score = score.(rotated_register) in
+        if current_score > !best_score then begin
+          best_score := current_score;
+          best_reg := rotated_register;
+        end;
       done
     end;
     (* Found a register? *)
     if !best_reg >= 0 then begin
       reg.loc <- Reg(first_reg + !best_reg);
-      if Proc.rotate_registers then
-        start_register.(cl) <- (let start = start + 1 in
-                                if start >= num_regs then 0 else start)
+      rotation_index := succ !rotation_index;
     end else begin
       (* Sorry, we must put the pseudoreg in a stack location *)
       let nslots = Proc.num_stack_slots.(cl) in

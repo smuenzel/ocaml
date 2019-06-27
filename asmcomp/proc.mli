@@ -25,7 +25,7 @@ val num_available_registers: int array
 val first_available_register: int array
 val register_name: int -> string
 val phys_reg: int -> Reg.t
-val rotate_registers: bool
+val rotate_registers: rotation_index:int -> int -> int
 
 (* Calling conventions *)
 val loc_arguments: Reg.t array -> Reg.t array * int
