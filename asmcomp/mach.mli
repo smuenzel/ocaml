@@ -70,6 +70,7 @@ type operation =
         pointer to the trie node for the current function. *)
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
+  | Icompf of float_comparison
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation

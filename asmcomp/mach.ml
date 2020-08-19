@@ -60,6 +60,7 @@ type operation =
       dbginfo : Debuginfo.alloc_dbginfo; spacetime_index : int; }
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
+  | Icompf of float_comparison
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
@@ -194,7 +195,7 @@ let spacetime_node_hole_pointer_is_live_before insn =
       Arch.spacetime_node_hole_pointer_is_live_before specific_op
     | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
     | Iconst_symbol _ | Istackoffset _ | Iload _ | Istore _
-    | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
+    | Icompf _ | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
     | Ifloatofint | Iintoffloat
     | Iname_for_debugger _ -> false
     end
