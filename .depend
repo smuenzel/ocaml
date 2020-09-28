@@ -2060,13 +2060,13 @@ asmcomp/afl_instrument.cmi : \
     asmcomp/cmm.cmi
 asmcomp/arch.cmo : \
     asmcomp/x86_ast.cmi \
+    lambda/lambda.cmi \
     utils/config.cmi \
-    asmcomp/cmm.cmi \
     utils/clflags.cmi
 asmcomp/arch.cmx : \
     asmcomp/x86_ast.cmi \
+    lambda/lambda.cmx \
     utils/config.cmx \
-    asmcomp/cmm.cmx \
     utils/clflags.cmx
 asmcomp/asmgen.cmo : \
     lambda/translmod.cmi \
