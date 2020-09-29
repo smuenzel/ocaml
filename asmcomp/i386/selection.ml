@@ -143,6 +143,9 @@ let pseudoregs_for_operation op arg res =
       let newarg = Array.copy arg in
       newarg.(0) <- edx;
       (newarg, res, false)
+  (* For Icompf, the result must be in eax...edx *)
+  | Icompf _ ->
+      (arg, [| edx |], false)
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
