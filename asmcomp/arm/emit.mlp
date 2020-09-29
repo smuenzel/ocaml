@@ -702,7 +702,7 @@ let emit_instr i =
     | Lop(Icompf cmp) ->
         `	fcmpd	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	fmstat\n`;
-        1 + emit_set_condition_float cmp i.res.(0)
+        2 + emit_set_condition_float cmp i.res.(0)
     | Lop(Iintop_imm(Icomp cmp, n)) ->
         `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
         1 + emit_set_condition cmp i.res.(0)
