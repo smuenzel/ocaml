@@ -660,7 +660,7 @@ let emit_instr fallthrough i =
   | Lop(Icompf cmp) ->
       I.xor (reg i.res.(0)) (reg i.res.(0));
       let cond = emit_float_test_and_return_condition cmp i.arg in
-      I.set cond (reg i.res.(0))
+      I.set cond (reg8 i.res.(0))
   | Lop(Iintop_imm(Icomp cmp, n)) ->
       I.cmp (int n) (reg i.arg.(0));
       I.set (cond cmp) al;
