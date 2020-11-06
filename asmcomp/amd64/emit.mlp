@@ -772,8 +772,8 @@ let emit_instr fallthrough i =
         let lbl = new_label() in
         I.ucomisd (arg i 1) (arg i 0);
         I.set NE (res8 i 0);
-        I.j P (label lbl);
-        I.xor (res32 i 0) (res32 i 0);
+        I.j NP (label lbl);
+        I.mov (nat 1n) (res32 i 0);
         def_label lbl;
       | CFlt ->
         I.ucomisd (arg i 0) (arg i 1);
