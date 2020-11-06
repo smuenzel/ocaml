@@ -369,8 +369,6 @@ let max_register_pressure =
       consumes ~int:1 ~float:0
   | Istore(Single, _, _) ->
       consumes ~int:0 ~float:1
-  | Icompf _ ->
-      consumes ~int:0 ~float:1
   | _ -> consumes ~int:0 ~float:0
 
 (* Pure operations (without any side effect besides updating their result

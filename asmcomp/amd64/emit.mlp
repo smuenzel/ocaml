@@ -227,6 +227,7 @@ let arg16 i n = emit_subreg reg_low_16_name WORD i.arg.(n)
 let arg32 i n = emit_subreg reg_low_32_name DWORD i.arg.(n)
 let arg64 i n = reg64 i.arg.(n)
 
+let res8 i n = emit_subreg reg_low_8_name WORD i.res.(n)
 let res16 i n = emit_subreg reg_low_16_name WORD i.res.(n)
 let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
@@ -758,10 +759,47 @@ let emit_instr fallthrough i =
       (* We have i.arg.(0) = i.res.(0) *)
       instr_for_intop op (int n) (res i 0)
   | Lop(Icompf cmp) ->
-      let cond, a0, a1, _ = float_cond_and_swap cmp (arg i 0) (arg i 1) in
-      I.cmpsd cond a1 a0;
-      I.movd a0 (res i 0);
-      I.neg (res i 0);
+      I.xor (res32 i 0) (res32 i 0);
+      begin match cmp with
+      | CFeq ->
+        let lbl = new_label() in
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set E (res8 i 0);
+        I.j NP (label lbl);
+        I.xor (res32 i 0) (res32 i 0);
+        def_label lbl;
+      | CFneq ->
+        let lbl = new_label() in
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set NE (res8 i 0);
+        I.j P (label lbl);
+        I.xor (res32 i 0) (res32 i 0);
+        def_label lbl;
+      | CFlt ->
+        I.ucomisd (arg i 0) (arg i 1);
+        I.set A (res8 i 0);
+      | CFnlt ->
+        I.ucomisd (arg i 0) (arg i 1);
+        I.set BE (res8 i 0);
+      | CFle ->
+        I.ucomisd (arg i 0) (arg i 1);
+        I.set AE (res8 i 0);
+      | CFnle ->
+        I.ucomisd (arg i 0) (arg i 1);
+        I.set B (res8 i 0);
+      | CFgt ->
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set A (res8 i 0);
+      | CFngt ->
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set BE (res8 i 0);
+      | CFge ->
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set AE (res8 i 0);
+      | CFnge ->
+        I.ucomisd (arg i 1) (arg i 0);
+        I.set B (res8 i 0);
+      end;
   | Lop(Inegf) ->
       I.xorpd (mem64_rip OWORD (emit_symbol "caml_negf_mask")) (res i 0)
   | Lop(Iabsf) ->
