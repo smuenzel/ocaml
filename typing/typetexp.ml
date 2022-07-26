@@ -193,7 +193,7 @@ let rec transl_type env policy styp =
 
 and try_transl_old_poly_notation env policy styp lid stl =
   try
-    let path, decl = Env.find_type_by_name lid.txt env in
+    let _path, decl = Env.find_type_by_name lid.txt env in
     let rec check decl =
       match decl.type_manifest with
         None -> raise Not_found
@@ -209,12 +209,12 @@ and try_transl_old_poly_notation env policy styp lid stl =
     transl_type_aux env policy
       { styp
         with ptyp_desc =
-               Ptyp_variant([ { pfr_loc = styp.ptyp_loc
-                              ; pfr_desc = Rinherit
+               Ptyp_variant([ { prf_loc = styp.ptyp_loc
+                              ; prf_desc = Rinherit
                                     { styp with
-                                      Ptyp_desc = Ptyp_constr (lid, stl)
+                                      ptyp_desc = Ptyp_constr (lid, stl)
                                     }
-                              ; pfr_attributes = []
+                              ; prf_attributes = []
                               } ], Closed, None)
       }
   with Not_found -> raise Not_found
