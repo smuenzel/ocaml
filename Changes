@@ -105,6 +105,9 @@ Working version
   by leaf functions.
   (Tom Kelly and Xavier Leroy, review by Mark Shinwell)
 
+- #11261, #11457: Fix assert with private polymorphic variants using the old
+  syntax
+  (Stefan Muenzel, review by ???)
 
 OCaml 5.0
 ---------
