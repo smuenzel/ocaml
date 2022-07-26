@@ -191,6 +191,34 @@ let rec transl_type env policy styp =
   Builtin_attributes.warning_scope styp.ptyp_attributes
     (fun () -> transl_type_aux env policy styp)
 
+and try_transl_old_poly_notation env policy styp lid stl =
+  try
+    let path, decl = Env.find_type_by_name lid.txt env in
+    let rec check decl =
+      match decl.type_manifest with
+        None -> raise Not_found
+      | Some ty ->
+          match get_desc ty with
+            Tvariant row when Btype.static_row row -> ()
+          | Tconstr (path, _, _) ->
+              check (Env.find_type path env)
+          | _ -> raise Not_found
+    in check decl;
+    Location.deprecated styp.ptyp_loc
+      "old syntax for polymorphic variant type";
+    transl_type_aux env policy
+      { styp
+        with ptyp_desc =
+               Ptyp_variant([ { pfr_loc = styp.ptyp_loc
+                              ; pfr_desc = Rinherit
+                                    { styp with
+                                      Ptyp_desc = Ptyp_constr (lid, stl)
+                                    }
+                              ; pfr_attributes = []
+                              } ], Closed, None)
+      }
+  with Not_found -> raise Not_found
+
 and transl_type_aux env policy styp =
   let loc = styp.ptyp_loc in
   let ctyp ctyp_desc ctyp_type =
@@ -272,76 +300,48 @@ and transl_type_aux env policy styp =
       let ty, fields = transl_fields env policy o fields in
       ctyp (Ttyp_object (fields, o)) (newobj ty)
   | Ptyp_class(lid, stl) ->
-      let (path, decl, _is_variant) =
-        try
-          let path, decl = Env.find_type_by_name lid.txt env in
-          let rec check decl =
-            match decl.type_manifest with
-              None -> raise Not_found
-            | Some ty ->
-                match get_desc ty with
-                  Tvariant row when Btype.static_row row -> ()
-                | Tconstr (path, _, _) ->
-                    check (Env.find_type path env)
-                | _ -> raise Not_found
-          in check decl;
-          Location.deprecated styp.ptyp_loc
-            "old syntax for polymorphic variant type";
-          ignore(Env.lookup_type ~loc:lid.loc lid.txt env);
-          (path, decl,true)
-        with Not_found -> try
-          let lid2 =
-            match lid.txt with
-              Longident.Lident s     -> Longident.Lident ("#" ^ s)
-            | Longident.Ldot(r, s)   -> Longident.Ldot (r, "#" ^ s)
-            | Longident.Lapply(_, _) -> fatal_error "Typetexp.transl_type"
-          in
-          let path, decl = Env.find_type_by_name lid2 env in
-          ignore(Env.lookup_cltype ~loc:lid.loc lid.txt env);
-          (path, decl, false)
-        with Not_found ->
-          ignore (Env.lookup_cltype ~loc:lid.loc lid.txt env); assert false
-      in
-      if List.length stl <> decl.type_arity then
-        raise(Error(styp.ptyp_loc, env,
-                    Type_arity_mismatch(lid.txt, decl.type_arity,
-                                        List.length stl)));
-      let args = List.map (transl_type env policy) stl in
-      let params = instance_list decl.type_params in
-      List.iter2
-        (fun (sty, cty) ty' ->
-           try unify_var env ty' cty.ctyp_type with Unify err ->
-             let err = Errortrace.swap_unification_error err in
-             raise (Error(sty.ptyp_loc, env, Type_mismatch err))
-        )
-        (List.combine stl args) params;
+      begin try
+        try_transl_old_poly_notation env policy styp lid stl
+      with Not_found ->
+        let (path, decl) =
+          try
+            let lid2 =
+              match lid.txt with
+                Longident.Lident s     -> Longident.Lident ("#" ^ s)
+              | Longident.Ldot(r, s)   -> Longident.Ldot (r, "#" ^ s)
+              | Longident.Lapply(_, _) -> fatal_error "Typetexp.transl_type"
+            in
+            let path, decl = Env.find_type_by_name lid2 env in
+            ignore(Env.lookup_cltype ~loc:lid.loc lid.txt env);
+            (path, decl)
+          with Not_found ->
+            ignore (Env.lookup_cltype ~loc:lid.loc lid.txt env); assert false
+        in
+        if List.length stl <> decl.type_arity then
+          raise(Error(styp.ptyp_loc, env,
+                      Type_arity_mismatch(lid.txt, decl.type_arity,
+                                          List.length stl)));
+        let args = List.map (transl_type env policy) stl in
+        let params = instance_list decl.type_params in
+        List.iter2
+          (fun (sty, cty) ty' ->
+             try unify_var env ty' cty.ctyp_type with Unify err ->
+               let err = Errortrace.swap_unification_error err in
+               raise (Error(sty.ptyp_loc, env, Type_mismatch err))
+          )
+          (List.combine stl args) params;
         let ty_args = List.map (fun ctyp -> ctyp.ctyp_type) args in
-      let ty = Ctype.expand_head env (newconstr path ty_args) in
-      let ty = match get_desc ty with
-        Tvariant row ->
-          let fields =
-            List.map
-              (fun (l,f) -> l,
-                match row_field_repr f with
-                | Rpresent oty -> rf_either_of oty
-                | _ -> f)
-              (row_fields row)
-          in
-          (* NB: row is always non-static here; more is thus never Tnil *)
-          let more =
-            if policy = Univars then new_pre_univar () else newvar () in
-          let row =
-            create_row ~fields ~more
-              ~closed:true ~fixed:None ~name:(Some (path, ty_args)) in
-          newty (Tvariant row)
-      | Tobject (fi, _) ->
-          let _, tv = flatten_fields fi in
-          if policy = Univars then pre_univars := tv :: !pre_univars;
-          ty
-      | _ ->
-          assert false
-      in
-      ctyp (Ttyp_class (path, lid, args)) ty
+        let ty = Ctype.expand_head env (newconstr path ty_args) in
+        let ty = match get_desc ty with
+          | Tobject (fi, _) ->
+              let _, tv = flatten_fields fi in
+              if policy = Univars then pre_univars := tv :: !pre_univars;
+              ty
+          | _ ->
+              assert false
+        in
+        ctyp (Ttyp_class (path, lid, args)) ty
+      end
   | Ptyp_alias(st, alias) ->
       let cty =
         try
