@@ -5009,43 +5009,44 @@ let rec arity ty =
 
 (* Check for non-generalizable type variables *)
 exception Nongen
-let visited = ref TypeSet.empty
 
-let rec nongen_schema_rec env ty =
-  if TypeSet.mem ty !visited then () else begin
-    visited := TypeSet.add ty !visited;
+let rec nongen_schema_rec env visited ty =
+  if TypeSet.mem ty visited then visited else begin
+    let visited = TypeSet.add ty visited in
     match get_desc ty with
       Tvar _ when get_level ty <> generic_level ->
         raise Nongen
     | Tconstr _ ->
-        let old = !visited in
-        begin try iter_type_expr (nongen_schema_rec env) ty
+        let old = visited in
+        begin try fold_type_expr (nongen_schema_rec env) visited ty
         with Nongen -> try
-          visited := old;
-          nongen_schema_rec env (try_expand_head try_expand_safe env ty)
+          let visited = old in
+          nongen_schema_rec env visited (try_expand_head try_expand_safe env ty)
         with Cannot_expand ->
           raise Nongen
         end
     | Tfield(_, kind, t1, t2) ->
-        if field_kind_repr kind = Fpublic then
-          nongen_schema_rec env t1;
-        nongen_schema_rec env t2
+        let visited =
+          if field_kind_repr kind = Fpublic
+          then nongen_schema_rec env visited t1
+          else visited
+        in
+        nongen_schema_rec env visited t2
     | Tvariant row ->
-        iter_row (nongen_schema_rec env) row;
-        if not (static_row row) then nongen_schema_rec env (row_more row)
+        let visited = fold_row (nongen_schema_rec env) visited row in
+        if not (static_row row)
+        then nongen_schema_rec env visited (row_more row)
+        else visited
     | _ ->
-        iter_type_expr (nongen_schema_rec env) ty
+        fold_type_expr (nongen_schema_rec env) visited ty
   end
 
 (* Return whether all variables of type [ty] are generic. *)
 let nongen_schema env ty =
-  visited := TypeSet.empty;
   try
-    nongen_schema_rec env ty;
-    visited := TypeSet.empty;
+    let _visited : TypeSet.t = nongen_schema_rec env TypeSet.empty ty in
     false
   with Nongen ->
-    visited := TypeSet.empty;
     true
 
 (* Check that all type variables are generalizable *)
