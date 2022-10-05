@@ -421,11 +421,8 @@ let rec filter_row_fields erase = function
 
 exception Non_closed of type_expr * bool
 
-let free_variables = ref []
-let really_closed = ref None
-
 (* [free_vars_rec] collects the variables of the input type
-   expression into the [free_variables] reference. It is used for
+   expression. It is used for
    several different things in the type-checker, with the following
    bells and whistles:
    - If [really_closed] is Some typing environment, types in the environment
@@ -444,41 +441,46 @@ let really_closed = ref None
    [free_variables] drops the type/row information
    and only returns a [variable list].
  *)
-let rec free_vars_rec real ty =
-  if try_mark_node ty then
-    match get_desc ty, !really_closed with
+let rec free_vars_rec ~really_closed real free_variables ty =
+  if try_mark_node ty
+  then begin
+    match get_desc ty, really_closed with
       Tvar _, _ ->
-        free_variables := (ty, real) :: !free_variables
+        (ty, real) :: free_variables
     | Tconstr (path, tl, _), Some env ->
-        begin try
-          let (_, body, _) = Env.find_type_expansion path env in
-          if get_level body <> generic_level then
-            free_variables := (ty, real) :: !free_variables
-        with Not_found -> ()
-        end;
-        List.iter (free_vars_rec true) tl
+        let free_variables =
+          try
+            let (_, body, _) = Env.find_type_expansion path env in
+            if get_level body <> generic_level then
+              (ty, real) :: free_variables
+            else free_variables
+          with Not_found -> free_variables
+        in
+        List.fold_left (free_vars_rec ~really_closed true) free_variables tl
 (* Do not count "virtual" free variables
     | Tobject(ty, {contents = Some (_, p)}) ->
         free_vars_rec false ty; List.iter (free_vars_rec true) p
 *)
     | Tobject (ty, _), _ ->
-        free_vars_rec false ty
+        free_vars_rec ~really_closed false free_variables ty
     | Tfield (_, _, ty1, ty2), _ ->
-        free_vars_rec true ty1; free_vars_rec false ty2
+        let free_variables =
+          free_vars_rec ~really_closed true free_variables ty1
+        in
+        free_vars_rec ~really_closed false free_variables ty2
     | Tvariant row, _ ->
-        iter_row (free_vars_rec true) row;
-        if not (static_row row) then free_vars_rec false (row_more row)
+        let free_variables =
+          fold_row (free_vars_rec ~really_closed true) free_variables row
+        in
+        if not (static_row row)
+        then free_vars_rec ~really_closed false free_variables (row_more row)
+        else free_variables
     | _    ->
-        iter_type_expr (free_vars_rec true) ty
+        fold_type_expr (free_vars_rec ~really_closed true) free_variables ty
+  end
+  else free_variables
 
-let free_vars ?env ty =
-  free_variables := [];
-  really_closed := env;
-  free_vars_rec true ty;
-  let res = !free_variables in
-  free_variables := [];
-  really_closed := None;
-  res
+let free_vars ?env ty = free_vars_rec ~really_closed:env true [] ty
 
 let free_variables ?env ty =
   let tl = List.map fst (free_vars ?env ty) in
