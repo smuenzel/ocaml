@@ -1312,12 +1312,9 @@ let conflicts free bound =
   let bound = List.map get_id bound in
   TypeSet.exists (fun t -> List.memq (get_id t) bound) free
 
-let delayed_copy = ref []
-    (* copying to do later *)
-
 (* Copy without sharing until there are no free univars left *)
 (* all free univars must be included in [visited]            *)
-let rec copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share
+let rec copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share ~delayed_copy
     (visited : (int * (type_expr * type_expr list)) list) (ty : type_expr) =
   let univars = free ty in
   if is_Tvar ty || may_share && TypeSet.is_empty univars then
@@ -1344,7 +1341,8 @@ let rec copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share
       | Tlink _ | Tsubst _ ->
           assert false
     in
-    let copy_rec = copy_sep ~cleanup_scope ~fixed ~free ~bound visited in
+    let copy_rec =
+      copy_sep ~cleanup_scope ~fixed ~free ~bound ~delayed_copy visited in
     let desc' =
       match desc with
       | Tvariant row ->
@@ -1363,7 +1361,7 @@ let rec copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share
             List.map2 (fun ty t -> get_id ty, (t, bound)) tl tl' @ visited in
           let body =
             copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share:true
-              visited t1 in
+              ~delayed_copy visited t1 in
           Tpoly (body, tl')
       | Tfield (p, k, ty1, ty2) ->
           (* the kind is kept shared, see Btype.copy_type_desc *)
@@ -1375,6 +1373,16 @@ let rec copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share
     t
   end
 
+let copy_sep ~cleanup_scope ~fixed ~free ~bound ~may_share visited ty =
+  (* copying to do later *)
+  let delayed_copy = ref [] in
+  let result =
+    copy_sep
+      ~cleanup_scope ~fixed ~free ~bound ~may_share ~delayed_copy visited ty
+  in
+  List.iter Lazy.force !delayed_copy;
+  result
+
 let instance_poly' cleanup_scope ~keep_names fixed univars sch =
   (* In order to compute univars below, [sch] should not contain [Tsubst] *)
   let copy_var ty =
@@ -1384,12 +1392,9 @@ let instance_poly' cleanup_scope ~keep_names fixed univars sch =
   in
   let vars = List.map copy_var univars in
   let pairs = List.map2 (fun u v -> get_id u, (v, [])) univars vars in
-  delayed_copy := [];
   let ty =
     copy_sep ~cleanup_scope ~fixed ~free:(compute_univars sch) ~bound:[]
       ~may_share:true pairs sch in
-  List.iter Lazy.force !delayed_copy;
-  delayed_copy := [];
   vars, ty
 
 let instance_poly ?(keep_names=false) fixed univars sch =
