@@ -196,7 +196,9 @@ external ( == ) : 'a -> 'a -> bool = "%eq"
    also affects [e2].
    On non-mutable types, the behavior of [( == )] is
    implementation-dependent; however, it is guaranteed that
-   [e1 == e2] implies [compare e1 e2 = 0].
+   [e1 == e2] implies [compare e1 e2 = 0]. Specifically, this can mean
+   that depending on optimization decisions of the compiler [e1 == e2]
+   may be [true] or [false], when [compare e1 e2 = 0].
    Left-associative operator,  see {!Ocaml_operators} for more information.
 *)
 
