@@ -27,16 +27,28 @@ let phys_equal (approxs:A.t list) =
   | [] | [_] | _ :: _ :: _ :: _ ->
       Misc.fatal_error "wrong number of arguments for equality"
   | [a1; a2] ->
-    (* N.B. The following would be incorrect if the variables are not
-       bound in the environment:
-       match a1.var, a2.var with
-       | Some v1, Some v2 when Variable.equal v1 v2 -> true
-       | _ -> ...
-    *)
     match a1.symbol, a2.symbol with
     | Some (s1, None), Some (s2, None) -> Symbol.equal s1 s2
     | Some (s1, Some f1), Some (s2, Some f2) -> Symbol.equal s1 s2 && f1 = f2
-    | _ -> false
+    | _ ->
+        (* Optimizing physical identity in the case of equal variables
+           is not straightforward, due to the compilers decisions around
+           float boxing/unboxing. Two approximations that resolve to the
+           same variable could be separately boxed (yielding false), or
+           resolve to the same boxed block (yielding true).
+
+           In the case of blocks, the manual only guarantees that
+           [e1 == 2] implies [compare e1 e2 = 0], which is still true in
+           case of this optimization.
+           Furthermore, even without this optimization, [==] can observe
+           compiler boxing decisions, meaning that the result always
+           depends on compiler optimizations in the boxed float case. Thus,
+           we don't lose any guarantees by optimizing the equal variable
+           case, but still gain performance.
+        *)
+        match a1.var, a2.var with
+        | Some v1, Some v2 when Variable.equal v1 v2 -> true
+        | _ -> false
 
 let is_known_to_be_some_kind_of_int (arg:A.descr) =
   match arg with
