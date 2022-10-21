@@ -106,8 +106,7 @@ let invert_then_else = function
   | Then_false_else_true -> Then_true_else_false
   | Unknown -> Unknown
 
-let mut_from_env ?mut env ptr =
-  let mut = match mut with | None -> Mutable | Some mut -> mut in
+let mut_from_env ?(mut = Mutable) env ptr =
   match env.environment_param with
   | None -> mut
   | Some environment_param ->
