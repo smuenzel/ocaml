@@ -106,19 +106,20 @@ let invert_then_else = function
   | Then_false_else_true -> Then_true_else_false
   | Unknown -> Unknown
 
-let mut_from_env env ptr =
+let mut_from_env ?mut env ptr =
+  let mut = match mut with | None -> Mutable | Some mut -> mut in
   match env.environment_param with
-  | None -> Mutable
+  | None -> mut
   | Some environment_param ->
     match ptr with
     | Cvar ptr ->
       (* Loads from the current function's closure are immutable. *)
       if V.same environment_param ptr then Immutable
-      else Mutable
-    | _ -> Mutable
+      else mut
+    | _ -> mut
 
-let get_field env ptr n dbg =
-  let mut = mut_from_env env ptr in
+let get_field ~mut env ptr n dbg =
+  let mut = mut_from_env ~mut env ptr in
   get_field_gen mut ptr n dbg
 
 type rhs_kind =
@@ -798,8 +799,8 @@ and transl_prim_1 env p arg dbg =
     Popaque ->
       opaque (transl env arg) dbg
   (* Heap operations *)
-  | Pfield(n, _, _) ->
-      get_field env (transl env arg) n dbg
+  | Pfield(n, _, mut) ->
+      get_field ~mut env (transl env arg) n dbg
   | Pfloatfield n ->
       let ptr = transl env arg in
       box_float dbg (floatfield n ptr dbg)
