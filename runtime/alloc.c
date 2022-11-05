@@ -68,6 +68,7 @@ Caml_inline value do_alloc_small(mlsize_t wosize, tag_t tag, value* vals)
 {
   Caml_check_caml_state();
   value v;
+  value* vals_copy;
   mlsize_t i;
   CAMLassert (tag < 256);
 
@@ -76,8 +77,9 @@ Caml_inline value do_alloc_small(mlsize_t wosize, tag_t tag, value* vals)
      the fast path. */
 #define Enter_gc(dom_st, wosize) do {                       \
     CAMLparam0();                                           \
-    CAMLlocalN(vals_copy, (wosize));                        \
+    vals_copy = alloca(sizeof(value)*(wosize));             \
     for (i = 0; i < (wosize); i++) vals_copy[i] = vals[i];  \
+    CAMLxparamN(vals_copy, (wosize));                       \
     Alloc_small_enter_GC(dom_st, wosize);                   \
     for (i = 0; i < (wosize); i++) vals[i] = vals_copy[i];  \
     CAMLdrop;                                               \
@@ -153,8 +155,9 @@ CAMLexport value caml_alloc_N (mlsize_t wosize, tag_t tag, ...)
 {
   va_list args;
   mlsize_t i;
-  value vals[wosize];
+  value*vals;
   value ret;
+  vals = alloca(sizeof(value)*wosize);
   va_start(args, tag);
   for (i = 0; i < wosize; i++)
     vals[i] = va_arg(args, value);

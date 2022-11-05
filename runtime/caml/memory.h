@@ -403,7 +403,7 @@ struct caml__roots_block {
   CAMLxparam5 (x, y, z, t, u)
 
 #define CAMLlocalN(x, size) \
-  value x [(size)]; \
+  value*x = alloca(sizeof(value)*(size)); \
   int caml__i_##x; \
   CAMLxparamN (x, (size)); \
   for (caml__i_##x = 0; caml__i_##x < size; caml__i_##x ++) { \
