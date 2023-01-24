@@ -196,6 +196,28 @@ method! select_store is_assign addr exp =
   | _ ->
       super#select_store is_assign addr exp
 
+method! select_condition op =
+  match op with
+  | Cop (Ccmpi Ceq
+        ,[Cop( Casr
+             , [ Cop(Cload { memory_chunk = Word_val }
+                   , [ loc ]
+                   , _)
+               ; Cconst_int(56, _)
+               ]
+             , _
+             )
+         ; Cconst_int (n, _)]
+        , dbg
+        ) when n > 0 && n < 256 ->
+      let imm = n in
+      let mode, loc =
+        self#select_addressing Byte_unsigned
+          (Cop (Caddi, [loc; Cconst_int (7, dbg)], dbg))
+      in
+      Ispecifictest ( false, Itestbyte_imm { mode; imm } ), loc
+  | _ -> super#select_condition op
+
 method! select_operation op args dbg =
   match op with
   (* Recognize the LEA instruction *)

@@ -42,6 +42,9 @@ type specific_operation =
   | Izextend32                         (* 32 to 64 bit conversion with zero
                                           extension *)
 
+and specific_test =
+  | Itestbyte_imm of { mode : addressing_mode; imm : int }
+
 and float_operation =
     Ifloatadd | Ifloatsub | Ifloatmul | Ifloatdiv
 

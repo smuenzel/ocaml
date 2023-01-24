@@ -779,6 +779,11 @@ let emit_instr env fallthrough i =
       | Ieventest ->
           I.test (int 1) (arg8 i 0);
           I.je lbl
+      | Ispecifictest (negated, Itestbyte_imm { mode; imm }) ->
+          I.cmp (int imm) (addressing mode BYTE i 0);
+          if negated
+          then I.jne lbl
+          else I.je lbl
       end
   | Lcondbranch3(lbl0, lbl1, lbl2) ->
       I.cmp (int 1) (arg i 0);

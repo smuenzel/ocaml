@@ -74,6 +74,7 @@ let invert_test = function
   | Ifloattest(cmp) -> Ifloattest(Cmm.negate_float_comparison cmp)
   | Ieventest -> Ioddtest
   | Ioddtest -> Ieventest
+  | Ispecifictest (neg, x) -> Ispecifictest (not neg, x) 
 
 (* The "end" instruction *)
 

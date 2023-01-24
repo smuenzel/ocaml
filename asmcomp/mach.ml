@@ -35,6 +35,7 @@ type test =
   | Ifloattest of float_comparison
   | Ioddtest
   | Ieventest
+  | Ispecifictest of bool * Arch.specific_test
 
 type operation =
     Imove
