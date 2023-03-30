@@ -994,8 +994,8 @@ Line 4, characters 17-23:
 4 |       method n = self#m
                      ^^^^^^
 Warning 17 [undeclared-virtual-method]: the virtual method "m" is not declared.
-Uncaught exception: File "typing/ctype.ml", line 3737, characters 13-19: Assertion failed
 
+class c : object method m : int method n : int end
 |}];;
 
 class virtual c = object (self : 'c)
@@ -1178,7 +1178,13 @@ class c = [ < foo : string; .. > ] p;;
 [%%expect {|
 class ['a] p :
   object ('a) constraint 'a = < .. > method private foo : int end
-class c : object method foo : int end
+Line 2, characters 12-32:
+2 | class c = [ < foo : string; .. > ] p;;
+                ^^^^^^^^^^^^^^^^^^^^
+Error: The type parameter "< foo : string; .. >"
+       does not meet its constraint: it should be
+         "< foo : int; .. > as 'a" = "< foo : int; .. >"
+       The method "foo" has type "string", but the expected method type was "int"
 |}];;
 
 (* Errors for undefined methods *)
