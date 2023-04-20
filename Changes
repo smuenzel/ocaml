@@ -63,6 +63,80 @@ OCaml 5.5.1 (4 September 2026)
   to report as the number of words of minor heap consumed, including headers.
   (Tim McGilchrist, review by Nicolás Ojeda Bär)
 
+- #15016, #14151: Fix spurious "Runtime_events: corrupt stream" failures when a
+  consumer falls behind the producer. The consumer now reports an overwritten
+  ring slot as lost events rather than corruption, and write_to_ring publishes
+  the ring head advance before overwriting the slots that advance releases.
+  (Tim McGilchrist, reported by mattiasdrp, review by Sadiq Jaffer and
+   Zane Hambly)
+
+* #14978: fix precedence of `with module type` construct in order to parse
+  `T with module type S = X -> X` as `T with module type S = (X -> X)`
+  (Pieter Goetschalckx, review by Gabriel Scherer and Florian Angeletti)
+
+* #15010: Fix truncation of the lost event count in runtime_events_consumer.c
+  The count is a difference of two uint64_t ring positions but was passed to
+  the callback as an int. caml_runtime_events_set_lost_events now takes a
+  callback whose lost_words parameter is uint64_t, the OCaml API is unchanged.
+  (Tim McGilchrist, review by Sadiq Jaffer and Miod Vallat)
+
+- #15039: Various runtime events documentation improvements
+  (Tim McGilchrist, reviewed by Sadiq Jaffer and Antonin Décimo)
+
+- #15069: Fix unchaught exception when comparing signatures adding the same
+  extension constructor to types with different arities
+  (Samuel Vivien, reported by Florian Angeletti, review by Florian Angeletti)
+
+- #15045: Atomic loads whose results are unused should not be removed
+  during dead-code elimination.
+  (Xavier Clerc, review by Steven Dolan and KC Sivaramakrishnan)
+
+- #15093: Windows: fix a bug in the `Unix.select` emulation which could result
+  in an out-of-bounds memory access. This is triggered when the watched set
+  contains 63 or more sockets along with at least one non-socket descriptor, or
+  more than 64 sockets in a single list.
+  (Romain Beauxis, review by Nicolás Ojeda Bär, Stefan Muenzel and Antonin
+  Décimo)
+
+- #14975: Windows: fix a bug in `Unix.select` when the watched set consists of
+  sockets and non-sockets. If the call failed with an error, the sockets passed
+  to it could be left in non-blocking mode, and one system handle was also
+  leaked for each socket.
+  (Romain Beauxis, review by Nicolás Ojeda Bär)
+
+- #12195: Lower levels in checked module packages so that remaining weak
+  variables may not be unified with out-of-scope types.
+  (Chris Casinghino and Leo White, review by ???)
+
+OCaml 5.5.1
+-----------
+
+### Bug fixes:
+
+- #14891, #14892: fix scope error leading to an erroneous typechecking for
+  non-dependent application of module-dependent function in presence of
+  dependent first-class module types:
+  ```ocaml
+  module type T = sig module type S end
+  let f (module M:T) (m: (module M.S)) = m
+  module type P = sig type 'a t end
+  let error =
+    f (module struct module type S = P end) (module List)
+  ````
+  (Florian Angeletti, report by Hazem ElMasry, review by Gabriel Scherer)
+
+- #14871, #14914: Ignore OCAMLTOP_INCLUDE_PATH during the build.
+  (David Allsopp, report by Andreas Rossberg, review by Florian Angeletti)
+
+- #14901, #14923: Fix the generated installation script to cope with macOS's
+  geriatric version of bash when executing in opam's sandbox.
+  (David Allsopp, report by Julian Fondren and Sacha-Élie Ayoun, investigation
+   and initial fix by Kate Deplaix, review by Florian Angeletti)
+
+- #14940, fix a memory leak in the OCaml runtime by bounding the size
+  of the internal cache of stacks.
+  (Vesa Karvonen, Florian Angeletti, review by Gabriel Scherer)
+
 - #14989: Improve build reproducibility by letting only otherlibs/{str,unix}
   build their own .cmi and .cmx. The generic %.cmi/%.cmx rules of the root
   Makefile were racing with them under make -j and recorded a different source
