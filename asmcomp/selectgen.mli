@@ -139,5 +139,3 @@ class virtual selector_generic : object
     environment -> Cmm.expression -> Reg.t array option
   method emit_tail : environment -> Cmm.expression -> unit
 end
-
-val reset : unit -> unit

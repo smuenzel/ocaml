@@ -1169,6 +1169,3 @@ method emit_fundecl ~future_funcnames f =
   }
 
 end
-
-let reset () =
-  current_function_name := ""
