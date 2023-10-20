@@ -3379,8 +3379,8 @@ let report_error ~loc _env = function
       Location.errorf ~loc
         "The type of this packed module contains variables:@ %a@ \
          @[<2>@{<hint>Hint@}: \
-         Consider using locally abstract types to bind these \
-         variables.@ %a@]"
+         Consider using locally abstract types to bind@ \
+         these variables.@ %a@]"
         (Style.as_inline_code type_expr) ty
         Misc.print_see_manual manual_ref
   | Scoping_pack (lid, ty) ->
