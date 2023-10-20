@@ -55,6 +55,8 @@ Line 1, characters 14-15:
                   ^
 Error: The type of this packed module contains variables:
        "(module S with type t = 'a)"
+       Hint: Consider using locally abstract types to bind these variables.
+         (see manual section 12.4)
 |}];;
 
 let f (type a) (module M : S with type t = a) = M.x;;
@@ -83,6 +85,8 @@ Line 1, characters 9-19:
              ^^^^^^^^^^
 Error: The type of this packed module contains variables:
        "(module S with type t = 'a)"
+       Hint: Consider using locally abstract types to bind these variables.
+         (see manual section 12.4)
 |}];;
 
 let f (type a) ({s=(module M)} : a s) = M.x;;
