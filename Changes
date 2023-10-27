@@ -141,10 +141,14 @@ Working version
 - #12634: Simplify TSan backtrace bookkeeping upon raise
   (Olivier Nicole and Fabrice Buoro, review by Gabriel Scherer)
 
-* #12686: Some primitives had the wrong types to be callable from the bytecode
+- #12686: Some primitives had the wrong types to be callable from the bytecode
   interpreter.  Either fix their types, mark them as `CAMLexport` instead of
   `CAMLprim`, or remove them entirely if no longer used.
   (Xavier Leroy, review by David Allsopp)
+
+- #11332, #?????: Change Bool_val to produce a boolean result that is correct
+  in both C and C++.
+  (Xavier Leroy, Stefan Muenzel, review by ?????)
 
 
 ### Code generation and optimizations:

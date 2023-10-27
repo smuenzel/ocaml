@@ -425,7 +425,7 @@ CAMLextern value caml_atom(tag_t);
 /* Booleans are integers 0 or 1 */
 
 #define Val_bool(x) Val_int((x) != 0)
-#define Bool_val(x) Int_val(x)
+#define Bool_val(x) ((v) != Val_false)
 #define Val_false Val_int(0)
 #define Val_true Val_int(1)
 #define Val_not(x) (Val_false + Val_true - (x))
