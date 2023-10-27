@@ -584,10 +584,18 @@ let rec transl env e =
          [Uprim(Pcompare_ints, [arg1; arg2], _);
           Uconst(Uconst_int 0)]) ->
           transl env (Uprim (comp, [arg1; arg2], dbg))
+      | (Pintcomp _ as comp,
+         [Uconst(Uconst_int 0);
+          Uprim(Pcompare_ints, [arg1; arg2], _)]) ->
+          transl env (Uprim (comp, [arg2; arg1], dbg))
       | (Pintcomp comp,
          [Uprim(Pcompare_bints b, [arg1; arg2], _);
           Uconst(Uconst_int 0)]) ->
           transl env (Uprim (Pbintcomp (b, comp), [arg1; arg2], dbg))
+      | (Pintcomp comp,
+         [Uconst(Uconst_int 0);
+          Uprim(Pcompare_bints b, [arg1; arg2], _)]) ->
+          transl env (Uprim (Pbintcomp (b, comp), [arg2; arg1], dbg))
       | (p, [arg]) ->
           transl_prim_1 env p arg dbg
       | (p, [arg1; arg2]) ->
