@@ -118,6 +118,9 @@ let natint_const_untagged dbg n =
   then Cconst_natint (n,dbg)
   else Cconst_int (Nativeint.to_int n, dbg)
 
+let targetint_const_untagged dbg n =
+  Targetint.to_int64
+
 let cint_const n =
   Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
@@ -217,23 +220,34 @@ let ignore_high_bit_int = function
         [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) -> c
   | c -> c
 
-let lsr_int c1 c2 dbg =
-  match c2 with
-    Cconst_int (0, _) ->
-      c1
-  | Cconst_int (n, _) when n > 0 ->
-      Cop(Clsr, [ignore_low_bit_int c1; c2], dbg)
-  | _ ->
-      Cop(Clsr, [c1; c2], dbg)
+let shift_valid n =
+  n >= 0 && n < size_int * 8
 
-let asr_int c1 c2 dbg =
-  match c2 with
-    Cconst_int (0, _) ->
+let right_shift_eliminates_or ~n_shift ~n_or =
+  shift_valid n_shift
+  && Targetint.(equal (shift_right (of_int n_or) n_shift) zero)
+
+let rec shift_right_int op kind c1 c2 dbg =
+  match c1, c2 with
+  | Cop(Cor, [c1p; Cconst_int (n_or, _)], _), Cconst_int (n_shift,_)
+    when right_shift_eliminates_or ~n_or ~n_shift ->
+      shift_right_int op kind c1p c2 dbg
+  | Cop((Clsl | Casr as kind'), [c1p; Cconst_int (n1, _)], _), Cconst_int (n2, dbg_n2)
+    when shift_valid (n1 + n2) && n1 > 0 && n2 > 0 ->
+      shift_right_int op kind' c1p (Cconst_int (n1 + n2, dbg_n2)) dbg
+  | Cconst_int (c1i, _), Cconst_int (c2i, _) ->
+      let result = op (Targetint.of_int c1i) c2i in
+      if Targeti
+      Cconst_int (op c1i c2i, dbg)
+  | _, Cconst_int (0, _) ->
       c1
-  | Cconst_int (n, _) when n > 0 ->
-      Cop(Casr, [ignore_low_bit_int c1; c2], dbg)
-  | _ ->
-      Cop(Casr, [c1; c2], dbg)
+  | _, Cconst_int (n, _) when n > 0 ->
+      Cop(kind, [ignore_low_bit_int c1; c2], dbg)
+  | _, _ ->
+      Cop(kind, [c1; c2], dbg)
+
+let asr_int c1 c2 dbg = shift_right_int Targetint.shift_right Casr c1 c2 dbg
+let lsr_int c1 c2 dbg = shift_right_int Targetint.shift_right_logical Clsr c1 c2 dbg
 
 let tag_int i dbg =
   match i with
@@ -247,15 +261,7 @@ let tag_int i dbg =
       incr_int (lsl_int c (Cconst_int (1, dbg)) dbg) dbg
 
 let untag_int i dbg =
-  match i with
-    Cconst_int (n, _) -> Cconst_int(n asr 1, dbg)
-  | Cop(Cor, [Cop(Casr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
-    when n > 0 && n < size_int * 8 ->
-      Cop(Casr, [c; Cconst_int (n+1, dbg)], dbg)
-  | Cop(Cor, [Cop(Clsr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
-    when n > 0 && n < size_int * 8 ->
-      Cop(Clsr, [c; Cconst_int (n+1, dbg)], dbg)
-  | c -> asr_int c (Cconst_int (1, dbg)) dbg
+  asr_int i (Cconst_int (1, dbg)) dbg
 
 let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
   match cond with
