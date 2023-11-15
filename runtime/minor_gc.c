@@ -545,7 +545,8 @@ void caml_empty_minor_heap_promote(caml_domain_state* domain,
 
       for( r = ref_start ; r < foreign_major_ref->ptr && r < ref_end ; r++ )
       {
-        oldify_one (&st, *((volatile value *) *r), *r);
+        volatile value* pr = *r;
+        oldify_one (&st, *pr, pr);
         remembered_roots++;
       }
 
