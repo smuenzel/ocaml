@@ -77,19 +77,17 @@ CAMLprim value caml_natdynlink_globals_inited(value unit)
 
 CAMLprim value caml_natdynlink_open(value filename, value global)
 {
-  CAMLparam2 (filename, global);
+  CAMLparam1 (filename); /* global is a bool */
   CAMLlocal3 (res, handle, header);
   void *sym;
   void *dlhandle;
   char_os *p;
-  int global_dup;
 
   /* TODO: dlclose in case of error... */
 
   p = caml_stat_strdup_to_os(String_val(filename));
-  global_dup = Int_val(global);
   caml_enter_blocking_section();
-  dlhandle = caml_dlopen(p, global_dup);
+  dlhandle = caml_dlopen(p, Int_val(global));
   caml_leave_blocking_section();
   caml_stat_free(p);
 
