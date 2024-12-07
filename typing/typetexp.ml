@@ -24,7 +24,7 @@ open Typedtree
 open Types
 open Ctype
 
-exception Already_bound
+exception Already_bound of string
 
 type error =
   | Unbound_type_variable of string * string list
@@ -376,7 +376,7 @@ let transl_type_param env styp =
           if not (valid_tyvar_name name) then
             raise (Error (loc, Env.empty, Invalid_variable_name ("'" ^ name)));
           if TyVarEnv.is_in_scope name then
-            raise Already_bound;
+            raise (Already_bound name);
           let v = new_global_var ~name () in
           TyVarEnv.add name v;
           v

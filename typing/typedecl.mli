@@ -67,7 +67,7 @@ and reaching_type_step =
   | Contains of type_expr * type_expr
 
 type error =
-    Repeated_parameter
+    Repeated_parameter of string
   | Duplicate_constructor of string
   | Too_many_constructors
   | Duplicate_label of string

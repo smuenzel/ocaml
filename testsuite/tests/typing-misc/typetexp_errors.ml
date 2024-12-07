@@ -2,6 +2,14 @@
  expect;
 *)
 
+type ('a,'at,'any,'a) t = A of 'a
+[%%expect {|
+Line 1, characters 18-20:
+1 | type ('a,'at,'any,'a) t = A of 'a
+                      ^^
+Error: The type variable "'a" occurs several times in this parameter list
+|}]
+
 type ('a,'at,'any,'en) t = A of 'an
 [%%expect {|
 Line 1, characters 32-35:
@@ -9,8 +17,7 @@ Line 1, characters 32-35:
                                     ^^^
 Error: The type variable "'an" is unbound in this type declaration.
 Hint: Did you mean "'a", "'any", "'at" or "'en"?
-|}
-]
+|}]
 
 type mismatched = [< `A of int | `B of float > `B `C]
 [%%expect {|

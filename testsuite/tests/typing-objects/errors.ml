@@ -75,3 +75,19 @@ Error: The type of this class,
        contains the non-generalizable type variable(s): "'_a".
        (see manual section 6.1.2)
 |}]
+
+class ['a, 'a] c = object end
+[%%expect{|
+Line 1, characters 11-13:
+1 | class ['a, 'a] c = object end
+               ^^
+Error: The type variable "'a" occurs several times in this parameter list
+|}]
+
+class type ['a, 'a] c = object end
+[%%expect{|
+Line 1, characters 16-18:
+1 | class type ['a, 'a] c = object end
+                    ^^
+Error: The type variable "'a" occurs several times in this parameter list
+|}]

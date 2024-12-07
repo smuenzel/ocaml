@@ -70,7 +70,7 @@ val transl_type_scheme:
 val transl_type_param:
   Env.t -> Parsetree.core_type -> Typedtree.core_type
 
-exception Already_bound
+exception Already_bound of string
 
 type error =
   | Unbound_type_variable of string * string list

@@ -96,7 +96,7 @@ type error =
   | Cannot_apply of class_type
   | Apply_wrong_label of arg_label
   | Pattern_type_clash of type_expr
-  | Repeated_parameter
+  | Repeated_parameter of string
   | Unbound_class_2 of Longident.t
   | Unbound_class_type_2 of Longident.t
   | Abbrev_type_clash of type_expr * type_expr * type_expr

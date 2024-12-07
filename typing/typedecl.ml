@@ -36,7 +36,7 @@ and reaching_type_step =
   | Contains of type_expr * type_expr
 
 type error =
-    Repeated_parameter
+    Repeated_parameter of string
   | Duplicate_constructor of string
   | Too_many_constructors
   | Duplicate_label of string
@@ -209,8 +209,8 @@ let make_params env params =
   let make_param (sty, v) =
     try
       (transl_type_param env sty, v)
-    with Already_bound ->
-      raise(Error(sty.ptyp_loc, Repeated_parameter))
+    with Already_bound var->
+      raise(Error(sty.ptyp_loc, Repeated_parameter var))
   in
     List.map make_param params
 
@@ -1986,8 +1986,10 @@ let quoted_type ppf ty = Style.as_inline_code Printtyp.type_expr ppf ty
 let quoted_constr = Style.as_inline_code Pprintast.Doc.constr
 
 let report_error_doc ppf = function
-  | Repeated_parameter ->
-      fprintf ppf "A type parameter occurs several times"
+  | Repeated_parameter var ->
+      fprintf ppf
+        "The type variable %a occurs several times in this parameter list"
+        (Style.as_inline_code Pprintast.Doc.tyvar) var
   | Duplicate_constructor s ->
       fprintf ppf "Two constructors are named %a" Style.inline_code s
   | Too_many_constructors ->

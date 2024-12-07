@@ -80,7 +80,7 @@ type error =
   | Cannot_apply of class_type
   | Apply_wrong_label of arg_label
   | Pattern_type_clash of type_expr
-  | Repeated_parameter
+  | Repeated_parameter of string
   | Unbound_class_2 of Longident.t
   | Unbound_class_type_2 of Longident.t
   | Abbrev_type_clash of type_expr * type_expr * type_expr
@@ -1528,8 +1528,8 @@ let class_infos define_class kind
         let make_param (sty, v) =
           try
             (transl_type_param env sty, v)
-          with Already_bound ->
-            raise(Error(sty.ptyp_loc, env, Repeated_parameter))
+          with Already_bound var ->
+            raise(Error(sty.ptyp_loc, env, Repeated_parameter var))
         in
         List.map make_param cl.pci_params
       in
@@ -1988,8 +1988,10 @@ let report_error_doc env ppf =
     Style.as_inline_code !Oprint.out_type_args ppf args
   in
   function
-  | Repeated_parameter ->
-      fprintf ppf "A type parameter occurs several times"
+  | Repeated_parameter var ->
+      fprintf ppf
+        "The type variable %a occurs several times in this parameter list"
+        (Style.as_inline_code Pprintast.Doc.tyvar) var
   | Unconsistent_constraint err ->
       let msg = Format_doc.Doc.msg in
       fprintf ppf "@[<v>The class constraints are not consistent.@ ";
