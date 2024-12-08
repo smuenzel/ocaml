@@ -175,7 +175,8 @@ G(name):
 #include "../runtime/caml/domain_state.tbl"
 #undef DOMAIN_STATE
 
-#define Caml_state(var) (8*domain_field_caml_##var)(%r14)
+#define Caml_state(var) %gs:(8*domain_field_caml_##var)
+#define Caml_state_from(value,var) (8*domain_field_caml_##var)(value)
 
 /* Load address of global [label] in register [dst]. */
 #if defined(__PIC__) && !defined(SYS_mingw64) && !defined(SYS_cygwin)
@@ -234,9 +235,7 @@ G(name):
 #define RESTORE_EXN_HANDLER_OCAML              \
         movq    Caml_state(exn_handler), %rsp; \
         CFI_DEF_CFA_OFFSET(16);                \
-        leaq    Caml_state(exn_handler), %r11; \
-        popq    (%r11); CFI_ADJUST(-8)
-
+        popq    Caml_state(exn_handler); CFI_ADJUST(-8)
 
 /* When ThreadSanitizer instrumentation is enabled, the code must call
    the C functions caml_tsan_func_entry_asm and caml_tsan_func_exit_asm to
@@ -461,22 +460,23 @@ G(caml_system__code_begin):
         movq    %r10,        10*8(%r15);               \
              /* %r11 is at   11*8(%r15); */            \
         movq    %rbp,        12*8(%r15);               \
-        movsd   %xmm0,   (0+13)*8(%r15);               \
-        movsd   %xmm1,   (1+13)*8(%r15);               \
-        movsd   %xmm2,   (2+13)*8(%r15);               \
-        movsd   %xmm3,   (3+13)*8(%r15);               \
-        movsd   %xmm4,   (4+13)*8(%r15);               \
-        movsd   %xmm5,   (5+13)*8(%r15);               \
-        movsd   %xmm6,   (6+13)*8(%r15);               \
-        movsd   %xmm7,   (7+13)*8(%r15);               \
-        movsd   %xmm8,   (8+13)*8(%r15);               \
-        movsd   %xmm9,   (9+13)*8(%r15);               \
-        movsd   %xmm10, (10+13)*8(%r15);               \
-        movsd   %xmm11, (11+13)*8(%r15);               \
-        movsd   %xmm12, (12+13)*8(%r15);               \
-        movsd   %xmm13, (13+13)*8(%r15);               \
-        movsd   %xmm14, (14+13)*8(%r15);               \
-        movsd   %xmm15, (15+13)*8(%r15)
+        movq    %r14,        13*8(%r15);               \
+        movsd   %xmm0,   (0+14)*8(%r15);               \
+        movsd   %xmm1,   (1+14)*8(%r15);               \
+        movsd   %xmm2,   (2+14)*8(%r15);               \
+        movsd   %xmm3,   (3+14)*8(%r15);               \
+        movsd   %xmm4,   (4+14)*8(%r15);               \
+        movsd   %xmm5,   (5+14)*8(%r15);               \
+        movsd   %xmm6,   (6+14)*8(%r15);               \
+        movsd   %xmm7,   (7+14)*8(%r15);               \
+        movsd   %xmm8,   (8+14)*8(%r15);               \
+        movsd   %xmm9,   (9+14)*8(%r15);               \
+        movsd   %xmm10, (10+14)*8(%r15);               \
+        movsd   %xmm11, (11+14)*8(%r15);               \
+        movsd   %xmm12, (12+14)*8(%r15);               \
+        movsd   %xmm13, (13+14)*8(%r15);               \
+        movsd   %xmm14, (14+14)*8(%r15);               \
+        movsd   %xmm15, (15+14)*8(%r15)
 
 /* Undo SAVE_ALL_REGS. Expects gc_regs bucket in %r15 */
 #define RESTORE_ALL_REGS                               \
@@ -498,22 +498,23 @@ G(caml_system__code_begin):
         movq         10*8(%r15),%r10;                  \
         movq         11*8(%r15),%r11;                  \
         movq         12*8(%r15),%rbp;                  \
-        movsd    (0+13)*8(%r15),%xmm0;                 \
-        movsd    (1+13)*8(%r15),%xmm1;                 \
-        movsd    (2+13)*8(%r15),%xmm2;                 \
-        movsd    (3+13)*8(%r15),%xmm3;                 \
-        movsd    (4+13)*8(%r15),%xmm4;                 \
-        movsd    (5+13)*8(%r15),%xmm5;                 \
-        movsd    (6+13)*8(%r15),%xmm6;                 \
-        movsd    (7+13)*8(%r15),%xmm7;                 \
-        movsd    (8+13)*8(%r15),%xmm8;                 \
-        movsd    (9+13)*8(%r15),%xmm9;                 \
-        movsd   (10+13)*8(%r15),%xmm10;                \
-        movsd   (11+13)*8(%r15),%xmm11;                \
-        movsd   (12+13)*8(%r15),%xmm12;                \
-        movsd   (13+13)*8(%r15),%xmm13;                \
-        movsd   (14+13)*8(%r15),%xmm14;                \
-        movsd   (15+13)*8(%r15),%xmm15;                \
+        movq         13*8(%r15),%r14;                  \
+        movsd    (0+14)*8(%r15),%xmm0;                 \
+        movsd    (1+14)*8(%r15),%xmm1;                 \
+        movsd    (2+14)*8(%r15),%xmm2;                 \
+        movsd    (3+14)*8(%r15),%xmm3;                 \
+        movsd    (4+14)*8(%r15),%xmm4;                 \
+        movsd    (5+14)*8(%r15),%xmm5;                 \
+        movsd    (6+14)*8(%r15),%xmm6;                 \
+        movsd    (7+14)*8(%r15),%xmm7;                 \
+        movsd    (8+14)*8(%r15),%xmm8;                 \
+        movsd    (9+14)*8(%r15),%xmm9;                 \
+        movsd   (10+14)*8(%r15),%xmm10;                \
+        movsd   (11+14)*8(%r15),%xmm11;                \
+        movsd   (12+14)*8(%r15),%xmm12;                \
+        movsd   (13+14)*8(%r15),%xmm13;                \
+        movsd   (14+14)*8(%r15),%xmm14;                \
+        movsd   (15+14)*8(%r15),%xmm15;                \
         movq    Caml_state(young_ptr), %r15
 
 /* Save non-callee saved registers that may be in use to a free gc_regs
@@ -848,7 +849,7 @@ CFI_STARTPROC
         popq    C_ARG_1; CFI_ADJUST(-8)
 #endif
     /* Load Caml_state into r14 (was passed as an argument from C) */
-        movq    C_ARG_1, %r14
+        wrgsbase C_ARG_1
     /* Initial entry point is G(caml_program) */
         LEA_VAR(caml_program, %r12)
 #ifdef DEBUG
@@ -1008,12 +1009,12 @@ END_FUNCTION(caml_reraise_exn)
 FUNCTION(caml_raise_exception)
 CFI_STARTPROC
         ENTER_FUNCTION
-        movq    C_ARG_1, %r14                /* Caml_state */
+        wrgsbase C_ARG_1
         movq    C_ARG_2, %rax
     /* Load young_ptr into %r15 */
-        movq    Caml_state(young_ptr), %r15
+        movq    Caml_state_from(C_ARG_1,young_ptr), %r15
     /* Discard the C stack pointer and reset to ocaml stack */
-        movq    Caml_state(current_stack), %r10
+        movq    Caml_state_from(C_ARG_1,current_stack), %r10
         movq    Stack_sp(%r10), %rsp         /* FIXME: CFI */
 #if defined(WITH_THREAD_SANITIZER)
     /* Call __tsan_func_exit for every OCaml stack frame exited due to the
@@ -1049,10 +1050,12 @@ CFI_STARTPROC
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
 #endif
+    /* hide wrgsbase latency behind push_callee_save_regs */
+        wrgsbase C_ARG_1
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
-        movq    C_ARG_1, %r14      /* Caml_state */
+        //movq    C_ARG_1, %r14      /* Caml_state */
         movq    C_ARG_2, %rbx      /* closure */
         movq    0(C_ARG_3), %rax   /* argument */
         movq    0(%rbx), %r12      /* code pointer */
@@ -1076,10 +1079,11 @@ CFI_STARTPROC
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
 #endif
+        wrgsbase C_ARG_1
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
-        movq    C_ARG_1, %r14      /* Caml_state */
+        //movq    C_ARG_1, %r14      /* Caml_state */
         movq    C_ARG_2, %rdi      /* closure */
         movq    0(C_ARG_3), %rax   /* first argument */
         movq    8(C_ARG_3), %rbx   /* second argument */
@@ -1103,10 +1107,11 @@ CFI_STARTPROC
         popq    C_ARG_2; CFI_ADJUST(-8)
         popq    C_ARG_1; CFI_ADJUST(-8)
 #endif
+        wrgsbase C_ARG_1
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
-        movq    C_ARG_1, %r14      /* Caml_state */
+        //movq    C_ARG_1, %r14      /* Caml_state */
         movq    0(C_ARG_3), %rax   /* first argument */
         movq    8(C_ARG_3), %rbx   /* second argument */
         movq    C_ARG_2, %rsi      /* closure */

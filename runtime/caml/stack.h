@@ -64,7 +64,7 @@
 #ifdef TARGET_amd64
 /* Size of the gc_regs structure, in words.
    See amd64.S and amd64/proc.ml for the indices */
-#define Wosize_gc_regs (13 /* int regs */ + 16 /* float regs */)
+#define Wosize_gc_regs (14 /* int regs */ + 16 /* float regs */)
 #define Saved_return_address_raw(sp) *((intnat *)((sp) - 8))
 #ifdef WITH_FRAME_POINTERS
 #define First_frame(sp) ((sp) + 16)

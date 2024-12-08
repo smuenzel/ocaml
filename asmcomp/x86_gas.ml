@@ -27,12 +27,18 @@ let opt_displ b displ =
   else if displ > 0 then bprintf b "+%d" displ
   else bprintf b "%d" displ
 
-let arg_mem b {arch; typ=_; idx; scale; base; sym; displ} =
+let arg_mem b {arch; typ=_; idx; scale; base; sym; displ; segment} =
   let string_of_register =
     match arch with
     | X86 -> string_of_reg32
     | X64 -> string_of_reg64
   in
+  begin match segment with
+  | None -> ()
+  | Some segment ->
+      print_reg b string_of_reg_segment segment;
+      Buffer.add_string b ":";
+  end;
   begin match sym with
   | None ->
       if displ <> 0 || scale = 0 then
