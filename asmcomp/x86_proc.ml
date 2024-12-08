@@ -112,6 +112,10 @@ let buf_bytes_directive b directive s =
     if !pos >= 16 then begin pos := 0 end
   done
 
+let string_of_reg_segment = function
+  | FS -> "fs"
+  | GS -> "gs"
+
 let string_of_reg64 = function
   | RAX -> "rax"
   | RBX -> "rbx"
