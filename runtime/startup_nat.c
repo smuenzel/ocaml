@@ -19,6 +19,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <sys/auxv.h>
 #include "caml/callback.h"
 #include "caml/custom.h"
 #include "caml/codefrag.h"
@@ -38,6 +40,10 @@
 #include "caml/stack.h"
 #include "caml/startup_aux.h"
 #include "caml/sys.h"
+
+#ifndef HWCAP2_FSGSBASE
+#define HWCAP2_FSGSBASE (1 << 1)
+#endif
 
 extern char caml_system__code_begin, caml_system__code_end;
 /* The two symbols above are defined in runtime/$ARCH.S.
@@ -87,6 +93,9 @@ value caml_startup_common(char_os **argv, int pooling)
 {
   const char_os * exe_name, * proc_self_exe;
   value res;
+
+  unsigned val = getauxval(AT_HWCAP2);
+  assert(val & HWCAP2_FSGSBASE);
 
   /* Determine options */
   caml_parse_ocamlrunparam();

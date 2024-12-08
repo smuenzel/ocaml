@@ -43,7 +43,7 @@ let _label s = D.label ~typ:QWORD s
 
 let int_reg_name =
   [| RAX; RBX; RDI; RSI; RDX; RCX; R8; R9;
-     R12; R13; R10; R11; RBP; |]
+     R12; R13; R10; R11; RBP; R14 |]
 
 let float_reg_name = Array.init 16 (fun i -> XMM i)
 
@@ -160,7 +160,7 @@ let load_symbol_addr s arg =
     I.mov (sym (emit_symbol s)) arg
 
 let domain_field f =
-  mem64 QWORD (Domainstate.idx_of_field f * 8) R14
+  mem64 ~scale:0 ~segment:GS QWORD (Domainstate.idx_of_field f * 8) R14
 
 (* Output a label *)
 
@@ -188,7 +188,7 @@ let reg env = function
   | { loc = Reg.Reg r } -> register_name r
   | { loc = Stack(Domainstate n); typ = ty } ->
       let ofs = n + Domainstate.(idx_of_field Domain_extra_params) * 8 in
-      mem64 (x86_data_type_for_stack_slot ty) ofs R14
+      mem64 ~scale:0 ~segment:GS (x86_data_type_for_stack_slot ty) ofs R14
   | { loc = Stack s; typ = ty } as r ->
       let ofs = slot_offset env s (register_class r) in
       mem64 (x86_data_type_for_stack_slot ty) ofs RSP
@@ -210,7 +210,7 @@ let reg_low_32_name = Array.map (fun r -> Reg32 r) int_reg_name
 
 let emit_subreg env tbl typ r =
   match r.loc with
-  | Reg.Reg r when r < 13 -> tbl.(r)
+  | Reg.Reg r when r < 14 -> tbl.(r)
   | Stack s -> mem64 typ (slot_offset env s (register_class r)) RSP
   | _ -> assert false
 

@@ -44,8 +44,9 @@ let win64 = Arch.win64
     r10         10
     r11         11
     rbp         12
-    r14         domain state pointer
+    r14         13
     r15         allocation pointer
+    gs          domain state pointer
 
   xmm0 - xmm15  100 - 115  *)
 
@@ -80,10 +81,10 @@ let int_reg_name =
   match Config.ccomp_type with
   | "msvc" ->
       [| "rax"; "rbx"; "rdi"; "rsi"; "rdx"; "rcx"; "r8"; "r9";
-         "r12"; "r13"; "r10"; "r11"; "rbp" |]
+         "r12"; "r13"; "r10"; "r11"; "rbp"; "r14" |]
   | _ ->
       [| "%rax"; "%rbx"; "%rdi"; "%rsi"; "%rdx"; "%rcx"; "%r8"; "%r9";
-         "%r12"; "%r13"; "%r10"; "%r11"; "%rbp" |]
+         "%r12"; "%r13"; "%r10"; "%r11"; "%rbp"; "%r14" |]
 
 let float_reg_name =
   match Config.ccomp_type with
@@ -103,7 +104,7 @@ let register_class r =
   | Val | Int | Addr -> 0
   | Float -> 1
 
-let num_available_registers = [| 13; 16 |]
+let num_available_registers = [| 14; 16 |]
 
 let first_available_register = [| 0; 100 |]
 
@@ -117,8 +118,8 @@ let rotate_registers = false
 (* Representation of hard registers by pseudo-registers *)
 
 let hard_int_reg =
-  let v = Array.make 13 Reg.dummy in
-  for i = 0 to 12 do v.(i) <- Reg.at_location Int (Reg i) done;
+  let v = Array.make 14 Reg.dummy in
+  for i = 0 to 13 do v.(i) <- Reg.at_location Int (Reg i) done;
   v
 
 let hard_float_reg =
@@ -267,7 +268,7 @@ let loc_exn_bucket = rax
 (** See "System V Application Binary Interface, AMD64 Architecture Processor
     Supplement" (www.x86-64.org/documentation/abi.pdf) page 57, fig. 3.36. *)
 let int_dwarf_reg_numbers =
-  [| 0; 3; 5; 4; 1; 2; 8; 9; 12; 13; 10; 11; 6 |]
+  [| 0; 3; 5; 4; 1; 2; 8; 9; 12; 13; 10; 11; 6; 14 |]
 
 let float_dwarf_reg_numbers =
   [| 17; 18; 19; 20; 21; 22; 23; 24; 25; 26; 27; 28; 29; 30; 31; 32 |]
@@ -335,14 +336,14 @@ let destroyed_at_reloadretaddr = [| |]
 
 
 let safe_register_pressure = function
-    Iextcall _ -> if win64 then if fp then 7 else 8 else 0
-  | _ -> if fp then 10 else 11
+    Iextcall _ -> if win64 then if fp then 8 else 9 else 0
+  | _ -> if fp then 11 else 12
 
 let max_register_pressure =
   let consumes ~int ~float =
     if fp
-    then [| 12 - int; 16 - float |]
-    else [| 13 - int; 16 - float |]
+    then [| 13 - int; 16 - float |]
+    else [| 14 - int; 16 - float |]
   in
   function
     Iextcall _ ->
@@ -368,6 +369,6 @@ let assemble_file infile outfile =
 
 let init () =
   if fp then begin
-    num_available_registers.(0) <- 12
-  end else
     num_available_registers.(0) <- 13
+  end else
+    num_available_registers.(0) <- 14

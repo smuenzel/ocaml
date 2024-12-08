@@ -66,6 +66,9 @@ type reg64 =
 type reg8h =
   | AH | BH | CH | DH
 
+type reg_segment =
+  | FS | GS
+
 
 type registerf = XMM of int | TOS | ST of int
 
@@ -79,6 +82,7 @@ type addr =
     scale: int;
     base: reg64 option;
     sym: string option;
+    segment: reg_segment option;
     displ: int;
   }
   (** Addressing modes:

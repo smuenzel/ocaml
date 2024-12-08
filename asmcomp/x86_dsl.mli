@@ -58,11 +58,11 @@ val st0: arg
 val st1: arg
 
 val mem32:
-  data_type -> ?scale:int -> ?base:reg64 -> ?sym:string ->
+  data_type -> ?scale:int -> ?base:reg64 -> ?segment:reg_segment -> ?sym:string ->
   int -> reg64 -> arg
 
 val mem64:
-  data_type -> ?scale:int -> ?base:reg64 -> ?sym:string ->
+  data_type -> ?scale:int -> ?base:reg64 -> ?segment:reg_segment -> ?sym:string ->
   int -> reg64 -> arg
 
 val mem64_rip: data_type -> ?ofs:int -> string -> arg
