@@ -1863,7 +1863,7 @@ let check_abbrev_env env =
    4. The expansion requires the expansion of another abbreviation,
       and this other expansion fails.
 *)
-let expand_abbrev_gen link kind find_type_expansion env ty =
+let expand_abbrev_gen ~link kind find_type_expansion env ty =
   let path, args, abbrev = match get_desc ty with
   | Tconstr (path,args,abbrev) -> path, args, abbrev
   | _ -> assert false
@@ -1926,19 +1926,19 @@ let expand_abbrev_gen link kind find_type_expansion env ty =
   ty'
 
 (* Expand respecting privacy *)
-let expand_abbrev link env ty =
-  expand_abbrev_gen link Public Env.find_type_expansion env ty
+let expand_abbrev ~link env ty =
+  expand_abbrev_gen ~link Public Env.find_type_expansion env ty
 
 (* Expand once the head of a type *)
 let expand_head_once env ty =
   try
-    expand_abbrev false env ty
+    expand_abbrev ~link:false env ty
   with Cannot_expand | Escape _ -> assert false
 
 (* Check whether a type can be expanded *)
 let safe_abbrev env ty =
   let snap = Btype.snapshot () in
-  try ignore (expand_abbrev false env ty); true with
+  try ignore (expand_abbrev ~link:false env ty); true with
     Cannot_expand ->
       Btype.backtrack snap;
       false
@@ -1950,15 +1950,15 @@ let safe_abbrev env ty =
 (* Expand the head of a type once.
    Raise Cannot_expand if the type cannot be expanded.
    May raise Escape, if a recursion was hidden in the type. *)
-let try_expand_once link env ty =
+let try_expand_once ~link env ty =
   match get_desc ty with
-    Tconstr _ -> expand_abbrev link env ty
+    Tconstr _ -> expand_abbrev ~link env ty
   | _ -> raise Cannot_expand
 
 (* This one only raises Cannot_expand *)
-let try_expand_safe link env ty =
+let try_expand_safe ~link env ty =
   let snap = Btype.snapshot () in
-  try try_expand_once link env ty
+  try try_expand_once ~link env ty
   with Escape _ ->
     Btype.backtrack snap; cleanup_abbrev (); raise Cannot_expand
 
@@ -1972,22 +1972,22 @@ let rec try_expand_head
 (* Unsafe full expansion, may raise [Unify [Escape _]]. *)
 let expand_head_unif env ty =
   try
-    try_expand_head (try_expand_once true) env ty
+    try_expand_head (try_expand_once ~link:true) env ty
   with
   | Cannot_expand -> ty
   | Escape e -> raise_for Unify (Escape e)
 
 (* Safe version of expand_head, never fails *)
-let expand_head link env ty =
-  try try_expand_head (try_expand_safe link) env ty
+let expand_head ~link env ty =
+  try try_expand_head (try_expand_safe ~link) env ty
   with Cannot_expand -> ty
 
-let expand_head_nolink = expand_head false
-let expand_head = expand_head true
+let expand_head_nolink = expand_head ~link:false
+let expand_head = expand_head ~link:true
 
-let try_expand_safe_no_link = try_expand_safe false
+let try_expand_safe_no_link = try_expand_safe ~link:false
 let () = forward_try_expand_safe := try_expand_safe_no_link
-let try_expand_safe = try_expand_safe true
+let try_expand_safe = try_expand_safe ~link:true
 
 (* Expand until we find a non-abstract type declaration,
    use try_expand_safe to avoid raising "Unify _" when
@@ -2030,7 +2030,7 @@ let rec extract_concrete_typedecl env ty =
    the private abbreviation. *)
 
 let expand_abbrev_opt env ty =
-  expand_abbrev_gen false Private Env.find_type_expansion_opt env ty
+  expand_abbrev_gen ~link:false Private Env.find_type_expansion_opt env ty
 
 let safe_abbrev_opt env ty =
   let snap = Btype.snapshot () in
@@ -5481,7 +5481,7 @@ let find_cltype_for_path env p =
   | None -> assert false
 
 let has_constr_row' env t =
-  has_constr_row (expand_abbrev false env t)
+  has_constr_row (expand_abbrev ~link:false env t)
 
 let rec build_subtype env (visited : transient_expr list)
     (loops : (int * type_expr) list) posi level t =
@@ -5534,7 +5534,7 @@ let rec build_subtype env (visited : transient_expr list)
   | Tconstr(p, tl, abbrev)
     when level > 0 && generic_abbrev env p && safe_abbrev env t
     && not (has_constr_row' env t) ->
-      let t' = expand_abbrev false env t in
+      let t' = expand_abbrev ~link:false env t in
       let level' = pred_expand level in
       begin try match get_desc t' with
         Tobject _ when posi && not (opened_object t') ->
@@ -5761,10 +5761,12 @@ let rec subtype_rec env trace t1 t2 constraints =
         constraints
     | (Tconstr(p1, _tl1, _abbrev1), _)
       when generic_abbrev env p1 && safe_abbrev env t1 ->
-        subtype_rec env trace (expand_abbrev false env t1) t2 constraints
+        subtype_rec env trace
+          (expand_abbrev ~link:false env t1) t2 constraints
     | (_, Tconstr(p2, _tl2, _abbrev2))
       when generic_abbrev env p2 && safe_abbrev env t2 ->
-        subtype_rec env trace t1 (expand_abbrev false env t2) constraints
+        subtype_rec env trace
+          t1 (expand_abbrev ~link:false env t2) constraints
     | (Tconstr(p1, tl1, _), Tconstr(p2, tl2, _))
       when Env_unscoped.path_equiv env p1 p2 ->
         begin try
