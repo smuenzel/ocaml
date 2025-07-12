@@ -333,10 +333,10 @@ and print_out_type_2 ~arg ppf =
 and print_simple_out_type ppf =
   function
     Otyp_class (id, tyl) ->
-      fprintf ppf "@[%a#%a@]" print_typargs tyl print_ident id
+      fprintf ppf "@[%a#%a@]" print_typargs_with_space tyl print_ident id
   | Otyp_constr (id, tyl) ->
       pp_open_box ppf 0;
-      print_typargs ppf tyl;
+      print_typargs_with_space ppf tyl;
       print_ident ppf id;
       pp_close_box ppf ()
   | Otyp_object {fields; open_row} ->
@@ -419,14 +419,17 @@ and print_typlist : 'a . (_ -> 'a -> _) -> _ -> _ -> 'a list -> _ =
 and print_typargs ppf =
   function
     [] -> ()
-  | [ty1] -> print_simple_out_type ppf ty1; pp_print_space ppf ()
+  | [ty1] -> print_simple_out_type ppf ty1;
   | tyl ->
       pp_open_box ppf 1;
       pp_print_char ppf '(';
       print_typlist print_out_type "," ppf tyl;
       pp_print_char ppf ')';
       pp_close_box ppf ();
-      pp_print_space ppf ()
+and print_typargs_with_space ppf =
+  function
+    [] -> ()
+  | tyl -> print_typargs ppf tyl; pp_print_space ppf ()
 and print_out_label ppf {olab_name; olab_mut; olab_atomic; olab_type} =
   fprintf ppf "@[<2>%s%a :@ %a%s@];"
     (match olab_mut with
