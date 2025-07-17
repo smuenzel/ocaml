@@ -787,22 +787,22 @@ end = struct
      which maps from types to types.  The lookup process is
      "type -> apply substitution -> find name".  The substitution is presumed to
      be one-shot. *)
-  let names = ref ([] : (transient_expr * string) list)
+  let names = ref (Int.Map.empty : string Int.Map.t)
   let name_subst = ref ([] : (transient_expr * transient_expr) list)
   let name_counter = ref 0
   let named_vars = ref ([] : string list)
-  let visited_for_named_vars = ref ([] : transient_expr list)
+  let visited_for_named_vars = ref Int.Set.empty
 
   let weak_counter = ref 1
   let weak_var_map = ref TypeMap.empty
   let named_weak_vars = ref String.Set.empty
 
   let reset_names () =
-    names := [];
+    names := Int.Map.empty;
     name_subst := [];
     name_counter := 0;
     named_vars := [];
-    visited_for_named_vars := []
+    visited_for_named_vars := Int.Set.empty
 
   let add_named_var tty =
     match tty.desc with
@@ -814,8 +814,8 @@ end = struct
   let rec add_named_vars ty =
     let tty = Transient_expr.repr ty in
     let px = proxy ty in
-    if not (List.memq px !visited_for_named_vars) then begin
-      visited_for_named_vars := px :: !visited_for_named_vars;
+    if not (Int.Set.mem px.id !visited_for_named_vars) then begin
+      visited_for_named_vars := Int.Set.add px.id !visited_for_named_vars;
       match tty.desc with
       | Tvar _ | Tunivar _ ->
           add_named_var tty
@@ -836,7 +836,7 @@ end = struct
 
   let name_is_already_used name =
     List.mem name !named_vars
-    || List.exists (fun (_, name') -> name = name') !names
+    || Int.Map.exists (fun _  name' -> name = name') !names
     || String.Set.mem name !named_weak_vars
 
   let rec new_name () =
@@ -862,7 +862,7 @@ end = struct
     (* We've already been through repr at this stage, so t is our representative
        of the union-find class. *)
     let t = substitute t in
-    try List.assq t !names with Not_found ->
+    try Int.Map.find t.id !names with Not_found ->
       try TransientTypeMap.find t !weak_var_map with Not_found ->
       let name =
         match t.desc with
@@ -871,8 +871,8 @@ end = struct
              * unification variable to that name. We want to keep the name, so
              * try adding a number until we find a name that's not taken. *)
             let available name =
-              List.for_all
-                (fun (_, name') -> name <> name')
+              Int.Map.for_all
+                (fun _ name' -> name <> name')
                 !names
             in
             if available name then name
@@ -885,7 +885,7 @@ end = struct
             name_generator ()
       in
       (* Exception for type declarations *)
-      if name <> "_" then names := (t, name) :: !names;
+      if name <> "_" then names := Int.Map.add t.id name !names;
       name
 
   let check_name_of_type ~non_gen px =
@@ -893,13 +893,13 @@ end = struct
     ignore(name_of_type name_gen px)
 
   let remove_names tyl =
-    let tyl = List.map substitute tyl in
-    names := List.filter (fun (ty,_) -> not (List.memq ty tyl)) !names
+    let tyl = List.map (fun ty -> (substitute ty).id) tyl in
+    names := Int.Map.filter (fun tyid _ -> not (List.memq tyid tyl)) !names
 
   let with_local_names f =
     let old_names = !names in
     let old_subst = !name_subst in
-    names      := [];
+    names      := Int.Map.empty;
     name_subst := [];
     try_finally
       ~always:(fun () ->
