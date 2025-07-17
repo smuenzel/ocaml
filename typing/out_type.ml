@@ -927,35 +927,35 @@ end
 
 module Aliases = struct
   let visited_objects = ref Int.Set.empty
-  let aliased = ref ([] : transient_expr list)
-  let delayed = ref ([] : transient_expr list)
-  let printed_aliases = ref ([] : transient_expr list)
+  let aliased = ref Int.Set.empty
+  let delayed = ref Int.Set.empty
+  let printed_aliases = ref Int.Set.empty
 
 (* [printed_aliases] is a subset of [aliased] that records only those aliased
    types that have actually been printed; this allows us to avoid naming loops
    that the user will never see. *)
 
-  let is_delayed t = List.memq t !delayed
+  let is_delayed t = Int.Set.mem t.id !delayed
 
   let remove_delay t =
     if is_delayed t then
-      delayed := List.filter ((!=) t) !delayed
+      delayed := Int.Set.filter ((!=) t.id) !delayed
 
   let add_delayed t =
-    if not (is_delayed t) then delayed := t :: !delayed
+    if not (is_delayed t) then delayed := Int.Set.add t.id !delayed
 
-  let is_aliased_proxy px = List.memq px !aliased
-  let is_printed_proxy px = List.memq px !printed_aliases
+  let is_aliased_proxy px = Int.Set.mem px.id !aliased
+  let is_printed_proxy px = Int.Set.mem px.id !printed_aliases
 
   let add_proxy px =
     if not (is_aliased_proxy px) then
-      aliased := px :: !aliased
+      aliased := Int.Set.add px.id !aliased
 
   let add ty = add_proxy (proxy ty)
 
   let add_printed_proxy ~non_gen px =
     Variable_names.check_name_of_type ~non_gen px;
-    printed_aliases := px :: !printed_aliases
+    printed_aliases := Int.Set.add px.id !printed_aliases
 
   let mark_as_printed px =
      if is_aliased_proxy px then (add_printed_proxy ~non_gen:false) px
@@ -997,7 +997,10 @@ module Aliases = struct
     mark_loops_rec [] ty
 
   let reset () =
-    visited_objects := Int.Set.empty; aliased := []; delayed := []; printed_aliases := []
+    visited_objects := Int.Set.empty;
+    aliased := Int.Set.empty;
+    delayed := Int.Set.empty;
+    printed_aliases := Int.Set.empty
 
 end
 
