@@ -288,10 +288,14 @@ let print_arg_label ppf (lbl : Asttypes.arg_label) =
 
 let rec print_out_type ppf =
   function
-  | Otyp_alias {non_gen; aliased; alias } ->
+  | Otyp_alias {aliased; alias = Oalias_var (non_gen, alias) } ->
       fprintf ppf "@[%a@ as %a@]"
         print_out_type aliased
         (ty_var ~non_gen) alias
+  | Otyp_alias {aliased; alias = Oalias_constr (id, tyl) } ->
+      fprintf ppf "@[%a@ as %a@]"
+        print_out_type aliased
+        print_out_type (Otyp_constr (id, tyl))
   | Otyp_poly (sl, ty) ->
       fprintf ppf "@[<hov 2>%a.@ %a@]"
         pr_vars sl

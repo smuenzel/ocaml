@@ -68,7 +68,7 @@ Error: Signature mismatch:
        Type declarations do not match:
          type t = M1.t
        is not included in
-         type t = private < n : int; .. >
+         type t = private < n : int; .. > as t
        The implementation is missing the method n
 Line 3, characters 2-51:
 3 |   struct type t = int let f (x : int) = (x : t) end;; (* must fail *)

@@ -67,7 +67,7 @@ type out_type_param = {
 type out_type =
   | Otyp_abstract
   | Otyp_open
-  | Otyp_alias of {non_gen:bool; aliased:out_type; alias:string}
+  | Otyp_alias of {aliased:out_type; alias:out_alias}
   | Otyp_arrow of Asttypes.arg_label * out_type * out_type
   | Otyp_class of out_ident * out_type list
   | Otyp_constr of out_ident * out_type list
@@ -83,6 +83,10 @@ type out_type =
   | Otyp_module of out_package
   | Otyp_attribute of out_type * out_attribute
   | Otyp_external of string
+
+and out_alias =
+  | Oalias_var of bool * string
+  | Oalias_constr of out_ident * out_type list
 
 and out_label = {
   olab_name: string;

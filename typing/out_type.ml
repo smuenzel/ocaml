@@ -890,7 +890,7 @@ end = struct
 
   let check_name_of_type ~non_gen px =
     let name_gen = new_var_name ~non_gen (Transient_expr.type_expr px) in
-    ignore(name_of_type name_gen px)
+    ignore(name_of_type name_gen px : string)
 
   let remove_names tyl =
     let tyl = List.map (fun ty -> (substitute ty).id) tyl in
@@ -1143,10 +1143,10 @@ let rec tree_of_typexp mode ty =
   if Aliases.(is_aliased_proxy px && aliasable ty) then begin
     let non_gen = is_non_gen mode (Transient_expr.type_expr px) in
     Aliases.add_printed_proxy ~non_gen px;
-    (* add_printed_alias chose a name, thus the name generator
+    (* add_printed_proxy chose a name, thus the name generator
        doesn't matter.*)
     let alias = Variable_names.(name_of_type (new_var_name ~non_gen ty)) px in
-    Otyp_alias {non_gen;  aliased = pr_typ (); alias } end
+    Otyp_alias { aliased = pr_typ (); alias = Oalias_var (non_gen, alias) } end
   else pr_typ ()
 
 and tree_of_row_field mode (l, f) =
@@ -1182,7 +1182,24 @@ and tree_of_typobject mode fi nm =
             (fun (n, _) (n', _) -> String.compare n n') present_fields in
         tree_of_typfields mode rest sorted_fields in
       let (fields, open_row) = pr_fields fi in
-      Otyp_object {fields; open_row}
+      let result =
+      Otyp_object {fields; open_row = Option.is_some open_row}
+      in
+      begin match open_row with
+      | None -> result
+      | Some ty ->
+          match get_desc ty with
+          | Tconstr (Pident p, _, _)
+            when String.ends_with ~suffix:"#row" (Ident.name p) ->
+              result
+          | Tconstr (p, tyl, _) ->
+              Otyp_alias
+                { aliased = result;
+                  alias = Oalias_constr (tree_of_type_path p, tree_of_typlist mode tyl)}
+          | Tunivar _
+          | Tvar _ -> result
+          | _ -> fatal_error "Out_type.tree_of_typobject"
+      end;
   | Some (p, _ty :: tyl) ->
       let args = tree_of_typlist mode tyl in
       let (p', s) = best_type_path p in
@@ -1196,8 +1213,8 @@ and tree_of_typfields mode rest = function
   | [] ->
       let open_row =
         match get_desc rest with
-        | Tvar _ | Tunivar _ | Tconstr _-> true
-        | Tnil -> false
+        | Tvar _ | Tunivar _ | Tconstr _-> Some rest
+        | Tnil -> None
         | _ -> fatal_error "typfields (1)"
       in
       ([], open_row)
@@ -1212,6 +1229,11 @@ and tree_of_package mode {pack_path; pack_cstrs} =
       List.map
         (fun (li, ty) -> (String.concat "." li, tree_of_typexp mode ty))
         pack_cstrs }
+
+and tree_of_type_path p =
+  let (p', s) = best_type_path p in
+  let p'' = if (s = Id) then p' else p in
+  tree_of_best_type_path p p''
 
 let typexp mode ppf ty =
   !Oprint.out_type ppf (tree_of_typexp mode ty)
@@ -1990,7 +2012,3 @@ let tree_of_type_declaration ident td rs =
 let tree_of_class_type kind cty = tree_of_class_type kind [] cty
 let prepare_class_type cty = prepare_class_type [] cty
 
-let tree_of_type_path p =
-  let (p', s) = best_type_path p in
-  let p'' = if (s = Id) then p' else p in
-  tree_of_best_type_path p p''

@@ -1298,7 +1298,7 @@ Error: Signature mismatch:
        Type declarations do not match:
          type t = < b : int >
        is not included in
-         type t = private < a : int; .. >
+         type t = private < a : int; .. > as t
        The implementation is missing the method "a"
 |}];;
 
@@ -1320,7 +1320,7 @@ Error: Signature mismatch:
        Type declarations do not match:
          type t = < a : int >
        is not included in
-         type t = private < a : float; .. >
+         type t = private < a : float; .. > as t
        The type "int" is not equal to the type "float"
        Type "int" is not equal to type "float"
 |}];;
