@@ -24,6 +24,7 @@ open Types
 open Btype
 open Outcometree
 
+module Int = Misc.Stdlib.Int
 module String = Misc.Stdlib.String
 module Sig_component_kind = Shape.Sig_component_kind
 module Style = Misc.Style
@@ -675,12 +676,14 @@ let printer_iter_type_expr f ty =
   | Tobject (fi, nm) -> begin
       match !nm with
       | None ->
-          let fields, _ = flatten_fields fi in
+          let fields, rest = flatten_fields fi in
           List.iter
             (fun (_, kind, ty) ->
                if field_kind_repr kind = Fpublic then
                  f ty)
-            fields
+            fields;
+          if false then
+            f rest
       | Some (_, l) ->
           List.iter f (List.tl l)
     end
@@ -923,7 +926,7 @@ end = struct
 end
 
 module Aliases = struct
-  let visited_objects = ref ([] : transient_expr list)
+  let visited_objects = ref Int.Set.empty
   let aliased = ref ([] : transient_expr list)
   let delayed = ref ([] : transient_expr list)
   let printed_aliases = ref ([] : transient_expr list)
@@ -979,9 +982,9 @@ module Aliases = struct
       let visited = px :: visited in
       match tty.desc with
       | Tvariant _ | Tobject _ ->
-          if List.memq px !visited_objects then add_proxy px else begin
+          if Int.Set.mem px.id !visited_objects then add_proxy px else begin
             if should_visit_object ty then
-              visited_objects := px :: !visited_objects;
+              visited_objects := Int.Set.add px.id !visited_objects;
             printer_iter_type_expr (mark_loops_rec visited) ty
           end
       | Tpoly(ty, tyl) ->
@@ -994,7 +997,7 @@ module Aliases = struct
     mark_loops_rec [] ty
 
   let reset () =
-    visited_objects := []; aliased := []; delayed := []; printed_aliases := []
+    visited_objects := Int.Set.empty; aliased := []; delayed := []; printed_aliases := []
 
 end
 
@@ -1586,7 +1589,7 @@ let tree_of_method mode (lab, priv, virt, ty) =
 let rec prepare_class_type params = function
   | Cty_constr (_p, tyl, cty) ->
       let row = Btype.self_type_row cty in
-      if List.memq (proxy row) !Aliases.visited_objects
+      if Int.Set.mem (proxy row).id !Aliases.visited_objects
       || not (List.for_all is_Tvar params)
       || deep_occur_list row tyl
       then prepare_class_type params cty
@@ -1594,8 +1597,8 @@ let rec prepare_class_type params = function
   | Cty_signature sign ->
       (* Self may have a name *)
       let px = proxy sign.csig_self_row in
-      if List.memq px !Aliases.visited_objects then Aliases.add_proxy px
-      else Aliases.(visited_objects := px :: !visited_objects);
+      if Int.Set.mem px.id !Aliases.visited_objects then Aliases.add_proxy px
+      else Aliases.(visited_objects := Int.Set.add px.id !visited_objects);
       Vars.iter (fun _ (_, _, ty) -> prepare_type ty) sign.csig_vars;
       Meths.iter prepare_method sign.csig_meths
   | Cty_arrow (_, ty, cty) ->
@@ -1606,7 +1609,7 @@ let rec tree_of_class_type mode params =
   function
   | Cty_constr (p', tyl, cty) ->
       let row = Btype.self_type_row cty in
-      if List.memq (proxy row) !Aliases.visited_objects
+      if Int.Set.mem (proxy row).id !Aliases.visited_objects
       || not (List.for_all is_Tvar params)
       then
         tree_of_class_type mode params cty
