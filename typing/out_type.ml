@@ -1100,9 +1100,9 @@ let rec tree_of_typexp mode ty =
             Otyp_variant (Ovar_fields fields, closed, tags)
         end
     | Tobject (fi, nm) ->
-        tree_of_typobject mode fi !nm
+        tree_of_typobject ~is_row_variable:false mode fi !nm
     | Tnil | Tfield _ ->
-        tree_of_typobject mode ty None
+        tree_of_typobject ~is_row_variable:true mode ty None
     | Tsubst _ ->
         (* This case should only happen when debugging the compiler *)
         Otyp_stuff "<Tsubst>"
@@ -1159,7 +1159,7 @@ and tree_of_typlist mode tyl =
 and tree_of_labeled_typlist mode tyl =
   List.map (fun (label, ty) -> label, tree_of_typexp mode ty) tyl
 
-and tree_of_typobject mode fi nm =
+and tree_of_typobject ~is_row_variable mode fi nm =
   begin match nm with
   | None ->
       let pr_fields fi =
@@ -1176,7 +1176,7 @@ and tree_of_typobject mode fi nm =
             (fun (n, _) (n', _) -> String.compare n n') present_fields in
         tree_of_typfields mode rest sorted_fields in
       let (fields, open_row) = pr_fields fi in
-      Otyp_object {fields; open_row}
+      Otyp_object { is_row_variable; fields; open_row}
   | Some (p, _ty :: tyl) ->
       let args = tree_of_typlist mode tyl in
       let (p', s) = best_type_path p in

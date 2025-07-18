@@ -1069,7 +1069,7 @@ Line 10, characters 3-4:
         ^
 Error: The value "x" has type "t" = "< foo : int; .. >"
        but an expression was expected of type "< foo : int >"
-       Type "$0" = "< bar : int; .. >" is not compatible with type "<  >"
+       Type "$0" = "< ..; bar : int; .. >" is not compatible with type "< ..;  >"
        The second object type has no method "bar"
 |}];;
 
@@ -1083,7 +1083,8 @@ Line 3, characters 3-4:
        ^
 Error: The value "x" has type "t" = "< foo : int; .. >"
        but an expression was expected of type "< bar : int; foo : int >"
-       Type "$0" = "< bar : int; .. >" is not compatible with type "< bar : int >"
+       Type "$0" = "< ..; bar : int; .. >" is not compatible with type
+         "< ..; bar : int >"
        The first object type has an abstract row, it cannot be closed
 |}];;
 
@@ -1347,9 +1348,9 @@ module M :
 Line 9, characters 4-5:
 9 |     z#b
         ^
-Error: This expression has type "$a" = "< b : bool >"
-       but an expression was expected of type "< b : 'a; .. >"
-       This instance of "< b : bool >" is ambiguous:
+Error: This expression has type "$a" = "< ..; b : bool >"
+       but an expression was expected of type "< ..; b : 'a; .. >"
+       This instance of "< ..; b : bool >" is ambiguous:
        it would escape the scope of its equation
        Hint: "$a" is an existential type bound by the constructor "C".
 |}]
@@ -1375,9 +1376,9 @@ module M :
 Line 9, characters 4-5:
 9 |     z#b
         ^
-Error: This expression has type "$a" = "< b : bool >"
-       but an expression was expected of type "< b : 'a; .. >"
-       This instance of "< b : bool >" is ambiguous:
+Error: This expression has type "$a" = "< ..; b : bool >"
+       but an expression was expected of type "< ..; b : 'a; .. >"
+       This instance of "< ..; b : bool >" is ambiguous:
        it would escape the scope of its equation
        Hint: "$a" is an existential type bound by the constructor "C".
 |}]

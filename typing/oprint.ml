@@ -339,8 +339,10 @@ and print_simple_out_type ppf =
       print_typargs ppf tyl;
       print_ident ppf id;
       pp_close_box ppf ()
-  | Otyp_object {fields; open_row} ->
-      fprintf ppf "@[<2>< %a >@]" (print_fields open_row) fields
+  | Otyp_object { is_row_variable; fields; open_row} ->
+      fprintf ppf "@[<2><%s %a >@]"
+        (if is_row_variable then " ..;" else "")
+        (print_fields open_row) fields
   | Otyp_stuff s -> pp_print_string ppf s
   | Otyp_var (non_gen, s) -> ty_var ~non_gen ppf s
   | Otyp_variant (row_fields, closed, tags) ->

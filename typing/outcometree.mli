@@ -72,7 +72,7 @@ type out_type =
   | Otyp_class of out_ident * out_type list
   | Otyp_constr of out_ident * out_type list
   | Otyp_manifest of out_type * out_type
-  | Otyp_object of { fields: (string * out_type) list; open_row:bool}
+  | Otyp_object of { is_row_variable : bool; fields: (string * out_type) list; open_row:bool}
   | Otyp_record of out_label list
   | Otyp_stuff of string
   | Otyp_sum of out_constructor list
