@@ -591,6 +591,7 @@ Line 5, characters 24-28:
                             ^^^^
 Error: This expression should not be a boolean literal, the expected type is
        "int"
+Unexecuted phrases: 1 phrases did not execute due to an error
 |}];;
 
 class c = object
@@ -833,6 +834,7 @@ Line 2, characters 17-25:
                      ^^^^^^^^
 Error: This field value has type "'b option ref" which is less general than
          "'a. 'a option ref"
+Unexecuted phrases: 3 phrases did not execute due to an error
 |}];;
 
 (* Type variable scope *)
@@ -954,6 +956,7 @@ Line 2, characters 26-32:
                               ^^^^^^
 Error: Constraints are not satisfied in this type.
        Type "'a u t" should be an instance of "int t"
+Unexecuted phrases: 1 phrases did not execute due to an error
 |}];;
 
 (* Behaviour is unstable *)
@@ -969,6 +972,7 @@ Line 3, characters 26-32:
                               ^^^^^^
 Error: Constraints are not satisfied in this type.
        Type "'a u t" should be an instance of "g t"
+Unexecuted phrases: 1 phrases did not execute due to an error
 |}];;
 
 (* Full unification trace reported for "Constraints are not satisfied in this type" *)
@@ -1118,6 +1122,7 @@ Line 5, characters 27-39:
                                ^^^^^^^^^^^^
 Error: This object is expected to have type : "c"
        This type does not have a method "n".
+Unexecuted phrases: 3 phrases did not execute due to an error
 |}];;
 
 
@@ -1141,6 +1146,7 @@ Error: The value "x" has type "< m : 'a. 'a * < m : 'a * 'b > > as 'b"
        but the expected method type was
        "'c. 'c * < m : 'a * < m : 'c. 'e > > as 'e"
        The universal variable "'a" would escape its scope
+Unexecuted phrases: 5 phrases did not execute due to an error
 |}];;
 
 fun (x : <m : 'a. 'a * ('a * <m : 'a. 'a * 'foo> as 'foo)>) ->
@@ -1165,6 +1171,7 @@ Error: The value "x" has type "< m : 'b. 'b * ('b * < m : 'c. 'c * 'a > as 'a) >
        The universal variables "'b" and "'c" are distinct.
        The first type variable "'b" was introduced in an earlier universal
        quantification.
+Unexecuted phrases: 3 phrases did not execute due to an error
 |}];;
 
 let f (x: <x: 'a 'b 'c. 'a * 'b * 'b * 'c >) =
@@ -1236,6 +1243,7 @@ Error: Signature mismatch:
        The method "m" has type "'a. 'a * ('a * < m : 'a. 'f >) as 'f",
        but the expected method type was "'c. 'c * ('b * < m : 'c. 'g >) as 'g"
        The universal variable "'b" would escape its scope
+Unexecuted phrases: 1 phrases did not execute due to an error
 |}];;
 
 module M : sig type 'a t type u = <m: 'a. 'a t> end
@@ -1286,6 +1294,7 @@ Line 6, characters 9-21:
 6 | fun x -> (x : v :> u);;
              ^^^^^^^^^^^^
 Error: Type "v" = "[> `A | `B ]" is not a subtype of "u" = "[< `A | `B ]"
+Unexecuted phrases: 6 phrases did not execute due to an error
 |}];;
 
 let f1 x =
@@ -1309,6 +1318,7 @@ Lines 2-3, characters 2-47:
 Error: Type "< m : 'a. (< p : int; .. > as 'a) -> int >" is not a subtype of
          "< m : 'b. (< p : int; q : int; .. > as 'b) -> int >"
        Type "< p : int; q : int; .. >" is not a subtype of "< p : int; .. >"
+Unexecuted phrases: 5 phrases did not execute due to an error
 |}];;
 
 (* Keep sharing the epsilons *)
@@ -1559,6 +1569,7 @@ type s = A of int
 let (A x) = (raise Exit : s);;
 [%%expect {|
 Exception: Stdlib.Exit.
+Unexecuted phrases: 4 phrases did not execute due to an error
 |}];;
 
 (* PR#5224 *)
