@@ -2228,7 +2228,7 @@ module Reaching_path = struct
             (Style.as_inline_code Out_type.prepared_type_expr) inner
       | Parameter (path, i, ty) ->
           let i = i + 1 in
-          Fmt.fprintf ppf "the %i%s type parameter of %a is %a"
+          Fmt.fprintf ppf "the %i%s type parameter of %a is constrained to %a"
             i
             (Misc.ordinal_suffix i)
             Style.inline_code (Path.name path)
