@@ -64,6 +64,23 @@ Error: The definition of "z1" contains a cycle:
          "t" = "int s z1"
 |}];;
 
+type 'a z0 = 'a constraint 'a = 'b z1
+and t = int s z0
+and 'a s = 'a constraint 'a = t
+and 'a z1 = 'a constraint 'a = 'b s
+;;
+[%%expect{|
+Line 1, characters 0-37:
+1 | type 'a z0 = 'a constraint 'a = 'b z1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The definition of "z0" contains a cycle:
+         the 1st type parameter of "z0" is constrained to "t s z1",
+         "t s z1" = "t s",
+         "t s" = "t",
+         "t" = "int s z0"
+|}];;
+
+
 
 (* Examples from the comments in typedecl: *)
 
