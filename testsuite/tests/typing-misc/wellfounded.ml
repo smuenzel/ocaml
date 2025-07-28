@@ -32,7 +32,7 @@ Line 2, characters 0-31:
 2 | and 'a s = 'a constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "s" contains a cycle:
-         the 1st type parameter of "s" is "t",
+         the 1st type parameter of "s" is constrained to "t",
          "t" = "int s"
 |}];;
 
@@ -46,7 +46,7 @@ Line 2, characters 0-34:
 2 | and 'a s = 'a id constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "s" contains a cycle:
-         the 1st type parameter of "s" is "t",
+         the 1st type parameter of "s" is constrained to "t",
          "t" = "int s"
 |}];;
 
@@ -60,7 +60,7 @@ Line 4, characters 0-32:
 4 | and 'a z1 = 'a constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "z1" contains a cycle:
-         the 1st type parameter of "z1" is "t",
+         the 1st type parameter of "z1" is constrained to "t",
          "t" = "int s z1"
 |}];;
 

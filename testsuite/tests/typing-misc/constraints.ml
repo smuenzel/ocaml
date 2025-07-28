@@ -157,7 +157,7 @@ Line 1, characters 0-36:
 1 | type 'a t = 'b  constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "'a t"
+         the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
 type 'a t = 'b constraint 'a = ('b * 'b) t;;
@@ -166,7 +166,7 @@ Line 1, characters 0-42:
 1 | type 'a t = 'b constraint 'a = ('b * 'b) t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "('a * 'a) t"
+         the 1st type parameter of "t" is constrained to "('a * 'a) t"
 |}]
 
 type 'a t = 'a * 'b constraint _ * 'a = 'b t;;
@@ -183,7 +183,7 @@ Line 1, characters 0-40:
 1 | type 'a t = 'a * 'b constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "'a t"
+         the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
 type 'a t = <a : 'a; b : 'b> constraint 'a = 'b t;;
@@ -192,7 +192,7 @@ Line 1, characters 0-49:
 1 | type 'a t = <a : 'a; b : 'b> constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "'a t"
+         the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
 type 'a t = <a : 'a; b : 'b> constraint <a : 'a; ..> = 'b t;;
@@ -210,7 +210,7 @@ Line 1, characters 19-54:
 1 | module rec M : sig type 'a t = 'b constraint 'a = 'b t end = M;;
                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "'a t"
+         the 1st type parameter of "t" is constrained to "'a t"
 |}]
 module rec M : sig type 'a t = 'b constraint 'a = ('b * 'b) t end = M;;
 [%%expect{|
@@ -218,7 +218,7 @@ Line 1, characters 19-61:
 1 | module rec M : sig type 'a t = 'b constraint 'a = ('b * 'b) t end = M;;
                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         the 1st type parameter of "t" is "('a * 'a) t"
+         the 1st type parameter of "t" is constrained to "('a * 'a) t"
 |}]
 
 module type S =
