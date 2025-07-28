@@ -1026,9 +1026,7 @@ let check_well_founded_decl ~abs_env ~decl_env loc path decl _to_check =
   let declaration = Ctype.generic_instance_declaration decl in
   Option.iter
     (fun from_ty ->
-       (* CR smuenzel: this is probably not correct, leads to error messages
-          with wrong type variables (?) *)
-       let args = (* List.map (fun _ -> Ctype.newvar()) *) decl.type_params in
+       let args = declaration.type_params in
        let ty = Ctype.newconstr path args in
        is_reachable
          ~trace:[ Expands_to (ty, from_ty) ]

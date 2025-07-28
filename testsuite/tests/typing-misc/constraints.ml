@@ -183,7 +183,7 @@ Line 1, characters 0-40:
 1 | type 'a t = 'a * 'b constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         "'b t t" = "'a t * 'a",
+         "'a t t" = "'a t * 'a",
          "'a t * 'a" contains "'a t"
 |}]
 
