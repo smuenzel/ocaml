@@ -58,8 +58,8 @@ Lines 2-6, characters 2-5:
 5 |     type ('a, 'b) t = ('a, 'b) Y.t
 6 |   end
 Error: The definition of "X.t" contains a cycle:
-         "('a, 'b) X.t" = "('c, 'd) Y.t",
-         "('c, 'd) Y.t" = "('c, 'd) X.t"
+         "('a, 'b) X.t" = "('a, 'b) Y.t",
+         "('a, 'b) Y.t" = "('a, 'b) X.t"
 |}]
 
 (* Cycle with unequal parameters *)
@@ -84,8 +84,8 @@ Lines 2-6, characters 2-5:
 5 |     type ('a, 'b) t = ('b, 'a) Y.t
 6 |   end
 Error: The definition of "X.t" contains a cycle:
-         "('a, 'b) X.t" = "('c, 'd) Y.t",
-         "('c, 'd) Y.t" = "('d, 'c) X.t"
+         "('a, 'b) X.t" = "('b, 'a) Y.t",
+         "('b, 'a) Y.t" = "('a, 'b) X.t"
 |}]
 
 (* Cycle with unequal number of parameters *)
@@ -110,8 +110,8 @@ Lines 2-6, characters 2-5:
 5 |     type ('a, 'b) t = ('b, 'a, bool) Y.t
 6 |   end
 Error: The definition of "X.t" contains a cycle:
-         "('a, 'b) X.t" = "('c, 'd, bool) Y.t",
-         "('c, 'd, bool) Y.t" = "('d, 'c) X.t"
+         "('a, 'b) X.t" = "('b, 'a, bool) Y.t",
+         "('b, 'a, bool) Y.t" = "('a, 'b) X.t"
 |}]
 
 (* Cycle is more than just aliasing *)

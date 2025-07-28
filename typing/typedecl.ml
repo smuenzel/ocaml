@@ -847,12 +847,18 @@ let check_abbrev env sdecl (id, decl) =
 
 let reachable
     ~env
-    ?(get_nondecl_env = fun _ -> None)
+    ?(get_expand_env = fun _ -> None)
     ~rectypes_guarded
     ~unguarded
     ~trace
     ty
   =
+  let iter_tl tl f =
+    List.iter (fun t -> f ~trace:(Contains (ty, t) :: trace) t) tl
+  in
+  let iter_tl' tl f =
+    List.iter (fun (_, t) -> f ~trace:(Contains (ty, t) :: trace) t) tl
+  in
   match get_desc ty with
   | Tobject _ | Tfield _ | Tnil -> ()
   | Tvariant _ -> ()
@@ -861,34 +867,27 @@ let reachable
       rectypes_guarded ~trace:(Contains (ty, t1) :: trace) t1;
       rectypes_guarded ~trace:(Contains (ty, t2) :: trace) t2;
   | Ttuple tl ->
-      List.iter
-        (fun (_, t) -> rectypes_guarded ~trace:(Contains (ty, t) :: trace) t)
-        tl
+      iter_tl' tl rectypes_guarded
   | Tconstr (path, tl, _) ->
-      let iter_tl f =
-        List.iter (fun t -> f ~trace:(Contains (ty, t) :: trace) t) tl
-      in
       if Ctype.is_contractive env path
       then
-        iter_tl rectypes_guarded
+        iter_tl tl rectypes_guarded
       else begin
         match Env.find_type path env with
         | { type_kind = (Type_record _ | Type_variant _); _ } ->
-            iter_tl rectypes_guarded
+            iter_tl tl rectypes_guarded
         | { type_kind = Type_abstract _ ; type_manifest = None; _ }
         | exception Not_found ->
             (* Abstract *)
-            iter_tl unguarded
+            iter_tl tl unguarded
         | _ ->
             let expand_env =
-              match get_nondecl_env path with
-              | None -> env
-              | Some env -> env
+              Option.value ~default:env (get_expand_env path)
             in
             match Ctype.try_expand_once_opt expand_env ty with
             | exception Ctype.Cannot_expand ->
                 (* Abstract *)
-                iter_tl unguarded
+                iter_tl tl unguarded
             | ty' ->
                 unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
       end
@@ -902,20 +901,16 @@ let reachable
       unguarded ~trace:(Contains (ty, ty') :: trace) ty'
   | Tfunctor (_, _, { pack_constraints; _ }, ty') ->
       unguarded ~trace:(Contains (ty, ty') :: trace) ty';
-      List.iter
-        (fun (_, ty') -> unguarded ~trace:(Contains (ty, ty') :: trace) ty')
-        pack_constraints
+      iter_tl' pack_constraints unguarded
   | Tpackage { pack_constraints; _ } ->
-      List.iter
-        (fun (_, ty') -> unguarded ~trace:(Contains (ty, ty') :: trace) ty')
-        pack_constraints
+      iter_tl' pack_constraints unguarded
 
 let is_reachable
     ?(trace=[])
-    ?(decl_paths=Path.Set.empty)
-    ?get_nondecl_env
-    ~abs_env
-    ~decl_env
+    ~is_decl_path
+    ?get_expand_env (* only allows expansion of the requested type*)
+    ~abs_env (* Environment with all types in the declaration abstract *)
+    ~decl_env (* Environment with only the current type abstract *)
     loc
     ~from_ty
     ~include_direct
@@ -978,12 +973,12 @@ let is_reachable
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
     | Tconstr (path, _, _)
-    | Texpand (_, path, _) when Path.Set.mem path decl_paths ->
+    | Texpand (_, path, _) when is_decl_path path ->
         visited_paths := Path.Map.add_to_list path ty' !visited_paths
     | _ -> ()
     end;
     reachable
-      ?get_nondecl_env
+      ?get_expand_env
       ~env:decl_env
       ~rectypes_guarded
       ~unguarded
@@ -1000,8 +995,8 @@ let is_reachable
 
 let is_reachable
     ?trace
-    ?decl_paths
-    ?get_nondecl_env
+    ~is_decl_path
+    ?get_expand_env
     ~abs_env
     ~decl_env
     loc
@@ -1015,8 +1010,8 @@ let is_reachable
     Ctype.wrap_trace_gadt_instances decl_env (
       is_reachable
         ?trace
-        ?decl_paths
-        ?get_nondecl_env
+        ~is_decl_path
+        ?get_expand_env
         ~abs_env
         ~decl_env
         loc
@@ -1035,6 +1030,7 @@ let check_well_founded_manifest ~abs_env loc path decl =
   let ty = Ctype.newconstr path args in
   is_reachable
     ~abs_env
+    ~is_decl_path:(Path.same path)
     ~decl_env:abs_env
     loc
     ~from_ty:ty
@@ -1061,21 +1057,18 @@ let check_well_founded_manifest ~abs_env loc path decl =
    are doing it anyway out of caution.
 *)
 let check_well_founded_decl
-    ~abs_env ~decl_env ?decl_paths ?get_nondecl_env loc path decl _to_check =
+    ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc path decl =
   let declaration = Ctype.generic_instance_declaration decl in
+  let is_reachable ~trace =
+    is_reachable
+      ~trace ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc
+      ~include_direct:true path None
+  in
   List.iteri
     (fun i from_ty ->
        is_reachable
          ~trace:[ Parameter (path, i, from_ty) ]
-         ~abs_env
-         ~decl_env
-         ?decl_paths
-         ?get_nondecl_env
-         loc
          ~from_ty
-         ~include_direct:true
-         path
-         None
     )
     declaration.type_params
   ;
@@ -1085,15 +1078,7 @@ let check_well_founded_decl
        let ty = Ctype.newconstr path args in
        is_reachable
          ~trace:[ Expands_to (ty, from_ty) ]
-         ~abs_env
-         ~decl_env
-         ?decl_paths
-         ?get_nondecl_env
-         loc
          ~from_ty
-         ~include_direct:true
-         path
-         None
     )
     declaration.type_manifest
 
@@ -1373,48 +1358,38 @@ let transl_type_decl env rec_flag sdecl_list =
   let make_decl_env abstract_condition =
     List.fold_left (fun acc (id, _decl) ->
         let decl_env =
-          List.fold_left4
-            (fun env (id', decl') shape _sdecl _ids ->
-               if abstract_condition id id' then
-                 try
+          List.fold_left2
+            (fun env (id', decl') shape ->
+               if abstract_condition id id'
+               then try
                    add_type ~check:true id'
                      (Env.find_type (Path.Pident id') abs_env)
                      env
                  with
-                 | Not_found ->
-                     (* nonrec *)
-                     env
+                 | Not_found -> env (* nonrec *)
                else
                  add_type ~check:true ~shape id' decl' env
-            ) env decls shapes sdecl_list ids_list
+            ) env decls shapes
         in
         Path.Map.add (Path.Pident id) decl_env acc
       ) Path.Map.empty decls
   in
   let decl_env_by_path =
-    make_decl_env
-      (fun id id' -> id = id')
+    make_decl_env (fun id id' -> id = id')
   in
-  let get_nondecl_env =
-    let nondecl_env_by_id =
-      make_decl_env
-        (fun id id' -> not (id = id'))
+  let get_expand_env =
+    let expand_env_by_id =
+      make_decl_env (fun id id' -> not (id = id'))
     in
-    (fun path -> Path.Map.find_opt path nondecl_env_by_id)
-  in
-  let decl_paths =
-    List.fold_left
-      (fun acc (id, _) ->
-         Path.Set.add (Path.Pident id) acc)
-      Path.Set.empty ids_list
+    (fun path -> Path.Map.find_opt path expand_env_by_id)
   in
   List.iter (fun (id, decl) ->
       let path = Path.Pident id in
       let decl_env = Path.Map.find path decl_env_by_path in
       check_well_founded_decl
-        ~abs_env ~decl_env ~decl_paths
-        ~get_nondecl_env (List.assoc id id_loc_list)
-        path decl to_check)
+        ~abs_env ~decl_env ~is_decl_path:to_check
+        ~get_expand_env (List.assoc id id_loc_list)
+        path decl)
     decls;
   List.iter (check_abbrev_regularity ~abs_env new_env id_loc_list to_check)
     tdecls;
@@ -2129,7 +2104,8 @@ let check_recmod_typedecl ~abs_env env loc recmod_ids path decl =
      (path, decl) is the type declaration to be checked. *)
   let to_check path = Path.exists_free recmod_ids path in
   (* CR smuenzel: do we have to modify decl_env here as well? *)
-  check_well_founded_decl ~abs_env ~decl_env:env loc path decl to_check;
+  check_well_founded_decl ~abs_env ~decl_env:env
+    ~is_decl_path:to_check loc path decl;
   check_regularity ~abs_env env loc path decl to_check;
   (* additional coherence check, as one might build an incoherent signature,
      and use it to build an incoherent module, cf. #7851 *)
