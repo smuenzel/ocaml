@@ -908,6 +908,7 @@ let reachable
 
 let is_reachable
     ?(trace=[])
+    ?(decl_paths=Path.Set.empty)
     ?get_nondecl_env
     ~abs_env
     ~decl_env
@@ -923,12 +924,12 @@ let is_reachable
 
      For example:
      type 'a v = [`A of u v] constraint 'a = t and t = u and u = t;;
+
+     Those paths may not uniquely identify a type (since they may have
+     different type parameters), so we save all types, and compare
+     thenm inside an abstract environment.
   *)
-  (* CR smuenzel: is [visited_paths] safe? What if an argument of the
-     path changes as we keep expanding and that becomes essential to this
-     check? Should we restrict [visited_paths] to only paths inside this
-     recursive declaration? *)
-  let visited_paths = ref Path.Set.empty in
+  let visited_paths = ref Path.Map.empty in
   let raise_error ~trace =
     let path = ty_path in
     let err =
@@ -952,7 +953,11 @@ let is_reachable
     then ()
     else if match get_desc ty' with
         Tconstr (path, _, _) | Texpand (_, path, _) ->
-          Path.Set.mem path !visited_paths
+          begin match Path.Map.find_opt path !visited_paths with
+          | None -> false
+          | Some visited_tys ->
+              List.exists (Ctype.does_match abs_env ty') visited_tys
+          end;
       | _ -> false
     then ()
     else begin
@@ -969,8 +974,8 @@ let is_reachable
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
     | Tconstr (path, _, _)
-    | Texpand (_, path, _) ->
-        visited_paths := Path.Set.add path !visited_paths
+    | Texpand (_, path, _) when Path.Set.mem path decl_paths ->
+        visited_paths := Path.Map.add_to_list path ty' !visited_paths
     | _ -> ()
     end;
     reachable
@@ -991,6 +996,7 @@ let is_reachable
 
 let is_reachable
     ?trace
+    ?decl_paths
     ?get_nondecl_env
     ~abs_env
     ~decl_env
@@ -1005,6 +1011,7 @@ let is_reachable
     Ctype.wrap_trace_gadt_instances decl_env (
       is_reachable
         ?trace
+        ?decl_paths
         ?get_nondecl_env
         ~abs_env
         ~decl_env
@@ -1050,7 +1057,7 @@ let check_well_founded_manifest ~abs_env loc path decl =
    are doing it anyway out of caution.
 *)
 let check_well_founded_decl
-    ~abs_env ~decl_env ?get_nondecl_env loc path decl _to_check =
+    ~abs_env ~decl_env ?decl_paths ?get_nondecl_env loc path decl _to_check =
   let declaration = Ctype.generic_instance_declaration decl in
   List.iteri
     (fun i from_ty ->
@@ -1058,6 +1065,7 @@ let check_well_founded_decl
          ~trace:[ Parameter (path, i, from_ty) ]
          ~abs_env
          ~decl_env
+         ?decl_paths
          ?get_nondecl_env
          loc
          ~from_ty
@@ -1075,6 +1083,7 @@ let check_well_founded_decl
          ~trace:[ Expands_to (ty, from_ty) ]
          ~abs_env
          ~decl_env
+         ?decl_paths
          ?get_nondecl_env
          loc
          ~from_ty
@@ -1389,11 +1398,18 @@ let transl_type_decl env rec_flag sdecl_list =
     in
     (fun path -> Path.Map.find_opt path nondecl_env_by_id)
   in
+  let decl_paths =
+    List.fold_left
+      (fun acc (id, _) ->
+         Path.Set.add (Path.Pident id) acc)
+      Path.Set.empty ids_list
+  in
   List.iter (fun (id, decl) ->
       let path = Path.Pident id in
       let decl_env = Path.Map.find path decl_env_by_path in
       check_well_founded_decl
-        ~abs_env ~decl_env ~get_nondecl_env (List.assoc id id_loc_list)
+        ~abs_env ~decl_env ~decl_paths
+        ~get_nondecl_env (List.assoc id id_loc_list)
         path decl to_check)
     decls;
   List.iter (check_abbrev_regularity ~abs_env new_env id_loc_list to_check)
