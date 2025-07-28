@@ -82,7 +82,7 @@ Line 3, characters 0-16:
 3 | type 'a t = 'a t
     ^^^^^^^^^^^^^^^^
 Error: The type abbreviation "t" is cyclic:
-         "'a t" = "'a t"
+         "'a t" = "'b t"
 |}]
 
 type 'a t = 'a u
@@ -94,27 +94,22 @@ and 'a z = 'a t
 Line 1, characters 0-16:
 1 | type 'a t = 'a u
     ^^^^^^^^^^^^^^^^
-Error: The type abbreviation "t" is cyclic:
-         "'a t" = "'a u",
-         "'a u" = "'a v * 'a",
-         "'a v * 'a" contains "'a v",
-         "'a v" = "'a w list",
-         "'a w list" contains "'a w",
-         "'a w" = "'a option z",
-         "'a option z" = "'a option t"
+Error: The definition of "t" contains a cycle:
+         "'a t" = "'b u",
+         "'b u" = "'b v * 'b",
+         "'b v * 'b" contains "'b v",
+         "'b v" = "'b w list",
+         "'b w list" contains "'b w",
+         "'b w" = "'b option z",
+         "'b option z" = "'b option t"
 |}]
 
 
 type 'a u = < x : 'a>
 and 'a t = 'a t u;;
 [%%expect{|
-Line 2, characters 0-17:
-2 | and 'a t = 'a t u;;
-    ^^^^^^^^^^^^^^^^^
-Error: The type abbreviation "t" is cyclic:
-         "'a t u" contains "'a t",
-         "'a t" = "'a t u",
-         "'a t u" contains "'a t"
+type 'a u = < x : 'a >
+and 'a t = 'a t u
 |}];; (* fails since 4.04 *)
 
 
@@ -125,8 +120,6 @@ Line 1, characters 0-75:
 1 | module rec A : sig type t = B.t -> int end = struct type t = B.t -> int end
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "A.t" contains a cycle:
-         "B.t -> int" contains "B.t",
-         "B.t" = "A.t",
          "A.t" = "B.t -> int",
          "B.t -> int" contains "B.t",
          "B.t" = "A.t"
