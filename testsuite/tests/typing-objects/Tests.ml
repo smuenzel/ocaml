@@ -232,8 +232,8 @@ Line 2, characters 0-17:
 2 | and 'a t = 'a t u;;
     ^^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         "'a t" = "'b t u",
-         "'b t u" = "'b t"
+         "'a t" = "'a t u",
+         "'a t u" = "'a t"
 |}];;
 type 'a u = 'a;;
 [%%expect{|
