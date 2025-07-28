@@ -860,26 +860,25 @@ let reachable
         (fun (_, t) -> rectypes_guarded ~trace:(Contains (ty, t) :: trace) t)
         tl
   | Tconstr (path, tl, _) ->
+      let iter_tl f =
+        List.iter (fun t -> f ~trace:(Contains (ty, t) :: trace) t) tl
+      in
       if Ctype.is_contractive env path
       then
-        List.iter
-          (fun t -> rectypes_guarded ~trace:(Contains (ty, t) :: trace) t)
-          tl
+        iter_tl rectypes_guarded
       else begin
         match Env.find_type path env with
         | { type_kind = (Type_record _ | Type_variant _); _ } ->
-            List.iter
-              (fun t -> rectypes_guarded ~trace:(Contains (ty, t) :: trace) t)
-              tl
+            iter_tl rectypes_guarded
         | { type_kind = Type_abstract _ ; type_manifest = None; _ }
         | exception Not_found ->
             (* Abstract *)
-            List.iter (fun t -> unguarded ~trace:(Contains (ty, t) :: trace) t) tl
+            iter_tl unguarded
         | _ ->
             match Ctype.try_expand_once_opt env ty with
             | exception Ctype.Cannot_expand ->
                 (* Abstract *)
-                List.iter (fun t -> unguarded ~trace:(Contains (ty, t) :: trace) t) tl
+                iter_tl unguarded
             | ty' ->
                 unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
       end
