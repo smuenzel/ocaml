@@ -649,8 +649,8 @@ Line 9, characters 0-25:
 9 | type 'a foo = 'a foo list
     ^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The definition of "foo" contains a cycle:
-         "'a foo" = "'b foo list",
-         "'b foo list" contains "'b foo"
+         "'a foo" = "'a foo list",
+         "'a foo list" contains "'a foo"
 |}];;
 
 class ['a] bar (x : 'a) = object end

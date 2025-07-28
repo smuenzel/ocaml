@@ -82,7 +82,7 @@ Line 3, characters 0-16:
 3 | type 'a t = 'a t
     ^^^^^^^^^^^^^^^^
 Error: The type abbreviation "t" is cyclic:
-         "'a t" = "'b t"
+         "'a t" = "'a t"
 |}]
 
 type 'a t = 'a u
@@ -95,13 +95,13 @@ Line 1, characters 0-16:
 1 | type 'a t = 'a u
     ^^^^^^^^^^^^^^^^
 Error: The definition of "t" contains a cycle:
-         "'a t" = "'b u",
-         "'b u" = "'b v * 'b",
-         "'b v * 'b" contains "'b v",
-         "'b v" = "'b w list",
-         "'b w list" contains "'b w",
-         "'b w" = "'b option z",
-         "'b option z" = "'b option t"
+         "'a t" = "'a u",
+         "'a u" = "'a v * 'a",
+         "'a v * 'a" contains "'a v",
+         "'a v" = "'a w list",
+         "'a w list" contains "'a w",
+         "'a w" = "'a option z",
+         "'a option z" = "'a option t"
 |}]
 
 
