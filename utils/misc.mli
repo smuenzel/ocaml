@@ -116,8 +116,14 @@ module Stdlib : sig
   module List : sig
     include module type of struct include List end
 
-    val fold_left4 :
-      ('acc -> 'a0 -> 'a1 -> 'a2 -> 'a3 -> 'acc) -> 'acc -> 'a0 list -> 'a1 list -> 'a2 list -> 'a3 list -> 'acc
+    val fold_left4
+      :  ('acc -> 'a0 -> 'a1 -> 'a2 -> 'a3 -> 'acc)
+      -> 'acc
+      -> 'a0 list
+      -> 'a1 list
+      -> 'a2 list
+      -> 'a3 list
+      -> 'acc
 
     val compare : ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** The lexicographic order supported by the provided order.
