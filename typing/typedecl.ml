@@ -844,20 +844,21 @@ let reachable
     ~unguarded
     ~trace
     ty
+    a
   =
   let iter_tl tl f =
-    List.iter (fun t -> f ~trace:(Contains (ty, t) :: trace) t) tl
+    List.iter (fun t -> f a ~trace:(Contains (ty, t) :: trace) t) tl
   in
   let iter_tl' tl f =
-    List.iter (fun (_, t) -> f ~trace:(Contains (ty, t) :: trace) t) tl
+    List.iter (fun (_, t) -> f a ~trace:(Contains (ty, t) :: trace) t) tl
   in
   match get_desc ty with
   | Tobject _ | Tfield _ | Tnil -> ()
   | Tvariant _ -> ()
   | Tvar _ | Tunivar _ -> ()
   | Tarrow (_, t1, t2, _) ->
-      rectypes_guarded ~trace:(Contains (ty, t1) :: trace) t1;
-      rectypes_guarded ~trace:(Contains (ty, t2) :: trace) t2;
+      rectypes_guarded a ~trace:(Contains (ty, t1) :: trace) t1;
+      rectypes_guarded a ~trace:(Contains (ty, t2) :: trace) t2;
   | Ttuple tl ->
       iter_tl' tl rectypes_guarded
   | Tconstr (path, tl, _) ->
@@ -881,16 +882,33 @@ let reachable
                 (* Abstract *)
                 iter_tl tl unguarded
             | ty' ->
-                unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
+                unguarded a ~trace:(Expands_to (ty, ty') :: trace) ty'
       end
   | Tlink ty' ->
-      unguarded ~trace ty'
+      unguarded a ~trace ty'
   | Tsubst _ ->
       failwith "Tsubst"
   | Tpoly (ty', _) ->
-      unguarded ~trace:(Contains (ty, ty') :: trace) ty'
+      unguarded a ~trace:(Contains (ty, ty') :: trace) ty'
   | Tpackage { pack_constraints; _ } ->
       iter_tl' pack_constraints unguarded
+
+let raise_cycle ~trace ~abs_env loc path =
+  let err =
+    let reaching_path, rec_abbrev =
+      (* The reaching trace is accumulated in reverse order, we
+             reverse it to get a reaching path. *)
+      match trace with
+      | (Expands_to (ty1, _) :: _) as trace
+        when (match get_desc ty1 with
+              Tconstr (p,_,_) -> Path.same p path | _ -> false) ->
+          List.rev trace, true
+      | trace -> List.rev trace, false
+    in
+    if rec_abbrev
+    then Recursive_abbrev (Path.name path, abs_env, reaching_path)
+    else Cycle_in_def (Path.name path, abs_env, reaching_path)
+  in raise (Error (loc, err))
 
 let is_reachable
     ?(trace=[])
@@ -916,25 +934,8 @@ let is_reachable
      thenm inside an abstract environment.
   *)
   let visited_paths = ref Path.Map.empty in
-  let raise_error ~trace =
-    let path = ty_path in
-    let err =
-      let reaching_path, rec_abbrev =
-        (* The reaching trace is accumulated in reverse order, we
-             reverse it to get a reaching path. *)
-        match trace with
-        | (Expands_to (ty1, _) :: _) as trace
-          when (match get_desc ty1 with
-                Tconstr (p,_,_) -> Path.same p path | _ -> false) ->
-            List.rev trace, true
-        | trace -> List.rev trace, false
-      in
-      if rec_abbrev
-      then Recursive_abbrev (Path.name path, abs_env, reaching_path)
-      else Cycle_in_def (Path.name path, abs_env, reaching_path)
-    in raise (Error (loc, err))
-  in
-  let rec unguarded ~trace ty' =
+  let raise_error ~trace = raise_cycle ~abs_env ~trace loc ty_path in
+  let rec unguarded_named ~trace ty' =
     if TypeSet.mem ty' !visited
     then ()
     else if match get_desc ty' with
@@ -947,14 +948,15 @@ let is_reachable
       | _ -> false
     then ()
     else begin
-      match ty_opt with
-      | Some ty when eq_type ty ty' -> raise_error ~trace
-      | _ ->
-          match get_desc ty' with
-          | Tconstr (path, _, _) when Path.same path ty_path ->
-              raise_error ~trace
-          | _ -> unguarded_no_self ~trace ty'
+      match get_desc ty' with
+      | Tconstr (path, _, _) when Path.same path ty_path ->
+          raise_error ~trace
+      | _ -> unguarded_no_self ~trace ty'
     end
+  and unguarded () ~trace ty' =
+    match ty_opt with
+    | Some ty when eq_type ty ty' -> raise_error ~trace
+    | _ -> unguarded_named ~trace ty'
   and unguarded_no_self ~trace ty' =
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
@@ -969,14 +971,15 @@ let is_reachable
       ~unguarded
       ~trace
       ty'
-  and rectypes_guarded ~trace ty' =
+      ()
+  and rectypes_guarded () ~trace ty' =
     if !Clflags.recursive_types
     then ()
-    else unguarded ~trace ty'
+    else unguarded () ~trace ty'
   in
   if include_direct
-  then unguarded ~trace from_ty
-  else unguarded_no_self ~trace from_ty
+  then unguarded () ~trace from_ty
+  else unguarded_named ~trace from_ty
 
 let is_reachable
     ?trace
@@ -1008,6 +1011,42 @@ let is_reachable
     (* Will be detected by check_regularity *)
     Btype.backtrack snap
 
+let check_unguarded_cycles
+    ~abs_env
+    ~env
+    ~visited
+    loc
+    ty
+    ty_path
+  =
+  let rec rectypes_guarded parents ~trace ty' =
+    if !Clflags.recursive_types
+    then ()
+    else unguarded parents ~trace ty'
+  and unguarded parents ~trace ty' =
+    if TypeSet.mem ty' parents
+    then raise_cycle ~trace ~abs_env loc ty_path
+    else if TypeSet.mem ty' !visited
+    then ()
+    else begin
+      visited := TypeSet.add ty' !visited;
+      let parents = TypeSet.add ty' parents in
+      reachable
+        ~env
+        ~rectypes_guarded
+        ~unguarded
+        ~trace
+        ty'
+        parents
+    end
+  in
+  reachable
+    ~env
+    ~rectypes_guarded
+    ~unguarded
+    ~trace:[]
+    ty
+    (TypeSet.singleton ty)
 
 (* Given a new type declaration [type t = ...] (potentially mutually-recursive),
    we check that accepting the declaration does not introduce ill-founded types.
@@ -1022,7 +1061,7 @@ let check_well_founded_decl
   let is_reachable ~trace =
     is_reachable
       ~trace ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc
-      ~include_direct:true path None
+      ~include_direct:false path None
   in
   List.iteri
     (fun i from_ty ->
@@ -1041,6 +1080,26 @@ let check_well_founded_decl
          ~from_ty
     )
     declaration.type_manifest
+  ;
+  ()
+
+let check_unguarded_cycles
+  ~visited ~abs_env ~env loc path decl
+  =
+  let declaration = Ctype.generic_instance_declaration decl in
+  List.iteri
+    (fun _i from_ty ->
+       check_unguarded_cycles ~visited ~abs_env ~env loc from_ty path
+    )
+    declaration.type_params
+  ;
+  Option.iter
+    (fun from_ty ->
+       check_unguarded_cycles ~visited ~abs_env ~env loc from_ty path
+    )
+    declaration.type_manifest
+  ;
+  ()
 
 (* Check for non-regular abbreviations; an abbreviation
    [type 'a t = ...] is non-regular if the expansion of [...]
@@ -1343,6 +1402,18 @@ let transl_type_decl env rec_flag sdecl_list =
         ~get_expand_env (List.assoc id id_loc_list)
         path decl)
     decls;
+  let () =
+    let visited = ref TypeSet.empty in
+    List.iter (fun (id, decl) ->
+        let path = Path.Pident id in
+        check_unguarded_cycles
+          ~visited
+          ~abs_env ~env
+          (List.assoc id id_loc_list)
+          path decl
+      )
+      decls
+  in
   List.iter (fun (tdecl, _shape) ->
     check_abbrev_regularity ~abs_env new_env id_loc_list to_check tdecl)
     tdecls;

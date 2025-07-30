@@ -80,13 +80,11 @@ module type PR6505 = sig
 end
 ;; (* fails *)
 [%%expect{|
-module type PR6505 =
-  sig
-    type !'o is_an_object = 'o constraint 'o = < .. >
-    and 'a abs constraint 'a = 'a is_an_object
-    val abs : ('a is_an_object as 'a) is_an_object -> 'a abs
-    val unabs : ('a is_an_object as 'a) abs -> 'a
-  end
+Line 3, characters 2-44:
+3 |   and 'o abs constraint 'o = 'o is_an_object
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The definition of "abs" contains a cycle:
+         "'a is_an_object as 'a" contains "'a"
 |}];;
 
 module PR6505a_old = struct
