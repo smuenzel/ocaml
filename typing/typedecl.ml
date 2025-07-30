@@ -918,9 +918,7 @@ let is_reachable
     ~decl_env (* Environment with only the current type abstract *)
     loc
     ~from_ty
-    ~include_direct
     ty_path
-    ty_opt
   =
   let visited = ref TypeSet.empty in
   (* We need to keeps paths since sometimes constraints can create a
@@ -935,7 +933,7 @@ let is_reachable
   *)
   let visited_paths = ref Path.Map.empty in
   let raise_error ~trace = raise_cycle ~abs_env ~trace loc ty_path in
-  let rec unguarded_named ~trace ty' =
+  let rec unguarded () ~trace ty' =
     if TypeSet.mem ty' !visited
     then ()
     else if match get_desc ty' with
@@ -953,10 +951,6 @@ let is_reachable
           raise_error ~trace
       | _ -> unguarded_no_self ~trace ty'
     end
-  and unguarded () ~trace ty' =
-    match ty_opt with
-    | Some ty when eq_type ty ty' -> raise_error ~trace
-    | _ -> unguarded_named ~trace ty'
   and unguarded_no_self ~trace ty' =
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
@@ -977,9 +971,7 @@ let is_reachable
     then ()
     else unguarded () ~trace ty'
   in
-  if include_direct
-  then unguarded () ~trace from_ty
-  else unguarded_named ~trace from_ty
+  unguarded () ~trace from_ty
 
 let is_reachable
     ?trace
@@ -989,9 +981,7 @@ let is_reachable
     ~decl_env
     loc
     ~from_ty
-    ~include_direct
     ty_path
-    ty
   =
   let snap = Btype.snapshot () in
   try
@@ -1004,9 +994,7 @@ let is_reachable
         ~decl_env
         loc
         ~from_ty
-        ~include_direct
-        ty_path
-    ) ty
+    ) ty_path
   with Ctype.Escape _ ->
     (* Will be detected by check_regularity *)
     Btype.backtrack snap
@@ -1060,8 +1048,7 @@ let check_well_founded_decl
   let declaration = Ctype.generic_instance_declaration decl in
   let is_reachable ~trace =
     is_reachable
-      ~trace ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc
-      ~include_direct:false path None
+      ~trace ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc path
   in
   List.iteri
     (fun i from_ty ->
