@@ -52,6 +52,7 @@ val approx_type_decl:
     Parsetree.type_declaration list ->
                                   (Ident.t * type_declaration) list
 val check_recmod_typedecl:
+  abs_env:Env.t -> decl_env:Env.t -> get_expand_env:(Path.t -> Env.t option) ->
     Env.t -> Location.t -> Ident.t list -> Path.t -> type_declaration -> unit
 val check_coherence:
     Env.t -> Location.t -> Path.t -> type_declaration -> unit
@@ -113,3 +114,10 @@ type error =
 exception Error of Location.t * error
 
 val report_error: loc:Location.t -> error -> Location.report
+
+val abstract_declaration
+  :  ?abstract_abbrevs:Types.type_origin
+  -> Asttypes.rec_flag
+  -> Parsetree.type_declaration
+  -> (Ident.t * Types.Uid.t)
+  -> Types.type_declaration option

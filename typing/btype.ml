@@ -806,3 +806,4 @@ let instance_variable_type label sign =
   match Vars.find label sign.csig_vars with
   | (_, _, ty) -> ty
   | exception Not_found -> assert false
+

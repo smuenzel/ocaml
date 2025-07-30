@@ -98,12 +98,7 @@ let add_type ~check ?shape id decl env =
   Builtin_attributes.warning_scope ~ppwarning:false decl.type_attributes
     (fun () -> Env.add_type ~check ?shape id decl env)
 
-(* Add a dummy type declaration to the environment, with the given arity.
-   The [type_kind] is [Type_abstract], but there is a generic [type_manifest]
-   for abbreviations, to allow polymorphic expansion, except if
-   [abstract_abbrevs] is given along with a reason for not allowing expansion.
-   This function is only used in [transl_type_decl]. *)
-let enter_type ?abstract_abbrevs rec_flag env sdecl (id, uid) =
+let abstract_declaration ?abstract_abbrevs rec_flag sdecl (id, uid) =
   let needed =
     match rec_flag with
     | Asttypes.Nonrecursive ->
@@ -118,7 +113,7 @@ let enter_type ?abstract_abbrevs rec_flag env sdecl (id, uid) =
     | Asttypes.Recursive -> true
   in
   let arity = List.length sdecl.ptype_params in
-  if not needed then env else
+  if not needed then None else
   let abstract_source, type_manifest =
     match sdecl.ptype_manifest, abstract_abbrevs with
     | None, _             -> Definition, None
@@ -143,7 +138,17 @@ let enter_type ?abstract_abbrevs rec_flag env sdecl (id, uid) =
       type_uid = uid;
     }
   in
-  add_type ~check:true id decl env
+  Some decl
+
+(* Add a dummy type declaration to the environment, with the given arity.
+   The [type_kind] is [Type_abstract], but there is a generic [type_manifest]
+   for abbreviations, to allow polymorphic expansion, except if
+   [abstract_abbrevs] is given along with a reason for not allowing expansion.
+   This function is only used in [transl_type_decl]. *)
+let enter_type ?abstract_abbrevs rec_flag env sdecl (id, uid) =
+  match abstract_declaration ?abstract_abbrevs rec_flag sdecl (id, uid) with
+  | Some decl' -> add_type ~check:true id decl' env
+  | None -> env
 
 (* Determine if a type's values are represented by floats at run-time. *)
 let is_float env ty =
@@ -2051,12 +2056,12 @@ let approx_type_decl sdecl_list =
 (* Check the well-formedness conditions on type abbreviations defined
    within recursive modules. *)
 
-let check_recmod_typedecl env loc recmod_ids path decl =
+let check_recmod_typedecl ~abs_env ~decl_env ~get_expand_env env loc recmod_ids path decl =
   (* recmod_ids is the list of recursively-defined module idents.
      (path, decl) is the type declaration to be checked. *)
   let to_check path = Path.exists_free recmod_ids path in
   (* CR smuenzel: do we have to modify decl_env here as well? *)
-  check_well_founded_decl ~abs_env:env ~decl_env:env
+  check_well_founded_decl ~abs_env ~decl_env ~get_expand_env
     ~is_decl_path:to_check loc path decl;
   check_regularity ~abs_env:env env loc path decl to_check;
   (* additional coherence check, as one might build an incoherent signature,
