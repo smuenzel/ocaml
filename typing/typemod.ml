@@ -200,39 +200,35 @@ let type_module_type_of_fwd :
 
 let check_recmod_typedecls env decls =
   let recmod_ids = List.map fst decls in
+  let abstractify_type ty =
+    let arity = ty.type_arity in
+    { ty with
+      type_params =
+        List.map (fun _ -> Btype.newgenvar()) ty.type_params;
+      type_kind = Type_abstract Rec_check_regularity;
+      type_manifest = None;
+      type_variance = Variance.unknown_signature ~injective:false ~arity;
+      type_separability = Types.Separability.default_signature ~arity;
+      type_is_newtype = false;
+      type_expansion_scope = Btype.lowest_level;
+      type_immediate = Unknown;
+      type_unboxed_default = false;
+    }
+  in
   let type_to_abstract =
     List.fold_left
       (fun acc (id, md) ->
          List.fold_left
            (fun acc path ->
-              match Env.find_type path env with
-              | exception Not_found ->
-                  (* CR smuenzel: Nonrecursive? Is that allowed here? *)
-                  acc
-              | ty ->
-                  let arity = ty.type_arity in
-                  let t =
-                    { ty with
-                      type_params =
-                        List.map (fun _ -> Btype.newgenvar()) ty.type_params;
-                      type_kind = Type_abstract Rec_check_regularity;
-                      type_manifest = None;
-                      type_variance = Variance.unknown_signature ~injective:false ~arity;
-                      type_separability = Types.Separability.default_signature ~arity;
-                      type_is_newtype = false;
-                      type_expansion_scope = Btype.lowest_level;
-                      type_immediate = Unknown;
-                      type_unboxed_default = false;
-                    }
-                  in
-                  Path.Map.add path t acc
+              let ty = Env.find_type path env in
+              let t = abstractify_type ty in
+              Path.Map.add path t acc
            )
            acc
            (Mtype.type_paths env (Pident id) md.Types.md_type))
       Path.Map.empty decls
   in
   let abs_env =
-    (* Use Env.add_local_constraint *)
     Path.Map.fold
       (fun path ty env ->
          Env.add_local_constraint path ty env)
@@ -256,9 +252,8 @@ let check_recmod_typedecls env decls =
       List.iter
         (fun path ->
            let decl_env =
-             match Path.Map.find path type_to_abstract with
-             | abs_ty -> Env.add_local_constraint path abs_ty env
-             | exception Not_found -> env
+             let abs_ty = Path.Map.find path type_to_abstract in
+             Env.add_local_constraint path abs_ty env
            in
            Typedecl.check_recmod_typedecl
              ~abs_env
