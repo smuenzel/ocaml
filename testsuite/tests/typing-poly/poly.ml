@@ -636,7 +636,7 @@ val app : int * bool = (1, true)
 Line 9, characters 0-25:
 9 | type 'a foo = 'a foo list
     ^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The type abbreviation "foo" is cyclic:
+Error: The definition of "foo" contains a cycle:
          "'a foo" = "'a foo list",
          "'a foo list" contains "'a foo"
 |}];;
@@ -939,7 +939,7 @@ type t = u and u = t;;
 Line 1, characters 0-10:
 1 | type t = u and u = t;;
     ^^^^^^^^^^
-Error: The type abbreviation "t" is cyclic:
+Error: The definition of "t" contains a cycle:
          "t" = "u",
          "u" = "t"
 |}];;
@@ -1068,8 +1068,11 @@ and  ('a2, 'b2) ty2 = 'b2 -> unit constraint 'b2 = [> `V2 of ('a2, 'b2) ty1 as '
 Line 1, characters 0-83:
 1 | type ('a1, 'b1) ty1 = 'a1 -> unit constraint 'a1 = [> `V1 of ('a1, 'b1) ty2 as 'b1]
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "ty1" contains a cycle:
-         "([> `V1 of 'a ] as 'b, 'a) ty2 as 'a" contains "'a"
+Error: Constraints are not satisfied in this type.
+       Type "[> `V1 of ('a, 'b) ty2 as 'b ] as 'a" should be an instance of
+         "('c, [> `V2 of 'c ]) ty1 as 'c"
+       Type "ty1" was considered abstract when checking constraints in this
+       recursive type definition.
 |}];;
 
 (* PR#8359: expanding may change original in Ctype.unify2 *)
