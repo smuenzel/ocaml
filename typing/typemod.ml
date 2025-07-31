@@ -198,14 +198,69 @@ let type_module_type_of_fwd :
 (* Additional validity checks on type definitions arising from
    recursive modules *)
 
-let check_recmod_typedecls ~abs_env env decls =
+let check_recmod_typedecls env decls =
   let recmod_ids = List.map fst decls in
+  let abstractify_type ty =
+    let arity = ty.type_arity in
+    { ty with
+      type_params =
+        List.map (fun _ -> Btype.newgenvar()) ty.type_params;
+      type_kind = Type_abstract Rec_check_regularity;
+      type_manifest = None;
+      type_variance = Variance.unknown_signature ~injective:false ~arity;
+      type_separability = Types.Separability.default_signature ~arity;
+      type_is_newtype = false;
+      type_expansion_scope = Btype.lowest_level;
+      type_immediate = Unknown;
+      type_unboxed_default = false;
+    }
+  in
+  let type_to_abstract =
+    List.fold_left
+      (fun acc (id, md) ->
+         List.fold_left
+           (fun acc path ->
+              let ty = Env.find_type path env in
+              let t = abstractify_type ty in
+              Path.Map.add path t acc
+           )
+           acc
+           (Mtype.type_paths env (Pident id) md.Types.md_type))
+      Path.Map.empty decls
+  in
+  let abs_env =
+    Path.Map.fold
+      (fun path ty env ->
+         Env.add_local_constraint path ty env)
+      type_to_abstract
+      env
+  in
+  let get_expand_env =
+    let expand_env_by_id =
+      Path.Map.mapi
+        (fun path _ ->
+           Env.add_local_constraint path
+             (Env.find_type path env)
+             abs_env
+        )
+        type_to_abstract
+    in
+    (fun path -> Path.Map.find_opt path expand_env_by_id)
+  in
   List.iter
     (fun (id, md) ->
       List.iter
         (fun path ->
-          Typedecl.check_recmod_typedecl ~abs_env env md.Types.md_loc recmod_ids
-                                         path (Env.find_type path env))
+           let decl_env =
+             let abs_ty = Path.Map.find path type_to_abstract in
+             Env.add_local_constraint path abs_ty env
+           in
+           Typedecl.check_recmod_typedecl
+             ~abs_env
+             ~decl_env
+             ~get_expand_env
+             env md.Types.md_loc recmod_ids
+             path (Env.find_type path env))
         (Mtype.type_paths env (Pident id) md.Types.md_type))
     decls
 
@@ -428,7 +483,7 @@ let check_well_formed_module env loc context mty =
           let (id_mty_l, rem) = extract_next_modules rem in
           begin try
             let forced_env = Lazy.force env in
-            check_recmod_typedecls ~abs_env:forced_env forced_env
+            check_recmod_typedecls forced_env
               ((id, mty) :: id_mty_l)
           with Typedecl.Error (_, err) ->
             raise (Error (loc, Lazy.force env,
@@ -2002,7 +2057,7 @@ and transl_recmodule_modtypes env sdecls =
       (fun () -> transition abs_env init)
   in
   let env1 = make_env dcl1 in
-  check_recmod_typedecls ~abs_env env1 (map_mtys dcl1);
+  check_recmod_typedecls env1 (map_mtys dcl1);
   let dcl2 = transition env1 dcl1 in
 (*
   List.iter
@@ -2011,7 +2066,7 @@ and transl_recmodule_modtypes env sdecls =
     dcl2;
 *)
   let env2 = make_env dcl2 in
-  check_recmod_typedecls ~abs_env env2 (map_mtys dcl2);
+  check_recmod_typedecls env2 (map_mtys dcl2);
   let dcl2 =
     List.map2 (fun pmd (id_shape, id_loc, md, mty) ->
       let tmd =
