@@ -65,8 +65,9 @@ val approx_type_decl:
       recursive module definitions.
 *)
 val check_recmod_typedecl:
-    abs_env:Env.t -> Env.t -> Location.t -> Ident.t list -> Path.t ->
-    type_declaration -> unit
+    abs_env:Env.t -> decl_env:Env.t ->
+    get_expand_env:(Path.t -> Env.t option) ->
+    Env.t -> Location.t -> Ident.t list -> Path.t -> type_declaration -> unit
 val check_coherence:
     Env.t -> Location.t -> Path.t -> type_declaration -> unit
 
