@@ -243,10 +243,13 @@ let init_shape id modl =
         raise (Initialization_failure info)
     | Mty_signature sg ->
         Const_block(0, [Const_block(0, init_shape_struct path env sg)])
-    | Mty_functor _ ->
-        (* can we do better? *)
-        let info = Unsafe {reason=Unsafe_functor;loc; path} in
-        raise (Initialization_failure info)
+    | Mty_functor (_, mty) ->
+        try
+          init_shape_mod path loc env mty
+        with
+        | Initialization_failure _ ->
+            let info = Unsafe {reason=Unsafe_functor;loc; path} in
+            raise (Initialization_failure info)
   and init_shape_struct path env sg =
     match sg with
       [] -> []
