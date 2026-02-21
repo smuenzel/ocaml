@@ -874,8 +874,6 @@ let reachable
         iter_tl tl rectypes_guarded
       else begin
         match Env.find_type path env with
-        | { type_kind = (Type_record _ | Type_variant _); _ } ->
-            iter_tl tl rectypes_guarded
         | { type_kind = Type_abstract _ ; type_manifest = None; _ }
         | exception Not_found ->
             (* Abstract *)
