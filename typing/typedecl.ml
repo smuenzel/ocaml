@@ -845,9 +845,12 @@ let check_abbrev env sdecl (id, decl) =
    - if -rectypes is not used, we only allow cycles in the type graph
      if they go through an object or polymorphic variant type *)
 
+let should_print = Sys.getenv_opt "OCAML_CHECK_WELL_FOUNDED" |> Option.is_some
+
 let reachable
-    ~env
-    ?(get_expand_env = fun _ -> None)
+    ~abs_env
+    ~final_env
+    ~restrict_type_expansion
     ~rectypes_guarded
     ~unguarded
     ~trace
@@ -869,25 +872,22 @@ let reachable
   | Ttuple tl ->
       iter_tl' tl rectypes_guarded
   | Tconstr (path, tl, _) ->
-      if Ctype.is_contractive env path
+      if Ctype.is_contractive final_env path
       then
         iter_tl tl rectypes_guarded
       else begin
-        match Env.find_type path env with
-        | { type_kind = Type_abstract _ ; type_manifest = None; _ }
-        | exception Not_found ->
+        match
+          (* Expansion can trigger unification, so we need to use
+             an abstract environment to avoid any cycles. *)
+          Ctype.try_expand_once_opt_custom
+            ~find_type_expansion:(restrict_type_expansion path)
+            abs_env ty
+        with
+        | exception Ctype.Cannot_expand ->
             (* Abstract *)
             iter_tl tl unguarded
-        | _ ->
-            let expand_env =
-              Option.value ~default:env (get_expand_env path)
-            in
-            match Ctype.try_expand_once_opt expand_env ty with
-            | exception Ctype.Cannot_expand ->
-                (* Abstract *)
-                iter_tl tl unguarded
-            | ty' ->
-                unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
+        | ty' ->
+            unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
       end
   | Tlink ty' ->
       unguarded ~trace ty'
@@ -906,15 +906,15 @@ let reachable
 let is_reachable
     ?(trace=[])
     ~is_decl_path
-    ?get_expand_env (* only allows expansion of the requested type*)
     ~abs_env (* Environment with all types in the declaration abstract *)
-    ~decl_env (* Environment with only the current type abstract *)
+    ~final_env (* Environment with all types defined *)
     loc
     ~from_ty
-    ~include_direct
     ty_path
     ty_opt
   =
+  if should_print
+  then Format.eprintf "is_reachable(%s) in %a\n" (Path.name ty_path) Rawprinttyp.type_expr from_ty;
   let visited = ref TypeSet.empty in
   (* We need to keeps paths since sometimes constraints can create a
      fresh type with a constructor that we've already seen.
@@ -946,6 +946,10 @@ let is_reachable
     in raise (Error (loc, err))
   in
   let rec unguarded ~trace ty' =
+    if should_print
+    then begin
+      Format.eprintf "-> unguarded %a\n" Rawprinttyp.type_expr ty'
+    end;
     if TypeSet.mem ty' !visited
     then ()
     else if match get_desc ty' with
@@ -968,6 +972,10 @@ let is_reachable
           | _ -> unguarded_no_self ~trace ty'
     end
   and unguarded_no_self ~trace ty' =
+    if should_print
+    then begin
+      Format.eprintf "-> unguarded_no_self %a\n" Rawprinttyp.type_expr ty'
+    end;
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
     | Tconstr (path, _, _)
@@ -976,65 +984,71 @@ let is_reachable
     | _ -> ()
     end;
     reachable
-      ?get_expand_env
-      ~env:decl_env
+      ~abs_env
+      ~final_env
+      ~restrict_type_expansion
       ~rectypes_guarded
       ~unguarded
       ~trace
       ty'
   and rectypes_guarded ~trace ty' =
+    if should_print
+    then begin
+      Format.eprintf "-> rectypes_guarded %a\n" Rawprinttyp.type_expr ty'
+    end;
     if !Clflags.recursive_types
     then ()
     else unguarded ~trace ty'
+  and restrict_type_expansion root_path_to_expand =
+    fun path _env ->
+      let is_decl_path = is_decl_path path in
+      let should_not_expand =
+        (Path.same path ty_path)
+        || (is_decl_path && not (Path.same path root_path_to_expand))
+      in
+      if should_print
+      then begin
+        if should_not_expand
+        then Printf.eprintf "root=%s should_not_expand(%s)\n" (Path.name root_path_to_expand) (Path.name path)
+        else Printf.eprintf "root=%s should_expand(%s) is_decl_path=%b\n" (Path.name root_path_to_expand) (Path.name path) is_decl_path
+      end;
+      (* Expand private abbreviations if they are part of the type declaration.
+
+         smuenzel: should we always expand private abbreviations? *)
+      if should_not_expand
+      then Env.find_type_expansion path abs_env
+      else if is_decl_path
+      then Env.find_type_expansion_opt path final_env
+      else Env.find_type_expansion path final_env
   in
-  if include_direct
-  then unguarded ~trace from_ty
-  else unguarded_no_self ~trace from_ty
+  unguarded ~trace from_ty
 
 let is_reachable
     ?trace
     ~is_decl_path
-    ?get_expand_env
     ~abs_env
-    ~decl_env
+    ~final_env
     loc
     ~from_ty
-    ~include_direct
     ty_path
     ty
   =
   let snap = Btype.snapshot () in
   try
-    Ctype.wrap_trace_gadt_instances decl_env (
+    Ctype.wrap_trace_gadt_instances final_env (
       is_reachable
         ?trace
         ~is_decl_path
-        ?get_expand_env
         ~abs_env
-        ~decl_env
+        ~final_env
         loc
         ~from_ty
-        ~include_direct
         ty_path
     ) ty
   with Ctype.Escape _ ->
     (* Will be detected by check_regularity *)
     Btype.backtrack snap
 
-
-let check_well_founded_manifest ~abs_env loc path decl =
-  if decl.type_manifest = None then () else
-  let args = List.map (fun _ -> Ctype.newvar()) decl.type_params in
-  let ty = Ctype.newconstr path args in
-  is_reachable
-    ~abs_env
-    ~is_decl_path:(Path.same path)
-    ~decl_env:abs_env
-    loc
-    ~from_ty:ty
-    ~include_direct:false
-    path
-    (Some ty)
 
 (* Given a new type declaration [type t = ...] (potentially mutually-recursive),
    we check that accepting the declaration does not introduce ill-founded types.
@@ -1055,12 +1069,12 @@ let check_well_founded_manifest ~abs_env loc path decl =
    are doing it anyway out of caution.
 *)
 let check_well_founded_decl
-    ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc path decl =
+    ~abs_env ~final_env ~is_decl_path loc path decl =
   let declaration = Ctype.generic_instance_declaration decl in
   let is_reachable ~trace =
     is_reachable
-      ~trace ~abs_env ~decl_env ~is_decl_path ?get_expand_env loc
-      ~include_direct:true path None
+      ~trace ~abs_env ~final_env ~is_decl_path loc
+      path None
   in
   List.iteri
     (fun i from_ty ->
@@ -1346,47 +1360,13 @@ let transl_type_decl env rec_flag sdecl_list =
     List.fold_left2
       (enter_type ~abstract_abbrevs:Rec_check_regularity rec_flag)
       env sdecl_list ids_list in
-  List.iter (fun (id, decl) ->
-    check_well_founded_manifest ~abs_env (List.assoc id id_loc_list)
-      (Path.Pident id) decl)
-    decls;
   let to_check =
     function Path.Pident id -> List.mem_assoc id id_loc_list | _ -> false in
-
-  let make_decl_env abstract_condition =
-    List.fold_left (fun acc (id, _decl) ->
-        let decl_env =
-          List.fold_left2
-            (fun env (id', decl') shape ->
-               if abstract_condition id id'
-               then try
-                   add_type ~check:true id'
-                     (Env.find_type (Path.Pident id') abs_env)
-                     env
-                 with
-                 | Not_found -> env (* nonrec *)
-               else
-                 add_type ~check:true ~shape id' decl' env
-            ) env decls shapes
-        in
-        Path.Map.add (Path.Pident id) decl_env acc
-      ) Path.Map.empty decls
-  in
-  let decl_env_by_path =
-    make_decl_env (fun id id' -> id = id')
-  in
-  let get_expand_env =
-    let expand_env_by_id =
-      make_decl_env (fun id id' -> not (id = id'))
-    in
-    (fun path -> Path.Map.find_opt path expand_env_by_id)
-  in
   List.iter (fun (id, decl) ->
       let path = Path.Pident id in
-      let decl_env = Path.Map.find path decl_env_by_path in
       check_well_founded_decl
-        ~abs_env ~decl_env ~is_decl_path:to_check
-        ~get_expand_env (List.assoc id id_loc_list)
+        ~abs_env ~final_env:new_env ~is_decl_path:to_check
+        (List.assoc id id_loc_list)
         path decl)
     decls;
   List.iter (check_abbrev_regularity ~abs_env new_env id_loc_list to_check)
@@ -2098,13 +2078,15 @@ let approx_type_decl ~explanation sdecl_list =
   It is used as a printing environment in the case of cycles.
   [env] is the main typing environment, which may contain cycles. *)
 let check_recmod_typedecl
-    ~abs_env ~decl_env ~get_expand_env env loc recmod_ids path decl =
+    ~abs_env env loc recmod_ids path decl =
   (* recmod_ids is the list of recursively-defined module idents.
      (path, decl) is the type declaration to be checked. *)
   let to_check path = Path.exists_free recmod_ids path in
-  (* CR smuenzel: do we have to modify decl_env here as well? *)
-  check_well_founded_decl ~abs_env ~decl_env ~get_expand_env
-    ~is_decl_path:to_check loc path decl;
+  let is_decl_path path' =
+    to_check path'
+  in
+  check_well_founded_decl ~abs_env ~final_env:env
+    ~is_decl_path loc path decl;
   check_regularity ~abs_env env loc path decl to_check;
   (* additional coherence check, as one might build an incoherent signature,
      and use it to build an incoherent module, cf. #7851 *)
