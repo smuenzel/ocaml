@@ -1962,12 +1962,22 @@ let try_expand_safe ~link env ty =
   with Escape _ ->
     Btype.backtrack snap; cleanup_abbrev (); raise Cannot_expand
 
+let [@inline never] [@local never] expand_fuel_exhausted () =
+  raise Cannot_expand
+
+let limit_fuel = Sys.getenv_opt "OCAML_LIMIT_EXPAND" |> Option.is_some
+
 (* Fully expand the head of a type. *)
-let rec try_expand_head
+let rec try_expand_head ~fuel
     (try_once : Env.t -> type_expr -> type_expr) env ty =
+  if limit_fuel && fuel <= 0 then expand_fuel_exhausted ();
+  let fuel = pred fuel in
   let ty' = try_once env ty in
-  try try_expand_head try_once env ty'
+  try try_expand_head ~fuel try_once env ty'
   with Cannot_expand -> ty'
+
+let try_expand_head once env ty =
+  try_expand_head ~fuel:10000 once env ty
 
 (* Unsafe full expansion, may raise [Unify [Escape _]]. *)
 let expand_head_unif env ty =
@@ -2042,6 +2052,11 @@ let safe_abbrev_opt env ty =
 let try_expand_once_opt env ty =
   match get_desc ty with
     Tconstr _ -> expand_abbrev_opt env ty
+  | _ -> raise Cannot_expand
+
+let try_expand_once_opt_custom ~find_type_expansion env ty =
+  match get_desc ty with
+    Tconstr _ -> expand_abbrev_gen ~link:false Private find_type_expansion env ty
   | _ -> raise Cannot_expand
 
 let try_expand_safe_opt env ty =
