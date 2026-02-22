@@ -235,30 +235,12 @@ let check_recmod_typedecls env decls =
       type_to_abstract
       env
   in
-  let get_expand_env =
-    let expand_env_by_id =
-      Path.Map.mapi
-        (fun path _ ->
-           Env.add_local_constraint path
-             (Env.find_type path env)
-             abs_env
-        )
-        type_to_abstract
-    in
-    (fun path -> Path.Map.find_opt path expand_env_by_id)
-  in
   List.iter
     (fun (id, md) ->
       List.iter
         (fun path ->
-           let decl_env =
-             let abs_ty = Path.Map.find path type_to_abstract in
-             Env.add_local_constraint path abs_ty env
-           in
            Typedecl.check_recmod_typedecl
              ~abs_env
-             ~decl_env
-             ~get_expand_env
              env md.Types.md_loc recmod_ids
              path (Env.find_type path env))
         (Mtype.type_paths env (Pident id) md.Types.md_type))
