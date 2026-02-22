@@ -845,8 +845,6 @@ let check_abbrev env sdecl (id, decl) =
    - if -rectypes is not used, we only allow cycles in the type graph
      if they go through an object or polymorphic variant type *)
 
-let should_print = Sys.getenv_opt "OCAML_CHECK_WELL_FOUNDED" |> Option.is_some
-
 let reachable
     ~abs_env
     ~final_env
@@ -913,8 +911,6 @@ let is_reachable
     ty_path
     ty_opt
   =
-  if should_print
-  then Format.eprintf "is_reachable(%s) in %a\n" (Path.name ty_path) Rawprinttyp.type_expr from_ty;
   let visited = ref TypeSet.empty in
   (* We need to keeps paths since sometimes constraints can create a
      fresh type with a constructor that we've already seen.
@@ -946,10 +942,6 @@ let is_reachable
     in raise (Error (loc, err))
   in
   let rec unguarded ~trace ty' =
-    if should_print
-    then begin
-      Format.eprintf "-> unguarded %a\n" Rawprinttyp.type_expr ty'
-    end;
     if TypeSet.mem ty' !visited
     then ()
     else if match get_desc ty' with
@@ -972,10 +964,6 @@ let is_reachable
           | _ -> unguarded_no_self ~trace ty'
     end
   and unguarded_no_self ~trace ty' =
-    if should_print
-    then begin
-      Format.eprintf "-> unguarded_no_self %a\n" Rawprinttyp.type_expr ty'
-    end;
     visited := TypeSet.add ty' !visited;
     begin match get_desc ty' with
     | Tconstr (path, _, _)
@@ -992,10 +980,6 @@ let is_reachable
       ~trace
       ty'
   and rectypes_guarded ~trace ty' =
-    if should_print
-    then begin
-      Format.eprintf "-> rectypes_guarded %a\n" Rawprinttyp.type_expr ty'
-    end;
     if !Clflags.recursive_types
     then ()
     else unguarded ~trace ty'
@@ -1006,12 +990,6 @@ let is_reachable
         (Path.same path ty_path)
         || (is_decl_path && not (Path.same path root_path_to_expand))
       in
-      if should_print
-      then begin
-        if should_not_expand
-        then Printf.eprintf "root=%s should_not_expand(%s)\n" (Path.name root_path_to_expand) (Path.name path)
-        else Printf.eprintf "root=%s should_expand(%s) is_decl_path=%b\n" (Path.name root_path_to_expand) (Path.name path) is_decl_path
-      end;
       (* Expand private abbreviations if they are part of the type declaration.
 
          smuenzel: should we always expand private abbreviations? *)
