@@ -860,7 +860,7 @@ let reachable
   let iter_tl' tl f =
     List.iter (fun (_, t) -> f ~trace:(Contains (ty, t) :: trace) t) tl
   in
-  match get_desc ty with
+  match Btype.get_constr_desc ty with
   | Tobject _ | Tfield _ | Tnil -> ()
   | Tvariant _ -> ()
   | Tvar _ | Tunivar _ -> ()
@@ -887,11 +887,7 @@ let reachable
         | ty' ->
             unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
       end
-  | Tlink ty' ->
-      unguarded ~trace ty'
-  | Texpand (ty', _, _) ->
-      unguarded ~trace:(Expands_to (ty, ty') :: trace) ty'
-  | Tsubst _ ->
+  | Tlink _ | Texpand _ | Tsubst _ ->
       failwith "Tsubst"
   | Tpoly (ty', _) ->
       unguarded ~trace:(Contains (ty, ty') :: trace) ty'
@@ -944,8 +940,8 @@ let is_reachable
   let rec unguarded ~trace ty' =
     if TypeSet.mem ty' !visited
     then ()
-    else if match get_desc ty' with
-        Tconstr (path, _, _) | Texpand (_, path, _) ->
+    else if match Btype.get_constr_desc ty' with
+        Tconstr (path, _, _) ->
           begin match Path.Map.find_opt path !visited_paths with
           | None -> false
           | Some visited_tys ->
@@ -957,17 +953,15 @@ let is_reachable
       match ty_opt with
       | Some ty when eq_type ty ty' -> raise_error ~trace
       | _ ->
-          match get_desc ty' with
-          | Tconstr (path, _, _)
-          | Texpand (_, path, _) when Path.same path ty_path ->
+          match Btype.get_constr_desc ty' with
+          | Tconstr (path, _, _) when Path.same path ty_path ->
               raise_error ~trace
           | _ -> unguarded_no_self ~trace ty'
     end
   and unguarded_no_self ~trace ty' =
     visited := TypeSet.add ty' !visited;
-    begin match get_desc ty' with
-    | Tconstr (path, _, _)
-    | Texpand (_, path, _) when is_decl_path path ->
+    begin match Btype.get_constr_desc ty' with
+    | Tconstr (path, _, _) when is_decl_path path ->
         visited_paths := Path.Map.add_to_list path ty' !visited_paths
     | _ -> ()
     end;
@@ -990,14 +984,10 @@ let is_reachable
         (Path.same path ty_path)
         || (is_decl_path && not (Path.same path root_path_to_expand))
       in
-      (* Expand private abbreviations if they are part of the type declaration.
-
-         smuenzel: should we always expand private abbreviations? *)
+      (* Always expand private abbreviations *)
       if should_not_expand
       then Env.find_type_expansion path abs_env
-      else if is_decl_path
-      then Env.find_type_expansion_opt path final_env
-      else Env.find_type_expansion path final_env
+      else Env.find_type_expansion_opt path final_env
   in
   unguarded ~trace from_ty
 
