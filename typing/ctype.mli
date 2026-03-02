@@ -276,7 +276,7 @@ val apply:
            Exception [Cannot_apply] is raised in case of failure. *)
 
 val try_expand_once_opt: Env.t -> type_expr -> type_expr
-val try_expand_once_opt_custom:
+val try_expand_once_gen_nolink:
   find_type_expansion:(Path.t -> Env.t -> type_expr list * type_expr * int) ->
   Env.t ->
   type_expr ->

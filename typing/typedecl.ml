@@ -877,7 +877,7 @@ let reachable
         match
           (* Expansion can trigger unification, so we need to use
              an abstract environment to avoid any cycles. *)
-          Ctype.try_expand_once_opt_custom
+          Ctype.try_expand_once_gen_nolink
             ~find_type_expansion:(restrict_type_expansion path)
             abs_env ty
         with
