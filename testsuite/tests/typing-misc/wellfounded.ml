@@ -80,6 +80,15 @@ Error: The definition of "z0" contains a cycle:
          "t" = "int s z0"
 |}];;
 
+type 'a t constraint 'a = 'b t
+[%%expect{|
+Line 1, characters 0-30:
+1 | type 'a t constraint 'a = 'b t
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The definition of "t" contains a cycle:
+         the 1st type parameter of "t" is constrained to "'a t"
+|}];;
+
 
 
 (* Examples from the comments in typedecl: *)
