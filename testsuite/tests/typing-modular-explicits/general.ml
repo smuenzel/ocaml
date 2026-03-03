@@ -823,7 +823,7 @@ module MyBool : sig type t = bool = false | true val not : bool -> bool end
 module type TBool =
   sig type t = bool = false | true val not : bool -> bool end
 val id_bool : (module B : TBool) -> B.t -> B.t = <fun>
-- : MyBool.t = false
+- : MyBool.t = MyBool.(false)
 |}]
 
 
