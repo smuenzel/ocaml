@@ -40,11 +40,30 @@ type string_constant =
   ; tag : string
   }
 
+type clflags =
+  | Principal
+  | Rectypes
+
+let get_clflags () =
+  match !Clflags.principal, !Clflags.recursive_types with
+  | false, false -> None
+  | true, false -> Some Principal
+  | false, true -> Some Rectypes
+  | true, true -> assert false
+
+let string_of_clflags = function
+  | Principal -> "Principal"
+  | Rectypes -> "Rectypes"
+
+module Clmap = Map.Make(struct
+    type t = clflags option
+    let compare = compare
+  end)
+
 type expectation =
   { extid_loc   : Location.t (* Location of "expect" in "[%%expect ...]" *)
   ; payload_loc : Location.t (* Location of the whole payload *)
-  ; normal      : string_constant (* expectation without -principal *)
-  ; principal   : string_constant (* expectation with -principal *)
+  ; text        : string_constant Clmap.t
   }
 
 (* A list of phrases with the expected toplevel output *)
@@ -73,28 +92,37 @@ let match_expect_extension (ext : Parsetree.extension) =
     let expectation =
       match payload with
       | PStr [{ pstr_desc = Pstr_eval (e, []) }] ->
-        let normal, principal =
+        let text =
           match e.pexp_desc with
           | Pexp_tuple
-              [ None, a
-              ; None,
-                { pexp_desc = Pexp_construct
-                                ({ txt = Lident "Principal"; _ }, Some b) }
-              ] ->
-            (string_constant a, string_constant b)
-          | _ -> let s = string_constant e in (s, s)
+              ((None, normal)
+               :: rest) ->
+              let rest =
+                List.map
+                  ~f:(function
+                        None, { Parsetree.
+                                pexp_desc = Pexp_construct
+                                    ({ txt = Lident "Principal"; _ }, Some b) }
+                        -> Some Principal, string_constant b
+                      | None, { Parsetree.
+                                pexp_desc = Pexp_construct
+                                    ({ txt = Lident "Rectypes"; _ }, Some b) }
+                        -> Some Rectypes, string_constant b
+                      | _ -> invalid_payload ())
+                  rest
+              in
+              Clmap.of_list ((None, string_constant normal)::rest)
+          | _ -> let s = string_constant e in Clmap.singleton None s
         in
         { extid_loc
         ; payload_loc = e.pexp_loc
-        ; normal
-        ; principal
+        ; text
         }
       | PStr [] ->
         let s = { tag = ""; str = "" } in
         { extid_loc
         ; payload_loc  = { extid_loc with loc_start = extid_loc.loc_end }
-        ; normal    = s
-        ; principal = s
+        ; text = Clmap.singleton None s
         }
       | _ -> invalid_payload ()
     in
@@ -178,20 +206,20 @@ let parse_contents ~fname contents =
 
 let eval_expectation expectation ~output =
   let s =
-    if !Clflags.principal then
-      expectation.principal
-    else
-      expectation.normal
+    try
+      Clmap.find (get_clflags ()) expectation.text
+    with
+    | Not_found ->
+        Clmap.find None expectation.text
   in
   if s.str = output then
     None
   else
     let s = { s with str = output } in
     Some (
-      if !Clflags.principal then
-        { expectation with principal = s }
-      else
-        { expectation with normal = s }
+      { expectation with
+        text = Clmap.add (get_clflags ()) s expectation.text
+      }
     )
 
 let shift_lines delta phrases =
@@ -310,11 +338,16 @@ let output_corrected oc ~file_contents correction =
     List.fold_left correction.corrected_expectations ~init:0
       ~f:(fun ofs c ->
         output_slice oc file_contents ofs c.payload_loc.loc_start.pos_cnum;
-        output_body oc c.normal;
-        if c.normal.str <> c.principal.str then begin
-          output_string oc ", Principal";
-          output_body oc c.principal
-        end;
+        output_body oc (Clmap.find None c.text);
+        Clmap.iter
+          (fun key body ->
+             match key with
+             | None -> ()
+             | Some clflag ->
+                 output_string oc ", ";
+                 output_string oc (string_of_clflags clflag);
+                 output_body oc body)
+          c.text;
         c.payload_loc.loc_end.pos_cnum)
   in
   output_slice oc file_contents ofs (String.length file_contents);
