@@ -896,10 +896,10 @@ let reachable
   | Tpoly (ty', _) ->
       unguarded ~trace:(Contains (ty, ty') :: trace) ty'
   | Tfunctor (_, _, { pack_constraints; _ }, ty') ->
-      unguarded ~trace:(Contains (ty, ty') :: trace) ty';
-      iter_tl' pack_constraints unguarded
+      rectypes_guarded ~trace:(Contains (ty, ty') :: trace) ty';
+      iter_tl' pack_constraints rectypes_guarded
   | Tpackage { pack_constraints; _ } ->
-      iter_tl' pack_constraints unguarded
+      iter_tl' pack_constraints rectypes_guarded
 
 let is_reachable
     ?(trace=[])
@@ -930,7 +930,7 @@ let is_reachable
         (* The reaching trace is accumulated in reverse order, we
              reverse it to get a reaching path. *)
         match trace with
-        | (Expands_to (ty1, _) :: _) as trace
+        | (Expands_to (ty1, _) :: _)
           when (match Btype.get_constr_desc ty1 with
                 Tconstr (p,_,_) -> Path.same p path | _ -> false) ->
             List.rev trace, true
