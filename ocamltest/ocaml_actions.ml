@@ -807,10 +807,11 @@ let cc =
   Actions.make ~name:"cc" ~description:"Run C compiler to build the program"
     run_cc
 
-let run_expect_once input_file principal log env =
+let run_expect_once input_file ~principal ~rectypes log env =
   let expect_flags = Sys.safe_getenv "EXPECT_FLAGS" in
   let repo_root = "-repo-root " ^ Ocaml_directories.srcdir in
   let principal_flag = if principal then "-principal" else "" in
+  let rectypes_flag = if rectypes then "-rectypes" else "" in
   let commandline =
   [
     Ocaml_commands.ocamlrun_expect;
@@ -818,6 +819,7 @@ let run_expect_once input_file principal log env =
     flags env;
     repo_root;
     principal_flag;
+    rectypes_flag;
     input_file
   ] in
   let exit_status =
@@ -832,19 +834,24 @@ let run_expect_once input_file principal log env =
 
 let run_expect_twice input_file log env =
   let corrected filename = Filename.make_filename filename "corrected" in
-  let (result1, env1) = run_expect_once input_file false log env in
+  let (result1, env1) = run_expect_once input_file ~principal:false ~rectypes:false log env in
   if Test_result.is_pass result1 then begin
-    let intermediate_file = corrected input_file in
+    let intermediate_file1 = corrected input_file in
     let (result2, env2) =
-      run_expect_once intermediate_file true log env1 in
+      run_expect_once intermediate_file1 ~principal:true ~rectypes:false log env1 in
     if Test_result.is_pass result2 then begin
-      let output_file = corrected intermediate_file in
-      let output_env = Environments.add_bindings
-      [
-        Builtin_variables.reference, input_file;
-        Builtin_variables.output, output_file
-      ] env2 in
-      (Test_result.pass, output_env)
+      let intermediate_file2 = corrected intermediate_file1 in
+      let (result3, env3) =
+        run_expect_once intermediate_file2 ~principal:false ~rectypes:true log env2 in
+      if Test_result.is_pass result3 then begin
+        let output_file = corrected intermediate_file2 in
+        let output_env = Environments.add_bindings
+            [
+              Builtin_variables.reference, input_file;
+              Builtin_variables.output, output_file
+            ] env3 in
+        (Test_result.pass, output_env)
+      end else (result3, env3)
     end else (result2, env2)
   end else (result1, env1)
 
