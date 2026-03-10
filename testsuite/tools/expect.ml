@@ -350,13 +350,18 @@ let output_corrected oc ~file_contents correction =
           (fun key body ->
              match key with
              | None -> ()
+             | Some _ when normal.str = body.str -> ()
+             | Some RectypesPrincipal
+               when Clmap.find_opt (Some Principal) c.text |> Option.exists (
+                   fun { str; _ } ->
+                     str = body.str
+                 ) ->
+                 ()
              | Some clflag ->
-                 if normal.str = body.str then ()
-                 else begin
-                   output_string oc ", ";
-                   output_string oc (string_of_clflags clflag);
-                   output_body oc body
-                 end)
+                 output_string oc ", ";
+                 output_string oc (string_of_clflags clflag);
+                 output_body oc body
+          )
           c.text;
         c.payload_loc.loc_end.pos_cnum)
   in

@@ -47,9 +47,6 @@ val u : unit -> unit = <fun>
 |}, Principal{|
 val f : x:string -> y:string -> (x:string -> y:string -> 'a as 'a) = <fun>
 val u : unit -> unit = <fun>
-|}, RectypesPrincipal{|
-val f : x:string -> y:string -> (x:string -> y:string -> 'a as 'a) = <fun>
-val u : unit -> unit = <fun>
 |}]
 
 let f g = g ?x:(g ?x:(Some g)) 0
@@ -84,13 +81,6 @@ Line 1, characters 11-12:
 Warning 16 [unerasable-optional-argument]: this optional argument cannot be erased.
 
 val f : ?x:'a -> (?x:'a -> 'b as 'b) = <fun>
-|}, RectypesPrincipal{|
-Line 1, characters 11-12:
-1 | let rec f ?x = f
-               ^
-Warning 16 [unerasable-optional-argument]: this optional argument cannot be erased.
-
-val f : ?x:'a -> (?x:'a -> 'b as 'b) = <fun>
 |}]
 
 let () = f 3
@@ -102,13 +92,6 @@ Error: The function applied to this argument has type
          ?x:'a -> ?x:'a -> (?x:'a -> 'b as 'b)
 This argument cannot be applied without label
 |}, Principal{|
-Line 1, characters 11-12:
-1 | let () = f 3
-               ^
-Error: The function applied to this argument has type
-         ?x:'a -> ?x:'a -> ?x:'a -> (?x:'a -> 'b as 'b)
-This argument cannot be applied without label
-|}, RectypesPrincipal{|
 Line 1, characters 11-12:
 1 | let () = f 3
                ^
