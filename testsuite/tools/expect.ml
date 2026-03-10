@@ -43,17 +43,19 @@ type string_constant =
 type clflags =
   | Principal
   | Rectypes
+  | RectypesPrincipal
 
 let get_clflags () =
   match !Clflags.principal, !Clflags.recursive_types with
   | false, false -> None
   | true, false -> Some Principal
   | false, true -> Some Rectypes
-  | true, true -> assert false
+  | true, true -> Some RectypesPrincipal
 
 let string_of_clflags = function
   | Principal -> "Principal"
   | Rectypes -> "Rectypes"
+  | RectypesPrincipal -> "RectypesPrincipal"
 
 module Clmap = Map.Make(struct
     type t = clflags option
@@ -108,6 +110,10 @@ let match_expect_extension (ext : Parsetree.extension) =
                                 pexp_desc = Pexp_construct
                                     ({ txt = Lident "Rectypes"; _ }, Some b) }
                         -> Some Rectypes, string_constant b
+                      | None, { Parsetree.
+                                pexp_desc = Pexp_construct
+                                    ({ txt = Lident "RectypesPrincipal"; _ }, Some b) }
+                        -> Some RectypesPrincipal, string_constant b
                       | _ -> invalid_payload ())
                   rest
               in
@@ -338,15 +344,19 @@ let output_corrected oc ~file_contents correction =
     List.fold_left correction.corrected_expectations ~init:0
       ~f:(fun ofs c ->
         output_slice oc file_contents ofs c.payload_loc.loc_start.pos_cnum;
-        output_body oc (Clmap.find None c.text);
+        let normal = Clmap.find None c.text in
+        output_body oc normal;
         Clmap.iter
           (fun key body ->
              match key with
              | None -> ()
              | Some clflag ->
-                 output_string oc ", ";
-                 output_string oc (string_of_clflags clflag);
-                 output_body oc body)
+                 if normal.str = body.str then ()
+                 else begin
+                   output_string oc ", ";
+                   output_string oc (string_of_clflags clflag);
+                   output_body oc body
+                 end)
           c.text;
         c.payload_loc.loc_end.pos_cnum)
   in

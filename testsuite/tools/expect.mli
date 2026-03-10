@@ -20,6 +20,7 @@ type string_constant =
 type clflags =
   | Principal
   | Rectypes
+  | RectypesPrincipal
 
 
 module Clmap : module type of Map.Make(struct

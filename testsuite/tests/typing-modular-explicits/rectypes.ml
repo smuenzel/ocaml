@@ -21,6 +21,10 @@ val f : ((module N : T) -> 'a as 'a) -> 'a = <fun>
 val f :
   ((module M : T) -> (module M : T) -> 'a as 'a) ->
   ((module N : T) -> 'b as 'b) = <fun>
+|}, RectypesPrincipal{|
+val f :
+  ((module M : T) -> (module M : T) -> 'a as 'a) ->
+  ((module N : T) -> 'b as 'b) = <fun>
 |}]
 
 
@@ -33,6 +37,10 @@ val f : ((module M : T) -> ((module N : T) -> 'a as 'a)) -> 'a = <fun>
 val f :
   ((module M : T) -> ((module M : T) -> 'a as 'a)) ->
   ((module N : T) -> 'b as 'b) = <fun>
+|}, RectypesPrincipal{|
+val f :
+  ((module M : T) -> ((module M : T) -> 'a as 'a)) ->
+  ((module N : T) -> 'b as 'b) = <fun>
 |}]
 
 let f (module M : T) (x : (module M : T) -> 'a as 'a) =
@@ -41,6 +49,10 @@ let f (module M : T) (x : (module M : T) -> 'a as 'a) =
 [%%expect{|
 val f : (module T) -> ((module M : T) -> 'a as 'a) -> 'a = <fun>
 |}, Principal{|
+val f :
+  (module T) -> ((module M : T) -> 'a as 'a) -> ((module M : T) -> 'b as 'b) =
+  <fun>
+|}, RectypesPrincipal{|
 val f :
   (module T) -> ((module M : T) -> 'a as 'a) -> ((module M : T) -> 'b as 'b) =
   <fun>
@@ -74,6 +86,11 @@ val f :
   ((module M : T with type t = int) ->
    (M.t * ((module N : T with type t = int) -> 'a) as 'a)) ->
   ((module O : T with type t = int) -> O.t * 'b as 'b) = <fun>
+|}, RectypesPrincipal{|
+val f :
+  ((module M : T with type t = int) ->
+   (M.t * ((module N : T with type t = int) -> 'a) as 'a)) ->
+  ((module O : T with type t = int) -> O.t * 'b as 'b) = <fun>
 |}]
 
 let f (x : (module M : T) -> (M.t * ((module N : T) -> (N.t * 'a) as 'a))) =
@@ -83,6 +100,10 @@ let f (x : (module M : T) -> (M.t * ((module N : T) -> (N.t * 'a) as 'a))) =
 val f : ((module M : T) -> M.t * ((module O : T) -> O.t * 'a as 'a)) -> 'a =
   <fun>
 |}, Principal{|
+val f :
+  ((module M : T) -> M.t * ((module N : T) -> N.t * 'a as 'a)) ->
+  ((module O : T) -> O.t * 'b as 'b) = <fun>
+|}, RectypesPrincipal{|
 val f :
   ((module M : T) -> M.t * ((module N : T) -> N.t * 'a as 'a)) ->
   ((module O : T) -> O.t * 'b as 'b) = <fun>
