@@ -18,14 +18,22 @@
    successful if there is no differences between the two files.
 
    An [%%expect] node always contains both the expected outcome with and
-   without -principal. When the two differ the expectation is written as
-   follows:
+   without -principal or -rectypes. When they differ the expectation
+   is written as follows:
 
    {[
      [%%expect {|
      output without -principal
      |}, Principal{|
      output with -principal
+     |}]
+   ]}
+
+   {[
+     [%%expect {|
+     output without -rectypes
+     |}, Rectypesl{|
+     output with -rectypes
      |}]
    ]}
 *)
@@ -102,17 +110,20 @@ let match_expect_extension (ext : Parsetree.extension) =
               let rest =
                 List.map
                   ~f:(function
-                        None, { Parsetree.
-                                pexp_desc = Pexp_construct
-                                    ({ txt = Lident "Principal"; _ }, Some b) }
+                        None
+                      , { Parsetree.
+                          pexp_desc = Pexp_construct
+                              ({ txt = Lident "Principal"; _}, Some b) }
                         -> Some Principal, string_constant b
-                      | None, { Parsetree.
-                                pexp_desc = Pexp_construct
-                                    ({ txt = Lident "Rectypes"; _ }, Some b) }
+                      | None
+                      , { Parsetree.
+                          pexp_desc = Pexp_construct
+                              ({ txt = Lident "Rectypes"; _}, Some b) }
                         -> Some Rectypes, string_constant b
-                      | None, { Parsetree.
-                                pexp_desc = Pexp_construct
-                                    ({ txt = Lident "RectypesPrincipal"; _ }, Some b) }
+                      | None
+                      , { Parsetree.
+                          pexp_desc = Pexp_construct
+                              ({ txt = Lident "RectypesPrincipal"; _}, Some b) }
                         -> Some RectypesPrincipal, string_constant b
                       | _ -> invalid_payload ())
                   rest

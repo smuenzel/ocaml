@@ -832,32 +832,33 @@ let run_expect_once input_file ~principal ~rectypes log env =
     (Test_result.fail_with_reason reason, env)
   end
 
-let run_expect_twice input_file log env =
+let run_expect_variants input_file log env =
   let corrected filename = Filename.make_filename filename "corrected" in
-  let (result1, env1) = run_expect_once input_file ~principal:false ~rectypes:false log env in
-  if Test_result.is_pass result1 then begin
-    let intermediate_file1 = corrected input_file in
-    let (result2, env2) =
-      run_expect_once intermediate_file1 ~principal:true ~rectypes:false log env1 in
-    if Test_result.is_pass result2 then begin
-      let intermediate_file2 = corrected intermediate_file1 in
-      let (result3, env3) =
-        run_expect_once intermediate_file2 ~principal:false ~rectypes:true log env2 in
-      if Test_result.is_pass result3 then begin
-        let output_file = corrected intermediate_file2 in
-        let output_env = Environments.add_bindings
-            [
-              Builtin_variables.reference, input_file;
-              Builtin_variables.output, output_file
-            ] env3 in
-        (Test_result.pass, output_env)
-      end else (result3, env3)
-    end else (result2, env2)
-  end else (result1, env1)
+  let run ~principal ~rectypes prev =
+    match prev with
+    | Ok (input_file, env) ->
+        let (result, env') = run_expect_once input_file ~principal ~rectypes log env in
+        if Test_result.is_pass result
+        then Ok (corrected input_file, env')
+        else Error (result, env')
+    | Error _ -> prev
+  in
+  run ~principal:false ~rectypes:false (Ok (input_file, env))
+  |> run ~principal:true ~rectypes:false
+  |> run ~principal:false ~rectypes:true
+  |> function
+  | Ok (output_file, env) ->
+      let output_env = Environments.add_bindings
+          [
+            Builtin_variables.reference, input_file;
+            Builtin_variables.output, output_file
+          ] env in
+      (Test_result.pass, output_env)
+  | Error (result, env) -> (result, env)
 
 let run_expect log env =
   let input_file = Actions_helpers.testfile env in
-  run_expect_twice input_file log env
+  run_expect_variants input_file log env
 
 let run_expect =
   Actions.make ~name:"run-expect" ~description:"Run expect test" run_expect
