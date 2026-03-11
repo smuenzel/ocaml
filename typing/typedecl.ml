@@ -909,7 +909,6 @@ let is_reachable
     loc
     ~from_ty
     ty_path
-    ty_opt
   =
   let visited = ref TypeSet.empty in
   (* We need to keeps paths since [visited] is insufficient to detect
@@ -971,15 +970,10 @@ let is_reachable
           end;
       | _ -> false
     then ()
-    else begin
-      match ty_opt with
-      | Some ty when eq_type ty ty' -> raise_error ~trace
-      | _ ->
-          match Btype.get_constr_desc ty' with
-          | Tconstr (path, _, _) when Path.same path ty_path ->
-              raise_error ~trace
-          | _ -> unguarded_no_self ~trace ty'
-    end
+    else match Btype.get_constr_desc ty' with
+      | Tconstr (path, _, _) when Path.same path ty_path ->
+          raise_error ~trace
+      | _ -> unguarded_no_self ~trace ty'
   and unguarded_no_self ~trace ty' =
     visited := TypeSet.add ty' !visited;
     begin match Btype.get_constr_desc ty' with
@@ -1021,7 +1015,6 @@ let is_reachable
     loc
     ~from_ty
     ty_path
-    ty
   =
   let snap = Btype.snapshot () in
   try
@@ -1033,8 +1026,7 @@ let is_reachable
         ~final_env
         loc
         ~from_ty
-        ty_path
-    ) ty
+    ) ty_path
   with Ctype.Escape _ ->
     (* Will be detected by check_regularity *)
     Btype.backtrack snap
@@ -1062,9 +1054,7 @@ let check_well_founded_decl
     ~abs_env ~final_env ~is_decl_path loc path decl =
   let declaration = Ctype.generic_instance_declaration decl in
   let is_reachable ~trace =
-    is_reachable
-      ~trace ~abs_env ~final_env ~is_decl_path loc
-      path None
+    is_reachable ~trace ~abs_env ~final_env ~is_decl_path loc path
   in
   List.iteri
     (fun i from_ty ->
