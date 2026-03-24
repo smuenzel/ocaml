@@ -12,7 +12,7 @@
  ocamlc.byte;
  flags = "";
  module = "main.ml";
- ocamlc_byte_exit_status = "2";
+ ocamlc_byte_exit_status = "0";
  ocamlc.byte;
  check-ocamlc.byte-output;
 *)
