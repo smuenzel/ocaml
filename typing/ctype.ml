@@ -1771,22 +1771,35 @@ type typedecl_extraction_result =
   | Has_no_typedecl
   | May_have_typedecl
 
+let concrete_typedecl_from_env env p =
+  match Env.find_type p env with
+  | exception Not_found -> Some May_have_typedecl
+  | decl ->
+      if not (type_kind_is_abstract decl) then Some (Typedecl(p, p, decl))
+      else None
+
 let rec extract_concrete_typedecl env ty =
+  match get_abbrev ty with
+  | Some (path, _) ->
+      begin match concrete_typedecl_from_env env path with
+      | Some res -> res
+      | None ->
+          extract_concrete_typedecl_no_abbrev env ty
+      end
+  | None -> extract_concrete_typedecl_no_abbrev env ty
+and extract_concrete_typedecl_no_abbrev env ty =
   match get_desc ty with
     Tconstr (p, _, _) ->
-      begin match Env.find_type p env with
-      | exception Not_found -> May_have_typedecl
-      | decl ->
-          if not (type_kind_is_abstract decl) then Typedecl(p, p, decl)
-          else begin
-            match try_expand_safe_no_link env ty with
-            | exception Cannot_expand -> May_have_typedecl
-            | ty ->
-                match extract_concrete_typedecl env ty with
-                | Typedecl(_, p', decl) -> Typedecl(p, p', decl)
-                | Has_no_typedecl -> Has_no_typedecl
-                | May_have_typedecl -> May_have_typedecl
-          end
+      begin match concrete_typedecl_from_env env p with
+      | Some res -> res
+      | None ->
+          match try_expand_safe_no_link env ty with
+          | exception Cannot_expand -> May_have_typedecl
+          | ty ->
+              match extract_concrete_typedecl env ty with
+              | Typedecl(_, p', decl) -> Typedecl(p, p', decl)
+              | Has_no_typedecl -> Has_no_typedecl
+              | May_have_typedecl -> May_have_typedecl
       end
   | Tpoly(ty, _) -> extract_concrete_typedecl env ty
   | Tarrow _ | Ttuple _ | Tobject _ | Tfield _ | Tnil
