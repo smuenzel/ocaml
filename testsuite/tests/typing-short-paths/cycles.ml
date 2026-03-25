@@ -30,7 +30,7 @@ end
 Line 2, characters 2-63:
 2 |   module rec X : sig type t = Y.t end = struct type t = Y.t end
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "X.t" contains a cycle:
+Error: The definition of "X.t" is cyclic:
          "X.t" = "Y.t",
          "Y.t" = "X.t"
 |}]
@@ -57,7 +57,7 @@ Lines 2-6, characters 2-5:
 4 |   end = struct
 5 |     type ('a, 'b) t = ('a, 'b) Y.t
 6 |   end
-Error: The definition of "X.t" contains a cycle:
+Error: The definition of "X.t" is cyclic:
          "('a, 'b) X.t" = "('a, 'b) Y.t",
          "('a, 'b) Y.t" = "('a, 'b) X.t"
 |}]
@@ -83,7 +83,7 @@ Lines 2-6, characters 2-5:
 4 |   end = struct
 5 |     type ('a, 'b) t = ('b, 'a) Y.t
 6 |   end
-Error: The definition of "X.t" contains a cycle:
+Error: The definition of "X.t" is cyclic:
          "('a, 'b) X.t" = "('b, 'a) Y.t",
          "('b, 'a) Y.t" = "('a, 'b) X.t"
 |}]
@@ -109,7 +109,7 @@ Lines 2-6, characters 2-5:
 4 |   end = struct
 5 |     type ('a, 'b) t = ('b, 'a, bool) Y.t
 6 |   end
-Error: The definition of "X.t" contains a cycle:
+Error: The definition of "X.t" is cyclic:
          "('a, 'b) X.t" = "('b, 'a, bool) Y.t",
          "('b, 'a, bool) Y.t" = "('a, 'b) X.t"
 |}]
@@ -122,7 +122,7 @@ module rec A : sig type t = B.t -> int end = struct type t = B.t -> int end
 Line 1, characters 0-75:
 1 | module rec A : sig type t = B.t -> int end = struct type t = B.t -> int end
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "A.t" contains a cycle:
+Error: The definition of "A.t" is cyclic:
          "A.t" = "B.t -> int",
          "B.t -> int" contains "B.t",
          "B.t" = "A.t"
@@ -152,7 +152,7 @@ Line 9, characters 13-100:
 9 | module Err = Fix(functor (X:T) -> struct type t = a__name__that__shall__not__be__printed -> X.t end)
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In the signature of this functor application:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Fixed.t",
          "Fixed.t" = "Atlas.t -> Fixed.t",
          "Atlas.t -> Fixed.t" contains "Fixed.t"

@@ -94,7 +94,7 @@ and 'a z = 'a t
 Line 1, characters 0-16:
 1 | type 'a t = 'a u
     ^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "'a t" = "'a u",
          "'a u" = "'a v * 'a",
          "'a v * 'a" contains "'a v",
@@ -119,7 +119,7 @@ module rec A : sig type t = B.t -> int end = struct type t = B.t -> int end
 Line 1, characters 0-75:
 1 | module rec A : sig type t = B.t -> int end = struct type t = B.t -> int end
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "A.t" contains a cycle:
+Error: The definition of "A.t" is cyclic:
          "A.t" = "B.t -> int",
          "B.t -> int" contains "B.t",
          "B.t" = "A.t"

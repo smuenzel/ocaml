@@ -32,7 +32,7 @@ type 'a t = [`A of 'a t t] constraint 'a = 'a t;; (* fails since 4.04 *)
 Line 1, characters 0-47:
 1 | type 'a t = [`A of 'a t t] constraint 'a = 'a t;; (* fails since 4.04 *)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a"
 |}];;
 type 'a t = [`A of 'a t] constraint 'a = 'a t;; (* fails since 4.04 *)
@@ -40,7 +40,7 @@ type 'a t = [`A of 'a t] constraint 'a = 'a t;; (* fails since 4.04 *)
 Line 1, characters 0-45:
 1 | type 'a t = [`A of 'a t] constraint 'a = 'a t;; (* fails since 4.04 *)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a"
 |}];;
 type 'a t = [`A of 'a] as 'a;;
@@ -54,7 +54,7 @@ type 'a v = [`A of u v] constraint 'a = t and t = u and u = t;; (* fails *)
 Line 1, characters 42-51:
 1 | type 'a v = [`A of u v] constraint 'a = t and t = u and u = t;; (* fails *)
                                               ^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "t" = "u",
          "u" = "t"
 |}];;
@@ -164,7 +164,7 @@ type 'a t = 'b  constraint 'a = 'b t;;
 Line 1, characters 0-36:
 1 | type 'a t = 'b  constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
@@ -173,7 +173,7 @@ type 'a t = 'b constraint 'a = ('b * 'b) t;;
 Line 1, characters 0-42:
 1 | type 'a t = 'b constraint 'a = ('b * 'b) t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "('a * 'a) t"
 |}]
 
@@ -190,7 +190,7 @@ type 'a t = 'a * 'b constraint 'a = 'b t;;
 Line 1, characters 0-40:
 1 | type 'a t = 'a * 'b constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
@@ -199,7 +199,7 @@ type 'a t = <a : 'a; b : 'b> constraint 'a = 'b t;;
 Line 1, characters 0-49:
 1 | type 'a t = <a : 'a; b : 'b> constraint 'a = 'b t;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a t"
 |}]
 
@@ -217,7 +217,7 @@ module rec M : sig type 'a t = 'b constraint 'a = 'b t end = M;;
 Line 1, characters 19-54:
 1 | module rec M : sig type 'a t = 'b constraint 'a = 'b t end = M;;
                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a t"
 |}]
 module rec M : sig type 'a t = 'b constraint 'a = ('b * 'b) t end = M;;
@@ -225,7 +225,7 @@ module rec M : sig type 'a t = 'b constraint 'a = ('b * 'b) t end = M;;
 Line 1, characters 19-61:
 1 | module rec M : sig type 'a t = 'b constraint 'a = ('b * 'b) t end = M;;
                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "('a * 'a) t"
 |}]
 
@@ -351,7 +351,7 @@ type !'a t = 'b constraint 'a = < x : 'b >
 Line 2, characters 0-20:
 2 | type u = < x : u > t
     ^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "u" contains a cycle:
+Error: The definition of "u" is cyclic:
          "u" = "< x : u > t",
          "< x : u > t" = "u"
 |}]
@@ -409,7 +409,7 @@ type 'a t constraint 'a = 'b * 'c
 Line 2, characters 0-21:
 2 | type cycle = cycle id
     ^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "cycle" contains a cycle:
+Error: The definition of "cycle" is cyclic:
          "cycle" = "cycle id",
          "cycle id" = "cycle"
 |}]

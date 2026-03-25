@@ -18,7 +18,7 @@ Line 1, characters 12-77:
 1 | module T1 = Fix(functor (X:sig type t end) -> struct type t = X.t option end);;
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In the signature of this functor application:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "F(Fixed).t",
          "F(Fixed).t" = "Fixed.t option",
          "Fixed.t option" contains "Fixed.t"
@@ -29,7 +29,7 @@ Line 1, characters 12-70:
 1 | module T2 = Fix(functor (X:sig type t end) -> struct type t = X.t end);;
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In the signature of this functor application:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "F(Fixed).t",
          "F(Fixed).t" = "Fixed.t"
 |}]
@@ -71,7 +71,7 @@ Line 1, characters 18-38:
 1 | module type Bad = S with module F = Id;;
                       ^^^^^^^^^^^^^^^^^^^^
 Error: In this instantiated signature:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "F(Fixed).t",
          "F(Fixed).t" = "Fixed.t"
 |}]
@@ -83,7 +83,7 @@ Line 1, characters 11-18:
 1 | module M = Fix(Id);;
                ^^^^^^^
 Error: In the signature of this functor application:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Id(Fixed).t",
          "Id(Fixed).t" = "Fixed.t"
 |}]
@@ -93,7 +93,7 @@ Line 1, characters 9-16:
 1 | type t = Fix(Id).Fixed.t;;
              ^^^^^^^
 Error: In the signature of Fix(Id):
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Id(Fixed).t",
          "Id(Fixed).t" = "Fixed.t"
 |}]
@@ -103,7 +103,7 @@ Line 1, characters 11-18:
 1 | let f (x : Fix(Id).Fixed.t) = x;;
                ^^^^^^^
 Error: In the signature of Fix(Id):
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Id(Fixed).t",
          "Id(Fixed).t" = "Fixed.t"
 |}]
@@ -118,7 +118,7 @@ module Foo : (F : T -> T) -> sig val f : Fix(F).Fixed.t -> Fix(F).Fixed.t end
 module M : sig val f : Fix(Id).Fixed.t -> Fix(Id).Fixed.t end
 Line 1:
 Error: In the signature of Fix(Id):
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Id(Fixed).t",
          "Id(Fixed).t" = "Fixed.t"
 |}]
@@ -152,7 +152,7 @@ Line 5, characters 11-19:
 5 | let f (x : Fix2(Id).R(M).t) = x;;
                ^^^^^^^^
 Error: In the signature of Fix2(Id):
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "Id(Fixed).t",
          "Id(Fixed).t" = "Fixed.t"
 |}]

@@ -809,7 +809,7 @@ let check_abbrev env sdecl (id, decl) =
 
      (* ill-founded, unless -rectypes is used *)
      module rec M : sig type t = int * M.t end = M
-     > Error: The definition of M.t contains a cycle:
+     > Error: The definition of M.t is cyclic:
      >        int * M.t
 
      This is also checked by [check_well_founded] below,
@@ -836,7 +836,7 @@ let check_abbrev env sdecl (id, decl) =
      (* ill-founded *)
      module M = Fix(functor (M:T) -> struct type t = int * M.t end);;
      > Error: In the signature of this functor application:
-     >   The definition of Fixed.t contains a cycle:
+     >   The definition of Fixed.t is cyclic:
      >   F(Fixed).t
 *)
 
@@ -2294,7 +2294,7 @@ let report_error ~loc = function
       Printtyp.wrap_printing_env ~error:true env @@ fun () ->
       Out_type.reset ();
       Reaching_path.add_to_preparation reaching_path;
-      Location.errorf ~loc "The definition of %a contains a cycle%a"
+      Location.errorf ~loc "The definition of %a is cyclic%a"
         Style.inline_code s
         Reaching_path.pp_colon reaching_path
   | Definition_mismatch (ty, env, err) ->

@@ -18,7 +18,7 @@ type _ prod = Prod : ('a * 'y) prod
 Line 6, characters 6-20:
 6 |       type d = d * d
           ^^^^^^^^^^^^^^
-Error: The definition of "d" contains a cycle:
+Error: The definition of "d" is cyclic:
          "d" = "d * d",
          "d * d" contains "d"
 |}];;
@@ -31,7 +31,7 @@ and 'a s = 'a constraint 'a = t
 Line 2, characters 0-31:
 2 | and 'a s = 'a constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "s" contains a cycle:
+Error: The definition of "s" is cyclic:
          the 1st type parameter of "s" is constrained to "t",
          "t" = "int s"
 |}];;
@@ -45,7 +45,7 @@ and 'a id = 'a
 Line 2, characters 0-34:
 2 | and 'a s = 'a id constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "s" contains a cycle:
+Error: The definition of "s" is cyclic:
          the 1st type parameter of "s" is constrained to "t",
          "t" = "int s"
 |}];;
@@ -59,7 +59,7 @@ and 'a z1 = 'a constraint 'a = t
 Line 4, characters 0-32:
 4 | and 'a z1 = 'a constraint 'a = t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "z1" contains a cycle:
+Error: The definition of "z1" is cyclic:
          the 1st type parameter of "z1" is constrained to "t",
          "t" = "int s z1"
 |}];;
@@ -73,7 +73,7 @@ and 'a z1 = 'a constraint 'a = 'b s
 Line 1, characters 0-37:
 1 | type 'a z0 = 'a constraint 'a = 'b z1
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "z0" contains a cycle:
+Error: The definition of "z0" is cyclic:
          the 1st type parameter of "z0" is constrained to "t s z1",
          "t s z1" = "t s",
          "t s" = "t",
@@ -85,7 +85,7 @@ type 'a t constraint 'a = 'b t
 Line 1, characters 0-30:
 1 | type 'a t constraint 'a = 'b t
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          the 1st type parameter of "t" is constrained to "'a t"
 |}];;
 
@@ -109,7 +109,7 @@ and u = u t
 Line 2, characters 0-11:
 2 | and u = u t
     ^^^^^^^^^^^
-Error: The definition of "u" contains a cycle:
+Error: The definition of "u" is cyclic:
          "u" = "u t",
          "u t" contains "u"
 |}];;
@@ -143,7 +143,7 @@ type t = (int * t)
 Line 1, characters 0-18:
 1 | type t = (int * t)
     ^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "t" = "int * t",
          "int * t" contains "t"
 |}];;
@@ -160,7 +160,7 @@ module rec M : sig type t = int * M.t end = M
 Line 1, characters 0-45:
 1 | module rec M : sig type t = int * M.t end = M
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "M.t" contains a cycle:
+Error: The definition of "M.t" is cyclic:
          "M.t" = "int * M.t",
          "int * M.t" contains "M.t"
 |}];;
@@ -188,7 +188,7 @@ Line 1, characters 11-62:
 1 | module M = Fix(functor (M:T) -> struct type t = int * M.t end);;
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: In the signature of this functor application:
-       The definition of "Fixed.t" contains a cycle:
+       The definition of "Fixed.t" is cyclic:
          "Fixed.t" = "F(Fixed).t",
          "F(Fixed).t" = "int * Fixed.t",
          "int * Fixed.t" contains "Fixed.t"

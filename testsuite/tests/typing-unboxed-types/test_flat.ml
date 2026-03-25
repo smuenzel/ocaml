@@ -311,7 +311,7 @@ type 'a id = Id of 'a [@@unboxed]
 Line 2, characters 0-21:
 2 | type cycle = cycle id
     ^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "cycle" contains a cycle:
+Error: The definition of "cycle" is cyclic:
          "cycle" = "cycle id",
          "cycle id" contains "cycle"
 |}];;

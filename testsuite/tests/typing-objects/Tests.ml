@@ -233,7 +233,7 @@ and 'a t = 'a t u;;
 Line 2, characters 0-17:
 2 | and 'a t = 'a t u;;
     ^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "'a t" = "'a t u",
          "'a t u" = "'a t"
 |}];;
@@ -246,7 +246,7 @@ type t = t u * t u;;
 Line 1, characters 0-18:
 1 | type t = t u * t u;;
     ^^^^^^^^^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "t" = "t u * t u",
          "t u * t u" contains "t u",
          "t u" = "t"

@@ -648,7 +648,7 @@ val app : int * bool = (1, true)
 Line 9, characters 0-25:
 9 | type 'a foo = 'a foo list
     ^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The definition of "foo" contains a cycle:
+Error: The definition of "foo" is cyclic:
          "'a foo" = "'a foo list",
          "'a foo list" contains "'a foo"
 |}];;
@@ -955,7 +955,7 @@ type t = u and u = t;;
 Line 1, characters 0-10:
 1 | type t = u and u = t;;
     ^^^^^^^^^^
-Error: The definition of "t" contains a cycle:
+Error: The definition of "t" is cyclic:
          "t" = "u",
          "u" = "t"
 |}];;
