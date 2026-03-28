@@ -478,7 +478,18 @@ for an example of careful usage of [Unscoped], by locally shadowing
 [Path] to hide [Path.same].
 "]
 
-(* Error report *)
+module Current_unit : sig
+  val get : unit -> Unit_info.t option
+  val set : Unit_info.t -> unit
+  val unset : unit -> unit
+
+  module Name : sig
+    val get : unit -> modname
+    val is : modname -> bool
+    val is_ident : Ident.t -> bool
+    val is_path : Path.t -> bool
+  end
+end
 
 type error =
   | Missing_module of Location.t * Path.t * Path.t
@@ -515,8 +526,6 @@ val strengthen:
      Path.t -> Subst.Lazy.modtype) ref
 (* Forward declaration to break mutual recursion with Ctype. *)
 val same_constr: (t -> type_expr -> type_expr -> bool) ref
-(* Forward declaration to break mutual recursion with Printtyp. *)
-val print_path: Path.t Format_doc.printer ref
 
 
 (** Folds *)

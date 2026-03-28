@@ -55,7 +55,7 @@ module Doc = struct
   let path ppf p =
     !Oprint.out_ident ppf (tree_of_path ~disambiguation:false p)
 
-  let () = Env.print_path := path
+  let () = Env_error.print_path := path
 
   let type_path ppf p = !Oprint.out_ident ppf (tree_of_type_path p)
 

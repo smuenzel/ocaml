@@ -131,6 +131,7 @@ typing_SOURCES = \
   file_formats/cmi_format.mli file_formats/cmi_format.ml \
   typing/persistent_env.mli typing/persistent_env.ml \
   typing/env.mli typing/env.ml \
+	typing/env_error.mli typing/env_error.ml \
   typing/errortrace.mli typing/errortrace.ml \
   typing/typedtree.mli typing/typedtree.ml \
   typing/signature_group.mli typing/signature_group.ml \
