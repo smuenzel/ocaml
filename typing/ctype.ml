@@ -929,8 +929,7 @@ let rec update_level env level expand ty =
         iter_type_expr (update_level env level expand) ty;
         update_level_abbrev env level expand ty
   end
-  else if get_abbrev_scope ty > level then
-    update_level_abbrev env level expand ty
+  else update_level_abbrev env level expand ty
 
 and update_level_abbrev env level expand ty =
   iter_abbrev
@@ -950,7 +949,7 @@ let update_level_expand env level ty =
 (* First try without expanding, then expand everything,
    to avoid combinatorial blow-up *)
 let update_level env level ty =
-  if get_level ty > level || get_abbrev_scope ty > level then begin
+  if get_level ty > level || not (check_level_abbrev level ty) then begin
     let snap = snapshot () in
     try
       try_update_level env level ty
@@ -2720,6 +2719,7 @@ let unify1_var uenv t1 t2 =
       begin
         try
           update_level env (get_level t1) t2;
+          update_level env (get_level t2) t1; (* for Texpand *)
           update_scope (get_scope t1) t2;
         with Escape e ->
           raise_for Unify (Escape e)

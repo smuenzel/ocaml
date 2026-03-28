@@ -203,6 +203,12 @@ val deep_occur: type_expr -> type_expr -> bool
       Objects are also traversed. *)
 val deep_occur_list: type_expr -> type_expr list -> bool
 val get_folded_desc: keep_Tvar:bool -> type_expr -> type_desc
+  (* Turn a [Texpand] into a [Tconstr] only when it is safe to do so *)
+val check_level_abbrev: int -> type_expr -> bool
+  (* If [get_abbrev ty = Some (path, args)] then return true
+     only if the scope of [path] is not greater than the given level,
+     and all [args] have a level not greater than the given level;
+     otherwise return true *)
 
 module For_copy : sig
 
