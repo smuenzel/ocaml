@@ -812,12 +812,6 @@ let deep_occur_list t0 tyl =
   with
   | Occur -> true
 
-let check_level_abbrev lev ty =
-  match get_abbrev ty with
-    Some (path, args) ->
-      Path.scope path <= lev && List.for_all (fun t -> get_level t <= lev) args
-  | None -> true
-
 let get_folded_desc ~keep_Tvar ty =
   let desc = get_desc ty in
   (* Need to first check for Tsubst, as its presence indicates an already
@@ -828,9 +822,7 @@ let get_folded_desc ~keep_Tvar ty =
   | _ ->
       (* Only re-instate an abbreviation if there is no risk to hide
          something and levels are valid *)
-      let lev = get_level ty in
       match get_abbrev ty with
-      | Some (path, args)
-        when check_level_abbrev lev ty && not (deep_occur_list ty args) ->
+      | Some (path, args) when not (deep_occur_list ty args) ->
           Tconstr (path, args, ref Mnil)
       | _ -> desc

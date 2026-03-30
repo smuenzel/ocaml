@@ -869,6 +869,18 @@ let needs_expand env level path args =
     (without this constraint, the type system would actually be unsound.)
 *)
 
+let rec check_level_type_rec visited level ty =
+  get_level ty <= level &&
+  match get_abbrev ty with
+    Some (path, args) ->
+      Path.scope path <= level &&
+      (args = [] || List.memq ty visited ||
+      let visited = ty :: visited in
+      List.for_all (check_level_type_rec visited level) args)
+  | None -> true
+
+let check_level_type level ty = check_level_type_rec [] level ty
+
 let rec update_level env level expand ty =
   let ty_level = get_level ty in
   if ty_level > level then begin
@@ -935,7 +947,7 @@ and update_level_abbrev env level expand ty =
   iter_abbrev
     (fun p args ->
       if level < Path.scope p then forget_abbrev ty else
-      if List.for_all (fun ty -> get_level ty <= level) args then () else
+      if List.for_all (check_level_type level) args then () else
       if expand || needs_expand env level p args then forget_abbrev ty else
       List.iter (update_level env level expand) args)
     ty
@@ -949,7 +961,7 @@ let update_level_expand env level ty =
 (* First try without expanding, then expand everything,
    to avoid combinatorial blow-up *)
 let update_level env level ty =
-  if get_level ty > level || not (check_level_abbrev level ty) then begin
+  if not (check_level_type level ty) then begin
     let snap = snapshot () in
     try
       try_update_level env level ty
