@@ -2542,9 +2542,11 @@ and type_one_application ~ctx:(apply_loc,sfunct,md_f,args)
                 fatal_error
                   "unexpected coercion from original module type to \
                    nondep_supertype one"
-            | exception Includemod.Error _ ->
-                fatal_error
-                  "nondep_supertype not included in original module type"
+            | exception Includemod.Error e ->
+                fatal_errorf
+                  "nondep_supertype not included in original module type:\n%a"
+                  (Format_doc.compat Includemod_errorprinter.err_msgs) e
+
             end;
             nondep_mty
       in
