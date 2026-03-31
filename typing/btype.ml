@@ -821,7 +821,7 @@ let get_folded_desc ~keep_Tvar ty =
   | Tvar _ when keep_Tvar -> desc
   | _ ->
       (* Only re-instate an abbreviation if there is no risk to hide
-         something and levels are valid *)
+         something *)
       match get_abbrev ty with
       | Some (path, args) when not (deep_occur_list ty args) ->
           Tconstr (path, args, ref Mnil)
