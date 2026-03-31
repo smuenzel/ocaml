@@ -254,6 +254,7 @@ val try_mark_node: type_mark -> type_expr -> bool
 val get_abbrev: type_expr -> (Path.t * type_expr list) option
 val iter_abbrev: (Path.t -> type_expr list -> unit) -> type_expr -> unit
 val forget_abbrev: type_expr -> unit
+val ignore_abbrev: type_expr -> type_expr
 
 (** Transient [type_expr].
     Should only be used immediately after [Transient_expr.repr] *)

@@ -617,6 +617,8 @@ let iter_abbrev f t =
   ignore (repr t);
   match t.desc with Texpand (_, path, args) -> f path args | _ -> ()
 
+let ignore_abbrev ty = repr ty
+
 (* transient type_expr *)
 
 module Transient_expr = struct

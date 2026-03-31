@@ -5506,8 +5506,12 @@ let rec nondep_type_rec ?(expand_private=false) env ids ty =
                Tconstr(p, List.map (nondep_type_rec env ids) tl, ref Mnil)
           with (Nondep_cannot_erase _) as exn ->
             (* If that doesn't work, try expanding abbrevs *)
-            try Tlink (nondep_type_rec ~expand_private env ids
-                         (try_expand env (newty2 ~level:(get_level ty) desc)))
+            if desc != get_desc ty then begin
+              TypeHash.remove nondep_hash ty;
+              Tlink (nondep_type_rec ~expand_private env ids (ignore_abbrev ty))
+            end else try
+              Tlink (nondep_type_rec ~expand_private env ids
+                       (try_expand env (newty2 ~level:(get_level ty) desc)))
               (*
                  The [Tlink] is important. The expanded type may be a
                  variable, or may not be completely copied yet
