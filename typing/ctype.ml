@@ -1014,7 +1014,7 @@ let rec lower_contravariant env var_level visited contra ty =
               variance tyl in
           if maybe_expand then (* we expand cautiously to avoid missing cmis *)
             if get_abbrev ty <> None then
-              lower_rec contra Transient_expr.(type_expr (repr ty))
+              lower_rec contra (ignore_abbrev ty)
             else match !forward_try_expand_safe env ty with
             | ty -> visit (); lower_rec contra ty
             | exception Cannot_expand -> not_expanded ()
@@ -5487,7 +5487,7 @@ let rec nondep_type_rec ?(expand_private=false) env ids ty =
     if expand_private then try_expand_safe_opt env t
     else try_expand_safe_no_link env t
   in
-  let desc = get_constr_desc ty in
+  let desc = get_folded_desc ~keep_Tvar:true ty in
   match desc with
     Tvar _ | Tunivar _ -> ty
   | _ -> try TypeHash.find nondep_hash ty
