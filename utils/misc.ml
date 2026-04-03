@@ -212,6 +212,13 @@ module Stdlib = struct
   module Option = struct
     type 'a t = 'a option
 
+    let fold_map f acc t =
+      match t with
+      | None -> acc, None
+      | Some v ->
+          let acc, v' = f acc v in
+          acc, Some v'
+
     let print print_contents ppf t =
       match t with
       | None -> Format.pp_print_string ppf "None"

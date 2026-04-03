@@ -497,26 +497,39 @@ let type_iterators mark =
                   (*  Utilities for copying         *)
                   (**********************************)
 
-let copy_row f fixed row keep more =
+let copy_row' (type a) (f : a -> _ -> a * _) (acc : a) fixed row keep more =
   let Row {fields = orig_fields; fixed = orig_fixed; closed; name = orig_name} =
     row_repr row in
-  let fields = List.map
-      (fun (l, fi) -> l,
+  let acc, fields = List.fold_left_map
+      (fun acc (l, fi) ->
         match row_field_repr fi with
-        | Rpresent oty -> rf_present (Option.map f oty)
+        | Rpresent oty ->
+            let acc, oty' = Misc.Stdlib.Option.fold_map f acc oty in
+            acc, (l, rf_present oty')
         | Reither(c, tl, m) ->
             let use_ext_of = if keep then Some fi else None in
             let m = if is_fixed row then fixed else m in
-            let tl = List.map f tl in
-            rf_either tl ?use_ext_of ~no_arg:c ~matched:m
-        | Rabsent -> rf_absent)
+            let acc, tl = List.fold_left_map f acc tl in
+            acc, (l, rf_either tl ?use_ext_of ~no_arg:c ~matched:m)
+        | Rabsent -> acc, (l, rf_absent))
+      acc
       orig_fields in
-  let name =
-    match orig_name with
-    | None -> None
-    | Some (path, tl) -> Some (path, List.map f tl) in
+  let acc, name =
+    Misc.Stdlib.Option.fold_map
+      (fun acc (path, tl) ->
+         let acc, tl' = List.fold_left_map f acc tl in
+         acc, (path, tl')
+      )
+      acc
+      orig_name
+  in
   let fixed = if fixed then orig_fixed else None in
-  create_row ~fields ~more ~fixed ~closed ~name
+  acc, create_row ~fields ~more ~fixed ~closed ~name
+
+let copy_row f fixed row keep more =
+  copy_row' (fun () t -> (), f t) () fixed row keep more
+  |> snd
+
 
 let copy_commu c = if is_commu_ok c then commu_ok else commu_var ()
 

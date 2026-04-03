@@ -5493,16 +5493,16 @@ let nondep_add t ty ty' = { t with tys = TypeMap.add ty ty' t.tys }
 let nondep_find_variant t ty = TypeMap.find ty t.variants
 let nondep_add_variant t ty ty' = { t with variants = TypeMap.add ty ty' t.variants }
 
-let rec nondep_type_rec_ref nondep_map env ids  =
+let rec nondep_type_rec_ref env ids (nondep_map : nondep_map) =
   let nondep_map_ref = ref nondep_map in
   let f ty =
-    let nondep_map, ty' = nondep_type_rec nondep_map env ids ty in
+    let nondep_map, ty' = nondep_type_rec env ids nondep_map ty in
     nondep_map_ref := nondep_map;
     ty'
   in
   nondep_map_ref, f
 
-and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map * type_expr =
+and nondep_type_rec ?(expand_private=false) env ids (nondep_map : nondep_map) (ty : Types.type_expr) : nondep_map * type_expr =
   let try_expand env t =
     if expand_private then try_expand_safe_opt env t
     else try_expand_safe_no_link env t
@@ -5526,9 +5526,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
             | None ->
                 let nondep_map, params =
                   List.fold_left_map
-                    (fun nondep_map typ ->
-                       nondep_type_rec nondep_map env ids typ
-                    )
+                    (nondep_type_rec env ids)
                     nondep_map
                     tl
                 in
@@ -5537,12 +5535,12 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
             (* If that doesn't work, try expanding abbrevs *)
             if desc != get_desc ty then begin
               let nondep_map, ty =
-                nondep_type_rec orig_nondep_map ~expand_private env ids (ignore_abbrev ty)
+                nondep_type_rec ~expand_private env ids orig_nondep_map (ignore_abbrev ty)
               in
               nondep_map, Tlink ty
             end else try
                 let nondep_map, ty =
-                  nondep_type_rec nondep_map ~expand_private env ids
+                  nondep_type_rec ~expand_private env ids nondep_map
                     (try_expand env (newty2 ~level:(get_level ty) desc))
                 in
                 nondep_map, Tlink ty
@@ -5561,7 +5559,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
           | None ->
               let nondep_map, pack_cstrs =
                 List.fold_left_map (fun nondep_map (n, ty) ->
-                    let nondep_map, ty = nondep_type_rec nondep_map env ids ty in
+                    let nondep_map, ty = nondep_type_rec env ids nondep_map ty in
                     nondep_map, (n, ty)
                   )
                   nondep_map
@@ -5574,7 +5572,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
               }
           end
       | Tobject (t1, name) ->
-          let nondep_map, t1 = nondep_type_rec nondep_map env ids t1 in
+          let nondep_map, t1 = nondep_type_rec env ids nondep_map t1 in
           let nondep_map, name = match !name with
             | None -> nondep_map, None
             | Some (p, tl) ->
@@ -5583,9 +5581,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
                 else
                   let nondep_map, tl =
                     List.fold_left_map
-                      (fun nondep_map ty ->
-                         nondep_type_rec nondep_map env ids ty
-                      )
+                      (nondep_type_rec env ids)
                       nondep_map
                       tl
                   in
@@ -5606,15 +5602,11 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
             let static = static_row row in
             let nondep_map, more' =
               if static then nondep_map, newgenty Tnil
-              else nondep_type_rec nondep_map env ids more
+              else nondep_type_rec env ids nondep_map more
             in
             (* Return a new copy *)
             let nondep_map, row =
-              let nondep_map_ref, f = nondep_type_rec_ref nondep_map env ids in
-              let row_copy =
-                copy_row f true row true more'
-              in
-              !nondep_map_ref, row_copy
+              copy_row' (nondep_type_rec env ids) nondep_map true row true more'
             in
             match row_name row with
               Some (p, _tl) when Path.exists_free ids p ->
@@ -5622,7 +5614,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
             | _ -> nondep_map, Tvariant row
           end
       | desc ->
-          let nondep_map_ref, f = nondep_type_rec_ref nondep_map env ids in
+          let nondep_map_ref, f = nondep_type_rec_ref env ids nondep_map in
           let type_desc_copy =
             copy_type_desc f desc
           in
@@ -5635,7 +5627,7 @@ and nondep_type_rec nondep_map ?(expand_private=false) env ids ty : nondep_map *
       raise e
 
 let nondep_type env id ty =
-  let _, ty' = nondep_type_rec nondep_map_empty env id ty in
+  let _, ty' = nondep_type_rec env id nondep_map_empty ty in
   ty'
 
 let () = nondep_type' := nondep_type
@@ -5644,14 +5636,12 @@ let () = nondep_type' := nondep_type
 let nondep_type_decl nondep_map env mid is_covariant decl =
   let nondep_map, params =
     List.fold_left_map
-      (fun nondep_map ty ->
-         nondep_type_rec nondep_map env mid ty
-      )
+      (nondep_type_rec env mid)
       nondep_map
       decl.type_params
   in
   let nondep_map, tk =
-    let nondep_map_ref, f = nondep_type_rec_ref nondep_map env mid in
+    let nondep_map_ref, f = nondep_type_rec_ref env mid nondep_map in
     try
       let result = map_kind f decl.type_kind in
       !nondep_map_ref, result
@@ -5664,14 +5654,14 @@ let nondep_type_decl nondep_map env mid is_covariant decl =
     | Some ty ->
         try
           let nondep_map, ty =
-            nondep_type_rec nondep_map env mid ty
+            nondep_type_rec env mid nondep_map ty
           in
           nondep_map
         , Some ty, decl.type_private
         with Nondep_cannot_erase _ when is_covariant ->
         try
           let nondep_map, ty =
-            nondep_type_rec nondep_map_empty ~expand_private:true env mid ty
+            nondep_type_rec ~expand_private:true env mid nondep_map_empty ty
           in
           nondep_map
         , Some ty,
@@ -5710,7 +5700,7 @@ let nondep_extension_constructor env ids ext =
           let ty =
             newgenty (Tconstr(ext.ext_type_path, ext.ext_type_params, ref Mnil))
           in
-          let nondep_map, ty' = nondep_type_rec nondep_map_empty env ids ty in
+          let nondep_map, ty' = nondep_type_rec env ids nondep_map_empty ty in
           match get_desc ty' with
             Tconstr(p, tl, _) -> nondep_map, p, tl
           | _ -> raise (Nondep_cannot_erase id)
@@ -5718,19 +5708,19 @@ let nondep_extension_constructor env ids ext =
     | None ->
         let nondep_map, type_params =
           List.fold_left_map
-            (fun nondep_map ty -> nondep_type_rec nondep_map env ids ty)
+            (nondep_type_rec env ids)
             nondep_map_empty
             ext.ext_type_params
         in
         nondep_map, ext.ext_type_path, type_params
   in
   let nondep_map, args =
-    let nondep_map_ref, f = nondep_type_rec_ref nondep_map env ids in
+    let nondep_map_ref, f = nondep_type_rec_ref env ids nondep_map in
     let result = map_type_expr_cstr_args f ext.ext_args in
     !nondep_map_ref, result
   in
   let ret_type =
-    Option.map (fun ty -> snd (nondep_type_rec nondep_map env ids ty)) ext.ext_ret_type
+    Option.map (fun ty -> snd (nondep_type_rec env ids nondep_map ty)) ext.ext_ret_type
   in
   { ext_type_path = type_path;
     ext_type_params = type_params;
@@ -5746,12 +5736,12 @@ let nondep_extension_constructor env ids ext =
 (* Preserve sharing inside class types. *)
 let nondep_class_signature nondep_map env id sign =
   let nondep_map, csig_self =
-    nondep_type_rec nondep_map env id sign.csig_self
+    nondep_type_rec env id nondep_map sign.csig_self
   in
   let nondep_map, csig_self_row =
-    nondep_type_rec nondep_map env id sign.csig_self_row
+    nondep_type_rec env id nondep_map sign.csig_self_row
   in
-  let nondep_map_ref, f = nondep_type_rec_ref nondep_map env id in
+  let nondep_map_ref, f = nondep_type_rec_ref env id nondep_map in
   let result =
     { csig_self;
       csig_self_row;
@@ -5770,9 +5760,7 @@ let rec nondep_class_type nondep_map env ids =
       nondep_class_type nondep_map env ids cty
   | Cty_constr (p, tyl, cty) ->
       let nondep_map, tyl = List.fold_left_map
-          (fun nondep_map ty ->
-             nondep_type_rec nondep_map env ids ty
-          )
+          (nondep_type_rec env ids)
           nondep_map
           tyl
       in
@@ -5786,7 +5774,7 @@ let rec nondep_class_type nondep_map env ids =
       in
       nondep_map, Cty_signature sign
   | Cty_arrow (l, ty, cty) ->
-      let nondep_map, ty = nondep_type_rec nondep_map env ids ty in
+      let nondep_map, ty = nondep_type_rec env ids nondep_map ty in
       let nondep_map, cty = nondep_class_type nondep_map env ids cty in
       nondep_map, Cty_arrow (l, ty, cty)
 
@@ -5794,9 +5782,7 @@ let nondep_class_declaration env ids decl =
   assert (not (Path.exists_free ids decl.cty_path));
   let nondep_map, cty_params =
     List.fold_left_map
-      (fun nondep_map ty ->
-         nondep_type_rec nondep_map env ids ty
-      )
+      (nondep_type_rec env ids)
       nondep_map_empty
       decl.cty_params
   in
@@ -5805,7 +5791,7 @@ let nondep_class_declaration env ids decl =
     match decl.cty_new with
       None    -> None
     | Some ty ->
-        let _, ty = nondep_type_rec nondep_map env ids ty in
+        let _, ty = nondep_type_rec env ids nondep_map ty in
         Some ty
   in
   let decl =
@@ -5825,9 +5811,7 @@ let nondep_cltype_declaration env ids decl =
   assert (not (Path.exists_free ids decl.clty_path));
   let nondep_map, clty_params =
     List.fold_left_map
-      (fun nondep_map ty ->
-         nondep_type_rec nondep_map env ids ty
-      )
+      (nondep_type_rec env ids)
       nondep_map_empty
       decl.clty_params
   in

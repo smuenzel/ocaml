@@ -186,6 +186,8 @@ module Stdlib : sig
   module Option : sig
     type 'a t = 'a option
 
+    val fold_map : ('acc -> 'b -> 'acc * 'c) -> 'acc -> 'b t -> 'acc * 'c t
+
     val print
        : (Format.formatter -> 'a -> unit)
       -> Format.formatter

@@ -197,6 +197,9 @@ val copy_type_desc:
 val copy_row:
     (type_expr -> type_expr) ->
     bool -> row_desc -> bool -> type_expr -> row_desc
+val copy_row':
+    ('a -> type_expr -> 'a * type_expr) ->
+    'a -> bool -> row_desc -> bool -> type_expr -> 'a * row_desc
 
 val deep_occur: type_expr -> type_expr -> bool
    (* [deep_occur t0 ty] return whether [t0] occurs in [ty].
