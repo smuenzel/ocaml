@@ -1179,8 +1179,7 @@ Line 2, characters 12-32:
 2 | class c = [ < foo : string; .. > ] p;;
                 ^^^^^^^^^^^^^^^^^^^^
 Error: The type parameter "< foo : string; .. >"
-       does not meet its constraint: it should be
-         "< foo : int; .. > as 'a" = "< foo : int; .. >"
+       does not meet its constraint: it should be "< foo : int; .. >"
        The method "foo" has type "string", but the expected method type was "int"
 |}];;
 
@@ -1368,7 +1367,7 @@ class c : object method private test : unit end
 Line 10, characters 9-16:
 10 | let () = (new c)#test
               ^^^^^^^
-Error: This expression has type "c" = "<  >"
+Error: This expression has type "c" = "d"
        It has no method "test"
 |}];;
 
