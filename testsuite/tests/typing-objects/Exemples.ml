@@ -423,18 +423,25 @@ val l1 : int lst = <obj>
 
 l1#print Format.print_int; Format.print_newline ();;
 [%%expect{|
-(3::10::[])
-- : unit = ()
+Line 1, characters 0-2:
+1 | l1#print Format.print_int; Format.print_newline ();;
+    ^^
+Error: This expression is not an object; it has type "int lst"
 |}];;
 
 let l2 = l1#map (fun x -> x + 1);;
 [%%expect{|
-val l2 : int lst = <obj>
+Line 1, characters 9-11:
+1 | let l2 = l1#map (fun x -> x + 1);;
+             ^^
+Error: This expression is not an object; it has type "int lst"
 |}];;
 l2#print Format.print_int; Format.print_newline ();;
 [%%expect{|
-(4::11::[])
-- : unit = ()
+Line 1, characters 0-2:
+1 | l2#print Format.print_int; Format.print_newline ();;
+    ^^
+Error: Unbound value "l2"
 |}];;
 
 let rec map_list f (x:'a lst) =
@@ -450,8 +457,11 @@ val p1 : printable_color_point lst = <obj>
 |}];;
 p1#print (fun x -> x#print); Format.print_newline () ;;
 [%%expect{|
-((3, red)::(10, red)::[])
-- : unit = ()
+Line 1, characters 0-2:
+1 | p1#print (fun x -> x#print); Format.print_newline () ;;
+    ^^
+Error: This expression is not an object;
+       it has type "printable_color_point lst"
 |}];;
 
 (*******************************************************************)
@@ -868,13 +878,28 @@ val calculator : calculator = <obj>
 
 (calculator#enter 5.)#equals;;
 [%%expect{|
+Line 1, characters 1-11:
+1 | (calculator#enter 5.)#equals;;
+     ^^^^^^^^^^
+Error: This expression is not an object; it has type "calculator"
+|}, Principal{|
 - : float = 5.
 |}];;
 ((calculator#enter 5.)#sub#enter 3.5)#equals;;
 [%%expect{|
+Line 1, characters 2-12:
+1 | ((calculator#enter 5.)#sub#enter 3.5)#equals;;
+      ^^^^^^^^^^
+Error: This expression is not an object; it has type "calculator"
+|}, Principal{|
 - : float = 1.5
 |}];;
 (calculator#enter 5.)#add#add#equals;;
 [%%expect{|
+Line 1, characters 1-11:
+1 | (calculator#enter 5.)#add#add#equals;;
+     ^^^^^^^^^^
+Error: This expression is not an object; it has type "calculator"
+|}, Principal{|
 - : float = 15.
 |}];;
