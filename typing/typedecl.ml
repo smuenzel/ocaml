@@ -2159,7 +2159,8 @@ module Reaching_path = struct
             i
             (Misc.ordinal_suffix i)
             Style.inline_code (Path.name path)
-            (Style.as_inline_code Out_type.prepared_type_expr) ty
+            (Printtyp.type_expansion Type)
+            (Out_type.prepare_expansion (Errortrace.trivial_expansion ty))
       | Considered_abstract path ->
           Fmt.fprintf ppf "the type %a is considered abstract"
             Style.inline_code (Path.name path)
