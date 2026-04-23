@@ -909,9 +909,9 @@ let is_reachable
     ~final_env (* Environment with all types defined *)
     loc
     ~from_ty
+    mark
     ty_path
   =
-  let visited = ref TypeSet.empty in
   (* We need to keeps paths since [visited] is insufficient to detect
      certain already visited types.
 
@@ -958,7 +958,7 @@ let is_reachable
     in raise (Error (loc, err))
   in
   let rec unguarded ~trace ty' =
-    if TypeSet.mem ty' !visited
+    if not (try_mark_node mark ty')
     then ()
     else if match Btype.get_constr_desc ty' with
         Tconstr (path, _, _) ->
@@ -976,7 +976,6 @@ let is_reachable
           raise_error ~trace
       | _ -> unguarded_no_self ~trace ty'
   and unguarded_no_self ~trace ty' =
-    visited := TypeSet.add ty' !visited;
     begin match Btype.get_constr_desc ty' with
     | Tconstr (path, _, _) when is_decl_path path ->
         visited_paths := Path.Map.add_to_list path ty' !visited_paths
@@ -1020,13 +1019,15 @@ let is_reachable
   let snap = Btype.snapshot () in
   try
     Ctype.wrap_trace_gadt_instances final_env (
-      is_reachable
-        ?trace
-        ~is_decl_path
-        ~abs_env
-        ~final_env
-        loc
-        ~from_ty
+      with_type_mark
+        (is_reachable
+           ?trace
+           ~is_decl_path
+           ~abs_env
+           ~final_env
+           loc
+           ~from_ty
+        )
     ) ty_path
   with Ctype.Escape _ ->
     (* Will be detected by check_regularity *)
