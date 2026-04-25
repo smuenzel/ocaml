@@ -3499,8 +3499,7 @@ let annotate_and_sort_recursive_bindings env valbinds =
       let loc_node = List.hd (Ident.Map.find (List.hd cycle) nodes) in
       raise(Error(loc_node.vb.vb_expr.exp_loc, env, Letrec_cycle cycle))
   | Sorted sorted ->
-      List.map (fun vb_link -> vb_link.vb) sorted
-
+      List.rev_map (fun vb_link -> vb_link.vb) sorted
 
 let check_recursive_class_bindings env ids exprs =
   List.iter
