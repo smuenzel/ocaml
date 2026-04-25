@@ -14,6 +14,7 @@ let sort
     (nodes : n list)
     (edges : n edge list)
   =
+  let node_count = List.length nodes in
   let module M = Map.Make(struct type t = n let compare = compare_node end) in
   let _, node_to_id, id_to_node =
     List.fold_left
@@ -36,7 +37,12 @@ let sort
   let exception Has_cycle of int list in
   let rec visit path node =
     match states.(node) with
-    | Visiting -> raise (Has_cycle (node::path))
+    | Visiting ->
+        let rec trim = function
+          | [] -> [node]
+          | x :: rest -> if x = node then [node] else x :: trim rest
+        in
+        raise (Has_cycle (node :: trim path))
     | Visited -> ()
     | Unvisited ->
         states.(node) <- Visiting;
@@ -50,8 +56,14 @@ let sort
         ()
   in
   try
-    Int_map.iter (fun node _ -> visit [] node) edges;
-    Sorted (List.rev_map (fun id -> Int_map.find id id_to_node) !sorted)
+    Int_map.iter (fun node _ -> visit [] node) id_to_node;
+    let sorted_nodes =
+      (List.map (fun id -> Int_map.find id id_to_node) !sorted)
+    in
+    if List.length sorted_nodes <> node_count
+    then failwith
+        (Printf.sprintf "Topological_sort: error, initial node count: %i, sorted node count: %i" node_count (List.length sorted_nodes));
+    Sorted sorted_nodes
   with
   | Has_cycle path -> Cycle (List.rev_map (fun id -> Int_map.find id id_to_node) path)
 
