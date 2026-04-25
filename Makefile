@@ -86,7 +86,8 @@ utils_SOURCES = $(addprefix utils/, \
   diffing.mli diffing.ml \
   diffing_with_keys.mli diffing_with_keys.ml \
   stable_matching.mli stable_matching.ml \
-  compression.mli compression.ml)
+  compression.mli compression.ml \
+	topological_sort.mli topological_sort.ml)
 
 parsing_SOURCES = $(addprefix parsing/, \
   location.mli location.ml \

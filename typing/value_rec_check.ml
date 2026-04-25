@@ -1340,6 +1340,16 @@ and is_destructuring_pattern : type k . k general_pattern -> bool =
     | Tpat_or (l,r,_) ->
         is_destructuring_pattern l || is_destructuring_pattern r
 
+let expression_dependencies idlist expr =
+  let rkind = classify_expression expr in
+  let ty = expression expr Return in
+  let dependencies =
+    match rkind with
+    | Static -> Env.unguarded ty idlist
+    | Dynamic -> Env.dependent ty idlist
+  in
+  rkind, dependencies
+
 let is_valid_recursive_expression idlist expr : sd option =
   match expr.exp_desc with
   | Texp_function _ ->

@@ -12,6 +12,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+val expression_dependencies :
+  Ident.t list ->
+  Typedtree.expression ->
+  Value_rec_types.recursive_binding_kind * Ident.t list
+
 val is_valid_recursive_expression :
   Ident.t list ->
   Typedtree.expression ->
