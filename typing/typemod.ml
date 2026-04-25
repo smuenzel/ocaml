@@ -2811,7 +2811,7 @@ and type_str_item ~names ~toplevel ~funct_body anchor env shape_map
         let (defs, newenv) =
           Typecore.type_binding env rec_flag sdefs in
         let defs = match rec_flag with
-          | Recursive -> Typecore.annotate_recursive_bindings env defs
+          | Recursive -> Typecore.annotate_and_sort_recursive_bindings env defs
           | Nonrecursive -> defs
         in
         (* Note: Env.find_value does not trigger the value_used event. Values

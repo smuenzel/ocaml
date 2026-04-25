@@ -1359,7 +1359,7 @@ and class_expr_aux cl_num final val_env met_env virt self_scope scl =
       in
       let cl = class_expr cl_num final val_env met_env virt self_scope scl' in
       let defs = match rec_flag with
-        | Recursive -> annotate_recursive_bindings val_env defs
+        | Recursive -> annotate_and_sort_recursive_bindings val_env defs
         | Nonrecursive -> defs
       in
       rc {cl_desc = Tcl_let (rec_flag, defs, vals, cl);

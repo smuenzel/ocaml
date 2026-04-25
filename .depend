@@ -216,6 +216,11 @@ utils/terminfo.cmo : \
 utils/terminfo.cmx : \
     utils/terminfo.cmi
 utils/terminfo.cmi :
+utils/topological_sort.cmo : \
+    utils/topological_sort.cmi
+utils/topological_sort.cmx : \
+    utils/topological_sort.cmi
+utils/topological_sort.cmi :
 utils/warnings.cmo : \
     utils/misc.cmi \
     utils/format_doc.cmi \
@@ -1746,6 +1751,7 @@ typing/typecore.cmo : \
     typing/typetexp.cmi \
     typing/types.cmi \
     typing/typedtree.cmi \
+    utils/topological_sort.cmi \
     typing/subst.cmi \
     typing/shape.cmi \
     typing/printtyp.cmi \
@@ -1782,6 +1788,7 @@ typing/typecore.cmx : \
     typing/typetexp.cmx \
     typing/types.cmx \
     typing/typedtree.cmx \
+    utils/topological_sort.cmx \
     typing/subst.cmx \
     typing/shape.cmx \
     typing/printtyp.cmx \
