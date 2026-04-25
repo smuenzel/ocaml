@@ -816,6 +816,19 @@ let compile_update size dummy newval =
 
 (** Compilation function *)
 
+let rec compile_nested ~subst_for_constants bindings pre_allocations_rev body =
+  match bindings with
+  | [] -> List.rev pre_allocations_rev, body
+  | (id, rkind, def) :: bindings ->
+      match (rkind : Value_rec_types.recursive_binding_kind) with
+      | Dynamic ->
+          Llet(Strict, Pgenval, id, lam, compile_nested ~subst_for_constants bindings pre_allocations_rev body)
+      | Static ->
+          let size = compute_static_size def in
+
+
+
+
 let compile_letrec input_bindings body =
   let subst_for_constants =
     List.fold_left (fun subst (id, _, _) ->
