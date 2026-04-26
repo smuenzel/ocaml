@@ -16,3 +16,8 @@ val compile_letrec :
   (Ident.t * Value_rec_types.recursive_binding_kind * Lambda.lambda) list ->
   Lambda.lambda ->
   Lambda.lambda
+
+val compile_letrec_for_class :
+  (Ident.t * Value_rec_types.recursive_binding_kind * Lambda.lambda) list ->
+  Lambda.lambda ->
+  Lambda.lambda

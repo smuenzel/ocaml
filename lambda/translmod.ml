@@ -691,7 +691,7 @@ and transl_struct_item ~scopes fields rootpath item next =
   | Tstr_class cl_list ->
       let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
       let body = next (List.rev_append ids fields) in
-      Value_rec_compiler.compile_letrec class_bindings body
+      Value_rec_compiler.compile_letrec_for_class class_bindings body
   | Tstr_include incl ->
       let ids = bound_value_identifiers incl.incl_type in
       let modl = incl.incl_mod in
@@ -1135,7 +1135,7 @@ let transl_store_structure ~scopes glob map prims aliases str =
         | Tstr_class cl_list ->
             let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
             let lam =
-              Value_rec_compiler.compile_letrec class_bindings
+              Value_rec_compiler.compile_letrec_for_class class_bindings
                 (store_idents Loc_unknown ids)
             in
             Lsequence(lambda_subst subst lam,
@@ -1499,7 +1499,7 @@ let transl_toplevel_item ~scopes item =
          be a value named identically *)
       let (ids, class_bindings) = transl_class_bindings ~scopes cl_list in
       List.iter set_toplevel_unique_name ids;
-      Value_rec_compiler.compile_letrec class_bindings
+      Value_rec_compiler.compile_letrec_for_class class_bindings
         (make_sequence toploop_setvalue_id ids)
   | Tstr_include incl ->
       let ids = bound_value_identifiers incl.incl_type in

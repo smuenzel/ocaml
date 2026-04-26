@@ -735,6 +735,7 @@ and rebuild_arms :
     representation for mutually recursive closures.
  *)
 
+(*
 type rec_bindings =
   { static : (Ident.t * block_size * Lambda.lambda) list;
     functions : (Ident.t * Lambda.lfunction) list;
@@ -745,6 +746,23 @@ let empty_bindings =
   { static = [];
     functions = [];
     dynamic = [];
+  }
+   *)
+
+type rec_binding =
+  | Patch of Ident.t * block_size * Lambda.lambda
+  | Dynamic of Ident.t * Lambda.lambda
+
+type rec_bindings =
+  { pre_allocations : (Ident.t * block_size) list;
+    functions : (Ident.t * Lambda.lfunction) list;
+    bindings : rec_binding list;
+  }
+
+let empty_bindings =
+  { pre_allocations = [];
+    functions = [];
+    bindings = [];
   }
 
 (** Allocation and backpatching code *)
@@ -816,18 +834,77 @@ let compile_update size dummy newval =
 
 (** Compilation function *)
 
-let rec compile_nested ~subst_for_constants bindings pre_allocations_rev body =
+(*
+let rec compile_nested ~subst_for_constants bindings body =
   match bindings with
-  | [] -> List.rev pre_allocations_rev, body
+  | [] -> [], body
   | (id, rkind, def) :: bindings ->
+      let pre_allocations, body =
+        compile_nested ~subst_for_constants bindings body
+      in
       match (rkind : Value_rec_types.recursive_binding_kind) with
       | Dynamic ->
-          Llet(Strict, Pgenval, id, lam, compile_nested ~subst_for_constants bindings pre_allocations_rev body)
+          pre_allocations, Llet(Strict, Pgenval, id, def, body)
       | Static ->
           let size = compute_static_size def in
+          begin match size with
+          | Constant | Unreachable ->
+              let lam =
+                Lambda.subst (fun _ _ env -> env) subst_for_constants def
+              in
+              pre_allocations
+            , Llet(Strict, Pgenval, id, lam, body)
+          | Block size ->
+              let pre_allocation body' =
+                let alloc = compile_alloc size in
+                Llet(Strict, Pgenval, id, alloc, body')
+              in
+              pre_allocation::pre_allocations
+            , Lsequence (compile_update size (Lvar id) def, body)
+          | Function ->
+              let next_letrec, body =
+                match body with
+                | Lletrec (bindings, body) -> bindings, body
+                | body -> [], body
+              in
+            begin match def with
+            | Lfunction lfun ->
+                pre_allocations
+              , Lletrec ({ id; def = lfun } :: next_letrec, body)
+            | _ ->
+              let ctx_id = Ident.create_local "letrec_function_context" in
+              begin match split_static_function ctx_id Ident.Set.empty def with
+              | Unreachable ->
+                Misc.fatal_error "letrec: no function for binding"
+              | Reachable ({ lfun; free_vars_block_size }, lam) ->
+                  let block_size = Regular_block free_vars_block_size in
+                  let pre_allocation body' =
+                    let alloc = compile_alloc block_size in
+                    Llet(Strict, Pgenval, ctx_id, alloc, body')
+                  in
+                  pre_allocation::pre_allocations
+                , Lletrec ({ id; def = lfun } :: next_letrec,
+                           Lsequence (compile_update block_size (Lvar ctx_id) lam, body))
+              end
+            end
+          end
 
+let compile_nested ~subst_for_constants bindings body =
+  let pre_allocations, body =
+    compile_nested ~subst_for_constants bindings body
+  in
+  List.fold_left
+    (fun acc pre_allocation -> pre_allocation acc)
+    body pre_allocations
 
-
+let compile_letrec input_bindings body =
+  let subst_for_constants =
+    List.fold_left (fun subst (id, _, _) ->
+        Ident.Map.add id Lambda.dummy_constant subst)
+      Ident.Map.empty input_bindings
+  in
+  compile_nested ~subst_for_constants input_bindings body
+   *)
 
 let compile_letrec input_bindings body =
   let subst_for_constants =
@@ -839,7 +916,7 @@ let compile_letrec input_bindings body =
     List.fold_left (fun rev_bindings (id, rkind, def) ->
         match (rkind : Value_rec_types.recursive_binding_kind) with
         | Dynamic ->
-          { rev_bindings with dynamic = (id, def) :: rev_bindings.dynamic }
+          { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
         | Static ->
           let size = compute_static_size def in
           begin match size with
@@ -851,10 +928,12 @@ let compile_letrec input_bindings body =
             let def =
               Lambda.subst (fun _ _ env -> env) subst_for_constants def
             in
-            { rev_bindings with dynamic = (id, def) :: rev_bindings.dynamic }
+            { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
           | Block size ->
             { rev_bindings with
-              static = (id, size, def) :: rev_bindings.static }
+              bindings = Patch (id, size, def) :: rev_bindings.bindings;
+              pre_allocations = (id, size) :: rev_bindings.pre_allocations
+            }
           | Function ->
             begin match def with
             | Lfunction lfun ->
@@ -868,41 +947,151 @@ let compile_letrec input_bindings body =
                 Misc.fatal_error "letrec: no function for binding"
               | Reachable ({ lfun; free_vars_block_size }, lam) ->
                 let functions = (id, lfun) :: rev_bindings.functions in
-                let static =
-                  (ctx_id, Regular_block free_vars_block_size, lam) ::
-                  rev_bindings.static
-                in
-                { rev_bindings with functions; static }
+                let block_size = Regular_block free_vars_block_size in
+                { functions
+                ; pre_allocations = (ctx_id, block_size) :: rev_bindings.pre_allocations
+                ; bindings = Patch (ctx_id, block_size, lam) :: rev_bindings.bindings
+                }
               end
             end
           end)
       empty_bindings input_bindings
   in
+  (*
+  let all_bindings_rev = { all_bindings_rev with bindings = List.rev all_bindings_rev.bindings } in
+     *)
+  let body_with_bindings =
+    List.fold_left (fun body binding ->
+        match binding with
+        | Patch (id, size, lam) ->
+            Lsequence (compile_update size (Lvar id) lam, body)
+        | Dynamic (id, lam) ->
+            Llet(Strict, Pgenval, id, lam, body)
+      ) body all_bindings_rev.bindings
+  in
+  (*
   let body_with_patches =
     List.fold_left (fun body (id, size, lam) ->
         Lsequence (compile_update size (Lvar id) lam, body)
     ) body (all_bindings_rev.static)
   in
+     *)
   let body_with_functions =
     match all_bindings_rev.functions with
-    | [] -> body_with_patches
+    | [] -> body_with_bindings
     | bindings_rev ->
       let function_bindings =
         List.rev_map (fun (id, lfun) ->
             { id; def = lfun })
           bindings_rev
       in
-      Lletrec (function_bindings, body_with_patches)
+      Lletrec (function_bindings, body_with_bindings)
   in
+  (*
   let body_with_dynamic_values =
     List.fold_left (fun body (id, lam) ->
         Llet(Strict, Pgenval, id, lam, body))
       body_with_functions all_bindings_rev.dynamic
   in
+     *)
   let body_with_pre_allocations =
-    List.fold_left (fun body (id, size, _lam) ->
+    List.fold_left (fun body (id, size) ->
         let alloc = compile_alloc size in
         Llet(Strict, Pgenval, id, alloc, body))
-      body_with_dynamic_values all_bindings_rev.static
+      body_with_functions all_bindings_rev.pre_allocations
   in
   body_with_pre_allocations
+
+module For_class = struct
+  type rec_bindings =
+    { static : (Ident.t * block_size * Lambda.lambda) list;
+      functions : (Ident.t * Lambda.lfunction) list;
+      dynamic : (Ident.t * Lambda.lambda) list;
+    }
+
+  let empty_bindings =
+    { static = [];
+      functions = [];
+      dynamic = [];
+    }
+
+  let compile_letrec input_bindings body =
+    let subst_for_constants =
+      List.fold_left (fun subst (id, _, _) ->
+          Ident.Map.add id Lambda.dummy_constant subst)
+        Ident.Map.empty input_bindings
+    in
+    let all_bindings_rev =
+      List.fold_left (fun rev_bindings (id, rkind, def) ->
+          match (rkind : Value_rec_types.recursive_binding_kind) with
+          | Dynamic ->
+              { rev_bindings with dynamic = (id, def) :: rev_bindings.dynamic }
+          | Static ->
+              let size = compute_static_size def in
+              begin match size with
+              | Constant | Unreachable ->
+                  (* The result never escapes any recursive variables, so as we know
+                     it doesn't inspect them either we can just bind the recursive
+                     variables to dummy values and evaluate the definition normally.
+                  *)
+                  let def =
+                    Lambda.subst (fun _ _ env -> env) subst_for_constants def
+                  in
+                  { rev_bindings with dynamic = (id, def) :: rev_bindings.dynamic }
+              | Block size ->
+                  { rev_bindings with
+                    static = (id, size, def) :: rev_bindings.static }
+              | Function ->
+                  begin match def with
+                  | Lfunction lfun ->
+                      { rev_bindings with
+                        functions = (id, lfun) :: rev_bindings.functions
+                      }
+                  | _ ->
+                      let ctx_id = Ident.create_local "letrec_function_context" in
+                      begin match split_static_function ctx_id Ident.Set.empty def with
+                      | Unreachable ->
+                          Misc.fatal_error "letrec: no function for binding"
+                      | Reachable ({ lfun; free_vars_block_size }, lam) ->
+                          let functions = (id, lfun) :: rev_bindings.functions in
+                          let static =
+                            (ctx_id, Regular_block free_vars_block_size, lam) ::
+                            rev_bindings.static
+                          in
+                          { rev_bindings with functions; static }
+                      end
+                  end
+              end)
+        empty_bindings input_bindings
+    in
+    let body_with_patches =
+      List.fold_left (fun body (id, size, lam) ->
+          Lsequence (compile_update size (Lvar id) lam, body)
+        ) body (all_bindings_rev.static)
+    in
+    let body_with_functions =
+      match all_bindings_rev.functions with
+      | [] -> body_with_patches
+      | bindings_rev ->
+          let function_bindings =
+            List.rev_map (fun (id, lfun) ->
+                { id; def = lfun })
+              bindings_rev
+          in
+          Lletrec (function_bindings, body_with_patches)
+    in
+    let body_with_dynamic_values =
+      List.fold_left (fun body (id, lam) ->
+          Llet(Strict, Pgenval, id, lam, body))
+        body_with_functions all_bindings_rev.dynamic
+    in
+    let body_with_pre_allocations =
+      List.fold_left (fun body (id, size, _lam) ->
+          let alloc = compile_alloc size in
+          Llet(Strict, Pgenval, id, alloc, body))
+        body_with_dynamic_values all_bindings_rev.static
+    in
+    body_with_pre_allocations
+end
+
+let compile_letrec_for_class = For_class.compile_letrec

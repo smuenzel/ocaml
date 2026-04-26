@@ -3431,37 +3431,38 @@ and is_nonexpansive_arg = function
 
 let maybe_expansive e = not (is_nonexpansive e)
 
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
 let annotate_and_sort_recursive_bindings env valbinds =
   let ids = let_bound_idents valbinds in
   let type vb_link =
         { vb : value_binding
         ; dependencies : Ident.Set.t
-        ; names : Ident.Set.t
+        ; name : Ident.t
         }
   in
   let links =
     List.map
       (fun ({vb_pat; vb_expr; vb_rec_kind = _; vb_attributes; vb_loc} as vb)->
-         let names = Ident.Set.of_list (let_bound_idents [vb]) in
+         let name = match let_bound_idents [vb] with
+           | [name] -> name | _ -> assert false in
          let vb_rec_kind, dependencies =
            Value_rec_check.expression_dependencies ids vb_expr
          in
          let dependencies = Ident.Set.of_list dependencies in
-         if not (Ident.Set.is_empty (Ident.Set.inter names dependencies))
+         if Ident.Set.mem name dependencies
          then raise(Error(vb_expr.exp_loc, env, Illegal_letrec_expr));
          { vb = { vb_pat; vb_expr; vb_rec_kind; vb_attributes; vb_loc}
          ; dependencies
-         ; names
+         ; name
          }
       )
       valbinds
   in
   let nodes =
     List.fold_left
-      (fun acc ({ names; _ } as vb_link) ->
-         Ident.Set.fold
-           (fun name acc -> Ident.Map.add_to_list name vb_link acc)
-           names acc
+      (fun acc ({ name; _ } as vb_link) ->
+         Ident.Map.add_to_list name vb_link acc
       )
       Ident.Map.empty links
   in
@@ -3478,6 +3479,8 @@ let annotate_and_sort_recursive_bindings env valbinds =
                      ; to_
                      }
                    in
+                   if do_print
+                   then Format.eprintf "from=%a to=%a@." Ident.print vb_link.name Ident.print to_.name;
                    edge :: acc
                 )
                 acc
@@ -3491,10 +3494,7 @@ let annotate_and_sort_recursive_bindings env valbinds =
   match Topological_sort.sort nodes_list edges with
   | Cycle cycle ->
       let cycle =
-        List.map (fun vb_link ->
-          Ident.Set.singleton_to_elt vb_link.names
-          |> Option.get
-        ) cycle
+        List.map (fun vb_link -> vb_link.name) cycle
       in
       let loc_node = List.hd (Ident.Map.find (List.hd cycle) nodes) in
       raise(Error(loc_node.vb.vb_expr.exp_loc, env, Letrec_cycle cycle))
