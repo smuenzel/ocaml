@@ -207,6 +207,33 @@ module Stdlib = struct
           }
       in
       find_prefix ~longest_common_prefix_rev:[] first second
+
+    let reduce_balanced l ~f =
+      let rec step_accum num acc x =
+        if num land 1 = 0
+        then x :: acc
+        else (
+          match acc with
+          | [] -> assert false
+          | y :: ys -> step_accum (num asr 1) ys (f y x))
+      in
+      let foldi l ~init ~f =
+        fold_left (fun (i, acc) x -> i + 1, f i acc x) (0, init) l
+        |> snd
+      in
+      let fold l ~init ~f =
+        fold_left f init l
+      in
+      match foldi l ~init:[] ~f:step_accum with
+      | [] -> None
+      | x :: xs -> Some (fold xs ~init:x ~f:(fun x y -> f y x))
+    ;;
+
+let reduce_balanced_exn l ~f =
+  match reduce_balanced l ~f with
+  | None -> invalid_arg "List.reduce_balanced_exn"
+  | Some v -> v
+;;
   end
 
   module Option = struct

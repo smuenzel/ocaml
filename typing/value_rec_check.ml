@@ -454,14 +454,28 @@ end = struct
 
   let empty = M.empty
 
+  (*
   let join (x: t) (y: t) =
-    M.fold
-      (fun (id: Ident.t) (v: Mode.t) (tbl: t) ->
-         let v' = find id tbl in
-         M.add id (Mode.join v v') tbl)
+    M.merge
+      (fun _id left right ->
+         match left, right with
+         | Some _, None -> left
+         | None, Some _ -> right
+         | Some v1, Some v2 -> Some (Mode.join v1 v2)
+         | None, None -> None)
+      x y
+     *)
+
+  let join (x: t) (y: t) =
+    M.union
+      (fun _id v1 v2 -> Some (Mode.join v1 v2))
       x y
 
-  let join_list li = List.fold_left join empty li
+  let join_list li =
+    match li with
+      [] -> empty
+    | _ ->
+        Misc.Stdlib.List.reduce_balanced_exn ~f:join li
 
   let compose m env =
     M.map (Mode.compose m) env
@@ -1393,6 +1407,28 @@ let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.ex
       Ident.Map.map
         (fun (rkind, ty, a) ->
            let ty' =
+             (*
+             Misc.Stdlib.List.reduce_balanced_exn
+               ~f:Env.join
+               (ty::
+                (List.map
+                   (fun id ->
+                      let mode = Env.find id ty in
+                      Env.compose mode (Misc.snd3 (Ident.Map.find id exprs)))
+                   idlist
+                ))
+                *)
+             Ident.Map.fold
+               (fun id (_rkind, ty', _a) acc ->
+                  let mode = Env.find id ty in
+                  Env.join
+                    acc
+                    (Env.compose mode ty')
+               )
+               exprs
+               ty
+               (*
+
              List.fold_left
                (fun acc id ->
                   let mode = Env.find id ty in
@@ -1401,6 +1437,7 @@ let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.ex
                     (Env.compose mode (Misc.snd3 (Ident.Map.find id exprs))))
                ty
                idlist
+                  *)
            in
            if not (Env.equal ty ty')
            then modified := true;
