@@ -927,10 +927,15 @@ let compile_letrec input_bindings body =
           let size = compute_static_size def in
           begin match size with
           | Constant ->
+            if do_print
+            then Format.eprintf "Static Constant: %a@." Ident.print id;
+            let def =
+              Lambda.subst (fun _ _ env -> env) subst_for_constants def
+            in
             { rev_bindings with constants = (id, def) :: rev_bindings.constants }
           | Unreachable ->
             if do_print
-            then Format.eprintf "Static (Constant|Unreachable): %a@." Ident.print id;
+            then Format.eprintf "Static Unreachable: %a@." Ident.print id;
 
             (* The result never escapes any recursive variables, so as we know
                it doesn't inspect them either we can just bind the recursive
