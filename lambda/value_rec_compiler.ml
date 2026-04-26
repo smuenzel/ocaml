@@ -43,6 +43,8 @@
 
 open Lambda
 
+let no_loc = Debuginfo.Scoped_location.Loc_unknown
+
 (** Allocation and backpatching primitives *)
 
 let alloc_prim =
@@ -80,7 +82,7 @@ type size =
       [Match_failure] for non-matching branches.
       Tracking [Unreachable] explicitly allows us to recover the size
       of the only non-raising branch. *)
-  | Constant
+  | Constant of lambda
   (** Constant values.
       Can be either an integer-like constant ([0], ['a'], [None],
       the empty list or the unit constructor), or a structured constant
@@ -172,7 +174,7 @@ let compute_static_size lam =
           binding_size
       end
     | Lmutvar _ -> dynamic_size ()
-    | Lconst _ -> Constant
+    | Lconst _ -> Constant lam
     | Lapply _ -> dynamic_size ()
     | Lfunction _ -> Function
     | Llet (_, _, id, def, body) ->
@@ -215,11 +217,11 @@ let compute_static_size lam =
       compute_expression_size env e
     | Lwhile _
     | Lfor _
-    | Lassign _ -> Constant
+    | Lassign _ -> Constant lambda_unit
     | Lsend _ -> dynamic_size ()
     | Levent (e, _) ->
       compute_expression_size env e
-    | Lifused _ -> Constant
+    | Lifused _ -> Constant lambda_unit
   and compute_and_join_sizes env branches =
     List.fold_left (fun size branch ->
         join_sizes size (compute_expression_size env branch))
@@ -256,7 +258,7 @@ let compute_static_size lam =
         (* Unit-returning primitives. Most of these are only generated from
            external declarations and not special-cased by [Value_rec_check],
            but it doesn't hurt to be consistent. *)
-      Constant
+      Constant lambda_unit
 
     | Pduprecord (repres, size) ->
         begin match repres with
@@ -298,7 +300,7 @@ let compute_static_size lam =
     | Pctconst _ ->
         (* These primitives are not special-cased by [Value_rec_check],
            so we should never end up here; but these are constants anyway. *)
-        Constant
+        Constant (Lprim (p, args, no_loc))
 
     | Pccall prim ->
         begin match find_size_of_alloc_prim prim args with
@@ -451,8 +453,6 @@ let ( let+ ) res f =
    but in this case the blocks might be empty and declaring them as Mutable
    would cause errors later.) *)
 let lifted_block_mut : Asttypes.mutable_flag = Immutable
-
-let no_loc = Debuginfo.Scoped_location.Loc_unknown
 
 let rec split_static_function block_var local_idents lam :
   Lambda.lambda split_result =
@@ -926,7 +926,7 @@ let compile_letrec input_bindings body =
         | Static ->
           let size = compute_static_size def in
           begin match size with
-          | Constant ->
+          | Constant const_def->
             if Lambda.is_evaluated def
             then begin
               if do_print
@@ -937,7 +937,7 @@ let compile_letrec input_bindings body =
               if do_print
               then Format.eprintf "Static Constant) is_not_evaluated: %a@." Ident.print id;
               let def =
-                Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton id def) def
+                Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton id const_def) def
               in
               { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
             end
@@ -1063,7 +1063,7 @@ module For_class = struct
           | Static ->
               let size = compute_static_size def in
               begin match size with
-              | Constant | Unreachable ->
+              | Constant _ | Unreachable ->
                   (* The result never escapes any recursive variables, so as we know
                      it doesn't inspect them either we can just bind the recursive
                      variables to dummy values and evaluate the definition normally.

@@ -4,8 +4,7 @@
 
 let rec x = (x; ());;
 [%%expect{|
->> Fatal error: x unbound at toplevel
-Exception: Misc.Fatal_error.
+val x : unit = ()
 |}];;
 
 let rec x = "x";;

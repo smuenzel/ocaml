@@ -4,8 +4,7 @@
 
 let rec x = let module M = struct let f = x end in ();;
 [%%expect{|
->> Fatal error: x unbound at toplevel
-Exception: Misc.Fatal_error.
+val x : unit = ()
 |}];;
 
 let rec x = let module M = struct let f = x let g = x () end in fun () -> ();;
