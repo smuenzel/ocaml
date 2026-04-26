@@ -927,12 +927,20 @@ let compile_letrec input_bindings body =
           let size = compute_static_size def in
           begin match size with
           | Constant ->
-            if do_print
-            then Format.eprintf "Static Constant: %a@." Ident.print id;
-            let def =
-              Lambda.subst (fun _ _ env -> env) subst_for_constants def
-            in
-            { rev_bindings with constants = (id, def) :: rev_bindings.constants }
+            if Lambda.is_evaluated def
+            then begin
+              if do_print
+              then Format.eprintf "Static Constant) is_evaluated: %a@." Ident.print id;
+              { rev_bindings with constants = (id, def) :: rev_bindings.constants }
+            end
+            else begin
+              if do_print
+              then Format.eprintf "Static Constant) is_not_evaluated: %a@." Ident.print id;
+              let def =
+                Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton id def) def
+              in
+              { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
+            end
           | Unreachable ->
             if do_print
             then Format.eprintf "Static Unreachable: %a@." Ident.print id;
