@@ -23,3 +23,12 @@ val is_valid_recursive_expression :
   Value_rec_types.recursive_binding_kind option
 
 val is_valid_class_expr : Ident.t list -> Typedtree.class_expr -> bool
+
+type 'a sort_result =
+  | Cycle_in_definition of Ident.t list
+  | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'a) list
+
+val sort_recursive_expressions :
+  Ident.t list ->
+  (Ident.t * (Typedtree.expression * 'a)) list ->
+  'a sort_result
