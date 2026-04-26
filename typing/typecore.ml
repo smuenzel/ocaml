@@ -3431,10 +3431,31 @@ and is_nonexpansive_arg = function
 
 let maybe_expansive e = not (is_nonexpansive e)
 
+(*
 let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+   *)
 
 let annotate_and_sort_recursive_bindings env valbinds =
   let ids = let_bound_idents valbinds in
+  let valbinds' =
+    List.map
+      (fun ({vb_pat = _; vb_expr; vb_rec_kind = _; vb_attributes = _; vb_loc = _} as vb)->
+         let name = match let_bound_idents [vb] with
+           | [name] -> name | _ -> assert false in
+         name, (vb_expr, vb)
+      )
+      valbinds
+  in
+  match Value_rec_check.sort_recursive_expressions ids valbinds' with
+  | Cycle_in_definition (repr, cycle) ->
+      raise(Error(repr.vb_loc, env, Letrec_cycle cycle))
+  | Sorted_definition sorted ->
+      List.rev_map
+        (fun (_name, vb_rec_kind, vb) ->
+           { vb with vb_rec_kind }
+        )
+        sorted
+  (*
   let type vb_link =
         { vb : value_binding
         ; dependencies : Ident.Set.t
@@ -3500,6 +3521,7 @@ let annotate_and_sort_recursive_bindings env valbinds =
       raise(Error(loc_node.vb.vb_expr.exp_loc, env, Letrec_cycle cycle))
   | Sorted sorted ->
       List.rev_map (fun vb_link -> vb_link.vb) sorted
+      *)
 
 let check_recursive_class_bindings env ids exprs =
   List.iter

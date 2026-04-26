@@ -1381,7 +1381,7 @@ let expression_dependencies idlist expr =
   rkind, dependencies
 
 type 'a sort_result =
-  | Cycle_in_definition of Ident.t list
+  | Cycle_in_definition of 'a * Ident.t list
   | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'a) list
 
 let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.expression * a)) list) : a sort_result =
@@ -1440,7 +1440,10 @@ let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.ex
       ([], [])
   in
   match Topological_sort.sort nodes edges with
-  | Cycle node_cycle -> Cycle_in_definition node_cycle
+  | Cycle ((node :: _) as node_cycle) ->
+      let (_, _, repr_node) = Ident.Map.find node exprs in
+      Cycle_in_definition (repr_node, node_cycle)
+  | Cycle [] -> assert false
   | Sorted node_sorted ->
       let sorted =
         List.map
