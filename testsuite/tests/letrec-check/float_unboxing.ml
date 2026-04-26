@@ -15,10 +15,8 @@ let rec x = (g.f <- y; ()) and y = 2.0;;
 [%%expect{|
 type t = { mutable f : float; }
 val g : t = {f = 0.}
-Line 3, characters 12-26:
-3 | let rec x = (g.f <- y; ()) and y = 2.0;;
-                ^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : float = 2.
+val x : unit = ()
 |}];;
 
 (* same example, with object instance variables
@@ -32,8 +30,16 @@ module S = struct
   let _ = print_float (new c)#m
 end
 [%%expect{|
-Line 5, characters 18-30:
+Line 5, characters 14-15:
 5 |       let rec x = (f <- y; ()) and y = 2.0 in f
-                      ^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+                  ^
+Warning 26 [unused-var]: unused variable "x".
+
+Line 5, characters 35-36:
+5 |       let rec x = (f <- y; ()) and y = 2.0 in f
+                                       ^
+Warning 26 [unused-var]: unused variable "y".
+
+module S :
+  sig class c : object val mutable f : float method m : float end end
 |}];;

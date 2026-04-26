@@ -4,16 +4,14 @@
 
 let rec a = lazy b and b = 3;;
 [%%expect{|
-Line 1, characters 12-18:
-1 | let rec a = lazy b and b = 3;;
-                ^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val b : int = 3
+val a : int lazy_t = lazy 3
 |}];;
 
 let rec e = lazy (fun _ -> f) and f = ();;
 [%%expect{|
-val e : ('a -> unit) lazy_t = lazy <fun>
 val f : unit = ()
+val e : ('a -> unit) lazy_t = lazy <fun>
 |}];;
 
 let rec x = lazy (Lazy.force x + Lazy.force x)

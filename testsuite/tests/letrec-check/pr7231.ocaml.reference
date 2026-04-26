@@ -3,8 +3,8 @@ Line 5, characters 58-64:
                                                               ^^^^^^
 Warning 20 [ignored-extra-argument]: this argument will not be used by the function.
 
-Line 5, characters 12-52:
+Line 5, characters 0-52:
 5 | let rec r = let rec x () = r and y () = x () in y () in r "oops";;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of let rec
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: r-> r
 

@@ -757,12 +757,14 @@ type rec_bindings =
   { pre_allocations : (Ident.t * block_size) list;
     functions : (Ident.t * Lambda.lfunction) list;
     bindings : rec_binding list;
+    constants : (Ident.t * Lambda.lambda) list;
   }
 
 let empty_bindings =
   { pre_allocations = [];
     functions = [];
     bindings = [];
+    constants = [];
   }
 
 (** Allocation and backpatching code *)
@@ -906,6 +908,8 @@ let compile_letrec input_bindings body =
   compile_nested ~subst_for_constants input_bindings body
    *)
 
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
 let compile_letrec input_bindings body =
   let subst_for_constants =
     List.fold_left (fun subst (id, _, _) ->
@@ -916,11 +920,18 @@ let compile_letrec input_bindings body =
     List.fold_left (fun rev_bindings (id, rkind, def) ->
         match (rkind : Value_rec_types.recursive_binding_kind) with
         | Dynamic ->
+          if do_print
+          then Format.eprintf "Dynamic: %a@." Ident.print id;
           { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
         | Static ->
           let size = compute_static_size def in
           begin match size with
-          | Constant | Unreachable ->
+          | Constant ->
+            { rev_bindings with constants = (id, def) :: rev_bindings.constants }
+          | Unreachable ->
+            if do_print
+            then Format.eprintf "Static (Constant|Unreachable): %a@." Ident.print id;
+
             (* The result never escapes any recursive variables, so as we know
                it doesn't inspect them either we can just bind the recursive
                variables to dummy values and evaluate the definition normally.
@@ -930,11 +941,15 @@ let compile_letrec input_bindings body =
             in
             { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
           | Block size ->
+            if do_print
+            then Format.eprintf "Static Block: %a@." Ident.print id;
             { rev_bindings with
               bindings = Patch (id, size, def) :: rev_bindings.bindings;
               pre_allocations = (id, size) :: rev_bindings.pre_allocations
             }
           | Function ->
+            if do_print
+            then Format.eprintf "Static Function: %a@." Ident.print id;
             begin match def with
             | Lfunction lfun ->
               { rev_bindings with
@@ -951,6 +966,7 @@ let compile_letrec input_bindings body =
                 { functions
                 ; pre_allocations = (ctx_id, block_size) :: rev_bindings.pre_allocations
                 ; bindings = Patch (ctx_id, block_size, lam) :: rev_bindings.bindings
+                ; constants = rev_bindings.constants
                 }
               end
             end
@@ -1000,7 +1016,12 @@ let compile_letrec input_bindings body =
         Llet(Strict, Pgenval, id, alloc, body))
       body_with_functions all_bindings_rev.pre_allocations
   in
-  body_with_pre_allocations
+  let body_with_constants =
+    List.fold_left (fun body (id, lam) ->
+        Llet(Strict, Pgenval, id, lam, body))
+      body_with_pre_allocations all_bindings_rev.constants
+  in
+  body_with_constants
 
 module For_class = struct
   type rec_bindings =
