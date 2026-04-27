@@ -72,6 +72,8 @@ module type S =
     val of_seq : (key * 'a) Seq.t -> 'a t
   end
 
+external phys_same : 'a -> 'b -> bool = "%eq"
+
 module Make(Ord: OrderedType) = struct
 
     type key = Ord.t
@@ -317,11 +319,13 @@ module Make(Ord: OrderedType) = struct
     let rec map f = function
         Empty ->
           Empty
-      | Node {l; v; d; r; h} ->
+      | Node {l; v; d; r; h} as node ->
           let l' = map f l in
           let d' = f d in
           let r' = map f r in
-          Node{l=l'; v; d=d'; r=r'; h}
+          if phys_same l l' && phys_same d d' && phys_same r r'
+          then Obj.magic node
+          else Node{l=l'; v; d=d'; r=r'; h}
 
     let rec mapi f = function
         Empty ->
