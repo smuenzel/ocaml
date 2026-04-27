@@ -427,17 +427,34 @@ module Make(Ord: OrderedType) = struct
       | (Node {l=l1; v=v1; d=d1; r=r1; h=h1},
          Node {l=l2; v=v2; d=d2; r=r2; h=h2}) ->
           if h1 >= h2 then
-            let (l2, d2, r2) = split v1 s2 in
-            let l = union f l1 l2 and r = union f r1 r2 in
-            match d2 with
-            | None -> join l v1 d1 r
-            | Some d2 -> concat_or_join l v1 (f v1 d1 d2) r
+            if h2 = 1 then
+              (* s2 is a singleton — avoid split *)
+              (match find_opt v2 s1 with
+               | None -> add v2 d2 s1
+               | Some d1' ->
+                   (match f v2 d1' d2 with
+                    | None -> remove v2 s1
+                    | Some d -> if d == d1' then s1 else add v2 d s1))
+            else
+              let (l2, d2, r2) = split v1 s2 in
+              let l = union f l1 l2 and r = union f r1 r2 in
+              (match d2 with
+               | None -> join l v1 d1 r
+               | Some d2 -> concat_or_join l v1 (f v1 d1 d2) r)
+          else
+          if h1 = 1 then
+            (match find_opt v1 s2 with
+             | None -> add v1 d1 s2
+             | Some d2' ->
+                 (match f v1 d1 d2' with
+                  | None -> remove v1 s2
+                  | Some d -> if d == d2' then s2 else add v1 d s2))
           else
             let (l1, d1, r1) = split v2 s1 in
             let l = union f l1 l2 and r = union f r1 r2 in
-            match d1 with
-            | None -> join l v2 d2 r
-            | Some d1 -> concat_or_join l v2 (f v2 d1 d2) r
+            (match d1 with
+             | None -> join l v2 d2 r
+             | Some d1 -> concat_or_join l v2 (f v2 d1 d2) r)
 
     let rec filter p = function
         Empty -> Empty

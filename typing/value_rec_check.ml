@@ -1402,10 +1402,37 @@ let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.ex
   let exprs = Ident.Map.of_list exprs in
   let exprs = Ident.Map.map (fun (expr, a) -> classify_expression expr, expression expr Return, a) exprs in
   let rec update (exprs : _ Ident.Map.t) =
-    (*
     let modified = ref false in
-       *)
     let exprs' =
+      List.fold_left
+        (fun exprs id ->
+           Ident.Map.update id
+             (function
+               | None -> None
+               | Some (rkind, ty, a) as input ->
+                   let ty' =
+                     Misc.Stdlib.List.reduce_balanced_exn
+                       ~f:Env.join
+                       (Ident.Map.fold
+                          (fun id (_rkind, ty', _a) acc ->
+                             let mode = Env.find id ty in
+                             (Env.compose mode ty') :: acc
+                          )
+                          exprs
+                          [ ty ])
+                   in
+                   if Env.equal ty ty'
+                   then input
+                   else begin
+                     modified := true;
+                     Some (rkind, ty', a)
+                   end
+             )
+             exprs
+        )
+        exprs
+        idlist
+        (*
       Ident.Map.map
         (fun (rkind, ty, a) ->
            let ty' =
@@ -1459,13 +1486,15 @@ let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.ex
            rkind, ty', a
         )
         exprs
+           *)
     in
+    (*
     if Ident.Map.equal (fun (_, e, _) (_, e', _) -> Env.equal e e') exprs exprs'
     then exprs'
-      (*
+       *)
     if !modified
-         *)
-    else update exprs'
+    then update exprs'
+    else exprs'
   in
   let exprs = update exprs in
   let nodes, edges =
