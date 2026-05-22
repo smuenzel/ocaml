@@ -196,6 +196,7 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
+  | Letrec_cycle of Ident.t list
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -3430,16 +3431,97 @@ and is_nonexpansive_arg = function
 
 let maybe_expansive e = not (is_nonexpansive e)
 
-let annotate_recursive_bindings env valbinds =
+(*
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+   *)
+
+let annotate_and_sort_recursive_bindings env valbinds =
   let ids = let_bound_idents valbinds in
-  List.map
-    (fun {vb_pat; vb_expr; vb_rec_kind = _; vb_attributes; vb_loc} ->
-       match (Value_rec_check.is_valid_recursive_expression ids vb_expr) with
-       | None ->
-         raise(Error(vb_expr.exp_loc, env, Illegal_letrec_expr))
-       | Some vb_rec_kind ->
-         { vb_pat; vb_expr; vb_rec_kind; vb_attributes; vb_loc})
-    valbinds
+  let valbinds' =
+    List.map
+      (fun ({vb_pat = _; vb_expr; vb_rec_kind = _; vb_attributes = _; vb_loc = _} as vb)->
+         let name = match let_bound_idents [vb] with
+           | [name] -> name | _ -> assert false in
+         name, (vb_expr, vb)
+      )
+      valbinds
+  in
+  match Value_rec_check.sort_recursive_expressions ids valbinds' with
+  | Cycle_in_definition (repr, cycle) ->
+      raise(Error(repr.vb_loc, env, Letrec_cycle cycle))
+  | Sorted_definition sorted ->
+      List.rev_map
+        (fun (_name, vb_rec_kind, vb) ->
+           { vb with vb_rec_kind }
+        )
+        sorted
+  (*
+  let type vb_link =
+        { vb : value_binding
+        ; dependencies : Ident.Set.t
+        ; name : Ident.t
+        }
+  in
+  let links =
+    List.map
+      (fun ({vb_pat; vb_expr; vb_rec_kind = _; vb_attributes; vb_loc} as vb)->
+         let name = match let_bound_idents [vb] with
+           | [name] -> name | _ -> assert false in
+         let vb_rec_kind, dependencies =
+           Value_rec_check.expression_dependencies ids vb_expr
+         in
+         let dependencies = Ident.Set.of_list dependencies in
+         if Ident.Set.mem name dependencies
+         then raise(Error(vb_expr.exp_loc, env, Illegal_letrec_expr));
+         { vb = { vb_pat; vb_expr; vb_rec_kind; vb_attributes; vb_loc}
+         ; dependencies
+         ; name
+         }
+      )
+      valbinds
+  in
+  let nodes =
+    List.fold_left
+      (fun acc ({ name; _ } as vb_link) ->
+         Ident.Map.add_to_list name vb_link acc
+      )
+      Ident.Map.empty links
+  in
+  let edges =
+    List.fold_left
+      (fun acc ({ dependencies; _ } as vb_link) ->
+         Ident.Set.fold
+           (fun name acc ->
+              List.fold_left
+                (fun acc to_ ->
+                   let edge =
+                     { Topological_sort.
+                       from = vb_link
+                     ; to_
+                     }
+                   in
+                   if do_print
+                   then Format.eprintf "from=%a to=%a@." Ident.print vb_link.name Ident.print to_.name;
+                   edge :: acc
+                )
+                acc
+                (Ident.Map.find name nodes)
+           )
+           dependencies acc
+      )
+      [] links
+  in
+  let nodes_list = Ident.Map.fold (fun _ vb acc -> List.rev_append vb acc) nodes [] in
+  match Topological_sort.sort nodes_list edges with
+  | Cycle cycle ->
+      let cycle =
+        List.map (fun vb_link -> vb_link.name) cycle
+      in
+      let loc_node = List.hd (Ident.Map.find (List.hd cycle) nodes) in
+      raise(Error(loc_node.vb.vb_expr.exp_loc, env, Letrec_cycle cycle))
+  | Sorted sorted ->
+      List.rev_map (fun vb_link -> vb_link.vb) sorted
+      *)
 
 let check_recursive_class_bindings env ids exprs =
   List.iter
@@ -4358,7 +4440,7 @@ and type_expect_
           let pat_exp_list, new_env = type_let_rec env spat_sexp_list in
           let body = type_expect new_env sbody ty_expected_explained in
           let pat_exp_list =
-            annotate_recursive_bindings env pat_exp_list
+            annotate_and_sort_recursive_bindings env pat_exp_list
           in
           pat_exp_list, body
         | Nonrecursive ->
@@ -8239,6 +8321,13 @@ let report_error ~loc env =
       Location.errorf ~loc
         "This kind of expression is not allowed as right-hand side of %a"
         Style.inline_code "let rec"
+  | Letrec_cycle ids ->
+      let pp_sep ppf () = fprintf ppf "-> " in
+      let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
+      Location.errorf ~loc
+        "The following recursive definitions form a cycle:@ %a"
+        (pp_print_list ~pp_sep pp_ident)
+        ids
   | Illegal_class_expr ->
       Location.errorf ~loc
         "This kind of recursive class expression is not allowed"

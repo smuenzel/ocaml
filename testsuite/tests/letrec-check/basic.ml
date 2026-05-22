@@ -24,24 +24,24 @@ val x : unit = ()
 
 let rec x = let y = () in x;;
 [%%expect{|
-Line 1, characters 12-27:
+Line 1, characters 0-27:
 1 | let rec x = let y = () in x;;
-                ^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 let rec x = [y]
 and y = let x = () in x;;
 [%%expect{|
-val x : unit list = [()]
 val y : unit = ()
+val x : unit list = [()]
 |}];;
 
 let rec x = [y]
 and y = let rec x = () in x;;
 [%%expect{|
-val x : unit list = [()]
 val y : unit = ()
+val x : unit list = [()]
 |}];;
 
 let rec x =
@@ -50,54 +50,52 @@ let rec x =
 and y =
   [x];;
 [%%expect{|
-val x : unit -> 'a = <fun>
 val y : (unit -> 'a) list = [<fun>]
+val x : unit -> 'a = <fun>
 |}];;
 
 let rec x = [|y|] and y = 0;;
 [%%expect{|
-val x : int array = [|0|]
 val y : int = 0
+val x : int array = [|0|]
 |}];;
 
 
 let rec x = (y, y)
 and y = fun () -> ignore x;;
 [%%expect{|
-val x : (unit -> unit) * (unit -> unit) = (<fun>, <fun>)
 val y : unit -> unit = <fun>
+val x : (unit -> unit) * (unit -> unit) = (<fun>, <fun>)
 |}];;
 
 let rec x = Some y
 and y = fun () -> ignore x
 ;;
 [%%expect{|
-val x : (unit -> unit) option = Some <fun>
 val y : unit -> unit = <fun>
+val x : (unit -> unit) option = Some <fun>
 |}];;
 
 let rec x = ignore x;;
 [%%expect{|
-Line 1, characters 12-20:
+Line 1, characters 0-20:
 1 | let rec x = ignore x;;
-                ^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 let rec x = y 0 and y _ = ();;
 [%%expect{|
-Line 1, characters 12-15:
-1 | let rec x = y 0 and y _ = ();;
-                ^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : int -> unit = <fun>
+val x : unit = ()
 |}];;
 
 let rec b = if b then true else false;;
 [%%expect{|
-Line 1, characters 12-37:
+Line 1, characters 0-37:
 1 | let rec b = if b then true else false;;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: b-> b
 |}];;
 
 let rec x = function
@@ -108,42 +106,42 @@ and y = function
   | _ :: _ -> ignore (x None)
     ;;
 [%%expect{|
-val x : 'a option -> unit = <fun>
 val y : 'a list -> unit = <fun>
+val x : 'a option -> unit = <fun>
 |}];;
 
 (* used to be accepted, see PR#7696 *)
 let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
 [%%expect{|
-Line 1, characters 12-35:
+Line 1, characters 0-59:
 1 | let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
-                ^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 (* this is rejected as `c` will be dereferenced during the copy,
    and is not yet fully defined *)
 let rec c = { c with Complex.re = 1.0 };;
 [%%expect{|
-Line 1, characters 12-39:
+Line 1, characters 0-39:
 1 | let rec c = { c with Complex.re = 1.0 };;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: c-> c
 |}];;
 
 let rec x = `A y
 and y = fun () -> ignore x
 ;;
 [%%expect{|
-val x : [> `A of unit -> unit ] = `A <fun>
 val y : unit -> unit = <fun>
+val x : [> `A of unit -> unit ] = `A <fun>
 |}];;
 
 let rec x = { contents = y }
 and y = fun () -> ignore x;;
 [%%expect{|
-val x : (unit -> unit) ref = {contents = <fun>}
 val y : unit -> unit = <fun>
+val x : (unit -> unit) ref = {contents = <fun>}
 |}];;
 
 let r = ref (fun () -> ())
@@ -155,18 +153,18 @@ val x : unit -> unit = <fun>
 
 let rec x = fun () -> y.contents and y = { contents = 3 };;
 [%%expect{|
-val x : unit -> int = <fun>
 val y : int ref = {contents = 3}
+val x : unit -> int = <fun>
 |}];;
 
 let r = ref ()
 let rec x = r := x;;
 [%%expect{|
 val r : unit ref = {contents = ()}
-Line 2, characters 12-18:
+Line 2, characters 0-18:
 2 | let rec x = r := x;;
-                ^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 let rec x =
@@ -175,11 +173,10 @@ let rec x =
   done
 and y = x; ();;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..for i = 0 to 1 do
-3 |     let z = y in ignore z
-4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Line 5, characters 0-13:
+5 | and y = x; ();;
+    ^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: y-> y
 |}];;
 
 let rec x =
@@ -188,11 +185,8 @@ let rec x =
   done
 and y = 10;;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..for i = 0 to y do
-3 |     ()
-4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : int = 10
+val x : unit = ()
 |}];;
 
 let rec x =
@@ -201,11 +195,8 @@ let rec x =
   done
 and y = 0;;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..for i = y to 10 do
-3 |     ()
-4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : int = 0
+val x : unit = ()
 |}];;
 
 let rec x =
@@ -214,11 +205,12 @@ let rec x =
   done
 and y = x; ();;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..while false do
+Lines 1-4, characters 0-6:
+1 | let rec x =
+2 |   while false do
 3 |     let y = x in ignore y
 4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 let rec x =
@@ -227,11 +219,8 @@ let rec x =
   done
 and y = false;;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..while y do
-3 |     ()
-4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : bool = false
+val x : unit = ()
 |}];;
 
 let rec x =
@@ -240,29 +229,26 @@ let rec x =
   done
 and y = false;;
 [%%expect{|
-Lines 2-4, characters 2-6:
-2 | ..while y do
+Lines 1-4, characters 0-6:
+1 | let rec x =
+2 |   while y do
 3 |     let y = x in ignore y
 4 |   done
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 
 
 let rec x = y.contents and y = { contents = 3 };;
 [%%expect{|
-Line 1, characters 12-22:
-1 | let rec x = y.contents and y = { contents = 3 };;
-                ^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : int ref = {contents = 3}
+val x : int = 3
 |}];;
 
 let rec x = assert y and y = true;;
 [%%expect{|
-Line 1, characters 12-20:
-1 | let rec x = assert y and y = true;;
-                ^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+val y : bool = true
+val x : unit = ()
 |}];;
 
 (* Recursively constructing arrays of known non-float type is permitted *)
@@ -293,10 +279,10 @@ let _ =
   in (x, y)
 ;;
 [%%expect{|
-Line 6, characters 14-26:
+Line 6, characters 2-26:
 6 |   let rec x = Stdlib.ref y
-                  ^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+      ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> x
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
@@ -310,10 +296,10 @@ let foo p x =
   (f, g)
 ;;
 [%%expect{|
-Line 3, characters 4-52:
-3 |     if p then (fun y -> x + g y) else (fun y -> g y)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Lines 4-5, characters 2-56:
+4 | ..and g =
+5 |     if not p then (fun y -> x - f y) else (fun y -> f y)
+Error: The following recursive definitions form a cycle: g-> g
 |}];;
 
 let rec x =
@@ -323,11 +309,10 @@ let rec x =
 and y = match x with
   z -> ("y", z);;
 [%%expect{|
-Lines 2-4, characters 2-30:
-2 | ..match let _ = y in raise Not_found with
-3 |     _ -> "x"
-4 |   | exception Not_found -> "z"
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Lines 5-6, characters 0-15:
+5 | and y = match x with
+6 |   z -> ("y", z)..
+Error: The following recursive definitions form a cycle: y-> y
 |}];;
 
 
@@ -349,11 +334,18 @@ let rec wrong =
   and y = ref wrong
   in ref ("foo" ^ ! ! !x);;
 [%%expect{|
-Lines 10-12, characters 2-25:
-10 | ..let rec x = ref y
+Lines 1-12, characters 0-25:
+ 1 | let rec wrong =
+ 2 |   (* x depends on y,
+ 3 |      and y depends on wrong,
+ 4 |      so it is important to notice that x transitively depends on wrong;
+ 5 |
+...
+ 9 |   *)
+10 |   let rec x = ref y
 11 |   and y = ref wrong
 12 |   in ref ("foo" ^ ! ! !x)..
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Error: The following recursive definitions form a cycle: wrong-> wrong
 |}]
 
 (* in this case, x does not depend on y, so everything is fine *)

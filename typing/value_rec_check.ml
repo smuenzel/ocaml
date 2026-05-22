@@ -351,6 +351,13 @@ module Mode = struct
         in arbitrary ways. Such a value must be fully defined at the point
         of usage, it cannot be defined mutually-recursively with its context. *)
 
+  let to_string = function
+    | Ignore -> "Ignore"
+    | Delay -> "Delay"
+    | Guard -> "Guard"
+    | Return -> "Return"
+    | Dereference -> "Dereference"
+
   let equal = ((=) : t -> t -> bool)
 
   (* Lower-ranked modes demand/use less of the variable/expression they qualify
@@ -447,24 +454,52 @@ end = struct
 
   let empty = M.empty
 
+  (*
   let join (x: t) (y: t) =
-    M.fold
-      (fun (id: Ident.t) (v: Mode.t) (tbl: t) ->
-         let v' = find id tbl in
-         M.add id (Mode.join v v') tbl)
+    M.merge
+      (fun _id left right ->
+         match left, right with
+         | Some _, None -> left
+         | None, Some _ -> right
+         | Some v1, Some v2 -> Some (Mode.join v1 v2)
+         | None, None -> None)
+      x y
+     *)
+
+  let join (x: t) (y: t) =
+    M.union
+      (fun _id v1 v2 -> Some (Mode.join v1 v2))
       x y
 
-  let join_list li = List.fold_left join empty li
+  let join_list li =
+    match li with
+      [] -> empty
+    | _ ->
+        Misc.Stdlib.List.reduce_balanced_exn ~f:join li
 
   let compose m env =
     M.map (Mode.compose m) env
 
   let single id mode = M.add id mode empty
 
+  let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
+  let px env li =
+    if do_print
+    then begin
+      Format.eprintf "deps:@.";
+      List.iter (fun id ->
+          Format.eprintf "%a mode=%s@."
+            Ident.print id
+            (Mode.to_string (find id env))) li
+    end
+
   let unguarded env li =
+    px env li;
     List.filter (fun id -> Mode.rank (find id env) > Mode.rank Guard) li
 
   let dependent env li =
+    px env li;
     List.filter (fun id -> Mode.rank (find id env) > Mode.rank Ignore) li
 
   let remove = M.remove
@@ -1339,6 +1374,170 @@ and is_destructuring_pattern : type k . k general_pattern -> bool =
     | Tpat_exception _ -> false
     | Tpat_or (l,r,_) ->
         is_destructuring_pattern l || is_destructuring_pattern r
+
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
+let expression_dependencies idlist expr =
+  let rkind = classify_expression expr in
+  let ty = expression expr Return in
+  let dependencies =
+    match rkind with
+    | Static -> Env.unguarded ty idlist
+    | Dynamic ->
+        (Env.dependent ty idlist) @ (Env.unguarded ty idlist)
+        |> List.sort_uniq Ident.compare
+  in
+  if do_print
+  then begin
+    Format.eprintf "expression_dependencies %a@."
+      (Format.pp_print_list Ident.print) dependencies
+  end;
+  rkind, dependencies
+
+type 'a sort_result =
+  | Cycle_in_definition of 'a * Ident.t list
+  | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'a) list
+
+let sort_recursive_expressions (type a) idlist (exprs : (Ident.t * (Typedtree.expression * a)) list) : a sort_result =
+  let exprs = Ident.Map.of_list exprs in
+  let exprs = Ident.Map.map (fun (expr, a) -> classify_expression expr, expression expr Return, a) exprs in
+  let rec update (exprs : _ Ident.Map.t) =
+    let modified = ref false in
+    let exprs' =
+      List.fold_left
+        (fun exprs id ->
+           Ident.Map.update id
+             (function
+               | None -> None
+               | Some (rkind, ty, a) as input ->
+                   let ty' =
+                     Misc.Stdlib.List.reduce_balanced_exn
+                       ~f:Env.join
+                       (Ident.Map.fold
+                          (fun id (_rkind, ty', _a) acc ->
+                             let mode = Env.find id ty in
+                             (Env.compose mode ty') :: acc
+                          )
+                          exprs
+                          [ ty ])
+                   in
+                   if Env.equal ty ty'
+                   then input
+                   else begin
+                     modified := true;
+                     Some (rkind, ty', a)
+                   end
+             )
+             exprs
+        )
+        exprs
+        idlist
+        (*
+      Ident.Map.map
+        (fun (rkind, ty, a) ->
+           let ty' =
+             (*
+             Misc.Stdlib.List.reduce_balanced_exn
+               ~f:Env.join
+               (ty::
+                (List.map
+                   (fun id ->
+                      let mode = Env.find id ty in
+                      Env.compose mode (Misc.snd3 (Ident.Map.find id exprs)))
+                   idlist
+                ))
+                *)
+             Misc.Stdlib.List.reduce_balanced_exn
+               ~f:Env.join
+               (Ident.Map.fold
+                  (fun id (_rkind, ty', _a) acc ->
+                     let mode = Env.find id ty in
+                     (Env.compose mode ty') :: acc
+                  )
+                  exprs
+                  [ ty ])
+             (*
+             Ident.Map.fold
+               (fun id (_rkind, ty', _a) acc ->
+                  let mode = Env.find id ty in
+                  Env.join
+                    acc
+                    (Env.compose mode ty')
+               )
+               exprs
+               ty
+                *)
+               (*
+
+             List.fold_left
+               (fun acc id ->
+                  let mode = Env.find id ty in
+                  Env.join
+                    acc
+                    (Env.compose mode (Misc.snd3 (Ident.Map.find id exprs))))
+               ty
+               idlist
+                  *)
+           in
+           (*
+           if not (Env.equal ty ty')
+           then modified := true;
+              *)
+           rkind, ty', a
+        )
+        exprs
+           *)
+    in
+    (*
+    if Ident.Map.equal (fun (_, e, _) (_, e', _) -> Env.equal e e') exprs exprs'
+    then exprs'
+       *)
+    if !modified
+    then update exprs'
+    else exprs'
+  in
+  let exprs = update exprs in
+  let nodes, edges =
+    Ident.Map.fold
+      (fun id (rkind, ty, _a) (nodes, edges) ->
+         let dependencies =
+           match (rkind : Value_rec_types.recursive_binding_kind) with
+           | Static -> Env.unguarded ty idlist
+           | Dynamic ->
+               (Env.dependent ty idlist) @ (Env.unguarded ty idlist)
+               |> List.sort_uniq Ident.compare
+         in
+         let new_edges =
+           List.map
+             (fun dep ->
+                { Topological_sort.
+                  from = id
+                ; to_ = dep
+                }
+             )
+             dependencies
+         in
+         id :: nodes
+       , List.append new_edges edges
+      )
+      exprs
+      ([], [])
+  in
+  match Topological_sort.sort nodes edges with
+  | Cycle ((node :: _) as node_cycle) ->
+      let (_, _, repr_node) = Ident.Map.find node exprs in
+      Cycle_in_definition (repr_node, node_cycle)
+  | Cycle [] -> assert false
+  | Sorted node_sorted ->
+      let sorted =
+        List.map
+          (fun id ->
+             let rkind, _ty, a = Ident.Map.find id exprs in
+             id, rkind, a
+          )
+          node_sorted
+      in
+      Sorted_definition sorted
 
 let is_valid_recursive_expression idlist expr : sd option =
   match expr.exp_desc with
