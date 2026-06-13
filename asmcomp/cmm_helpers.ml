@@ -27,6 +27,23 @@ let bind name arg fn =
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _ -> fn arg
   | _ -> let id = V.create_local name in Clet(VP.create id, arg, fn (Cvar id))
 
+let bind_list name args fn =
+  let lets, vars =
+    List.map
+      (function
+        | Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _ as arg ->
+            (fun x -> x), arg
+        | arg ->
+            let id = V.create_local name in
+            (fun next -> Clet(VP.create id, arg, next)), Cvar id)
+      args
+    |> List.split
+  in
+  List.fold_right
+    (fun f acc -> f acc)
+    lets (fn vars)
+
+
 let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _], _) -> fn arg
@@ -1781,10 +1798,27 @@ let generic_apply mut clos args dbg =
           dbg))
   | _ ->
       let arity = List.length args in
-      let cargs =
-        Cconst_symbol(apply_function_sym arity, dbg) :: args @ [clos]
-      in
-      Cop(Capply typ_val, cargs, dbg)
+      bind "fun" clos (fun clos ->
+          bind_list "args" args (fun args ->
+              let all_args = args @ [clos] in
+              Cifthenelse(
+                Cop(Ccmpi Ceq, [Cop(Casr,
+                                    [get_field_gen Asttypes.Mutable clos 1 (dbg);
+                                     Cconst_int(pos_arity_in_closinfo, dbg)], dbg);
+                                Cconst_int(arity, dbg)], dbg),
+                dbg,
+                Cop(Capply typ_val,
+                    get_field_codepointer Asttypes.Mutable clos 2 (dbg)
+                    :: all_args,
+                    dbg),
+                dbg,
+                Cop(Capply typ_val,
+                    Cconst_symbol(apply_function_sym arity, dbg) :: all_args
+                   , dbg),
+                dbg
+              )
+            )
+        )
 
 let send kind met obj args dbg =
   let call_met obj args clos =
