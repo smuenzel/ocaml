@@ -1801,22 +1801,21 @@ let generic_apply mut clos args dbg =
       bind "fun" clos (fun clos ->
           bind_list "args" args (fun args ->
               let all_args = args @ [clos] in
-              Cifthenelse(
-                Cop(Ccmpi Ceq, [Cop(Casr,
-                                    [get_field_gen Asttypes.Mutable clos 1 (dbg);
-                                     Cconst_int(pos_arity_in_closinfo, dbg)], dbg);
-                                Cconst_int(arity, dbg)], dbg),
-                dbg,
-                Cop(Capply typ_val,
-                    get_field_codepointer Asttypes.Mutable clos 2 (dbg)
-                    :: all_args,
-                    dbg),
-                dbg,
-                Cop(Capply typ_val,
-                    Cconst_symbol(apply_function_sym arity, dbg) :: all_args
-                   , dbg),
-                dbg
-              )
+              bind "cfun"
+                (Cifthenelse(
+                    Cop(Ccmpi Ceq, [Cop(Casr,
+                                        [get_field_gen Asttypes.Mutable clos 1 (dbg);
+                                         Cconst_int(pos_arity_in_closinfo, dbg)], dbg);
+                                    Cconst_int(arity, dbg)], dbg),
+                    dbg,
+                    get_field_codepointer Asttypes.Mutable clos 2 (dbg),
+                    dbg,
+                    Cconst_symbol(apply_function_sym arity, dbg),
+                    dbg
+                  ))
+                (fun cfun ->
+                   Cop(Capply typ_val, cfun :: all_args, dbg)
+                )
             )
         )
 
