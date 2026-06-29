@@ -1934,22 +1934,7 @@ let apply_function_body arity =
            app_fun newclos (n+1))
     end in
   let args = Array.to_list arg in
-  let all_args = args @ [clos] in
-  (args, clos,
-   if arity = 1 then app_fun clos 0 else
-   Cifthenelse(
-   Cop(Ccmpi Ceq, [Cop(Casr,
-                       [get_field_gen Asttypes.Mutable (Cvar clos) 1 (dbg());
-                        Cconst_int(pos_arity_in_closinfo, dbg())], dbg());
-                   Cconst_int(arity, dbg())], dbg()),
-   dbg (),
-   Cop(Capply typ_val,
-       get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ())
-       :: List.map (fun s -> Cvar s) all_args,
-       dbg ()),
-   dbg (),
-   app_fun clos 0,
-   dbg ()))
+  (args, clos, app_fun clos 0)
 
 let send_function arity =
   let dbg = placeholder_dbg in
