@@ -142,7 +142,9 @@ let mem__imp s =
 let rel_plt s =
   if windows && !Clflags.dlcode then mem__imp s
   else
-    sym (if use_plt then emit_symbol s ^ "@PLT" else emit_symbol s)
+    if use_plt
+    then mem64_rip QWORD (emit_symbol s ^ "@GOTPCREL")
+    else sym (emit_symbol s)
 
 let emit_call s = I.call (rel_plt s)
 
