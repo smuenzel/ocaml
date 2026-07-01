@@ -19,6 +19,8 @@ open Asttypes
 
 (* Type expressions for the core language *)
 
+type nil = unit
+
 type transient_expr =
   { mutable desc: type_desc;
     mutable level: int;
@@ -38,7 +40,7 @@ and type_desc =
   | Tconstr of Path.t * type_expr list * abbrev_memo ref
   | Tobject of type_expr * (Path.t * type_expr list) option ref
   | Tfield of string * field_kind * type_expr * type_expr
-  | Tnil
+  | Tnil of nil
   | Tvariant of row_desc
   | Tunivar of string option
   | Tpoly of type_expr * type_expr list
@@ -95,6 +97,8 @@ and _ commutable_gen =
     Cok      : [> `some] commutable_gen
   | Cunknown : [> `none] commutable_gen
   | Cvar : {mutable commu: any commutable_gen} -> [> `var] commutable_gen
+
+let nil = Tnil ()
 
 type tfunctor = {
   id_us : Ident.Unscoped.t;

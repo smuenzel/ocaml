@@ -193,7 +193,7 @@ let apply_type_function params args body =
                     Tsubst (ty, None) -> ty
                     (* TODO: is this case possible?
                        possibly an interaction with (copy more) below? *)
-                  | Tconstr _ | Tnil ->
+                  | Tconstr _ | Tnil _ ->
                       copy more
                   | Tvar _ | Tunivar _ ->
                       newgenty mored
@@ -226,7 +226,7 @@ let apply_type_function params args body =
           let desc' = Tfunctor (l, id, pack', copy t2) in
           Transient_expr.set_stub_desc t desc';
           t
-      | ( Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil | Tlink _ | Tunivar _
+      | ( Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil _ | Tlink _ | Tunivar _
         | Tpoly _ | Tconstr _ | Tobject _ | Tpackage _ | Texpand _ ) as desc ->
           let t = newgenstub ~scope:(get_scope ty) in
           For_copy.redirect_desc copy_scope ty (Tsubst (t, None));
@@ -323,7 +323,7 @@ let rec typexp copy_scope s ty =
               let more' =
                 match mored with
                   Tsubst (ty, None) -> ty
-                | Tconstr _ | Tnil -> typexp copy_scope s more
+                | Tconstr _ | Tnil _ -> typexp copy_scope s more
                 | Tunivar _ | Tvar _ ->
                     if s.for_saving then newpersty (norm mored)
                     else if dup && is_Tvar more then newgenty mored
@@ -349,7 +349,7 @@ let rec typexp copy_scope s ty =
           end
       | Tfield(_label, kind, _t1, t2) when field_kind_repr kind = Fabsent ->
           Tlink (typexp copy_scope s t2)
-      | Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil | Tlink _
+      | Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil _ | Tlink _
       | Tunivar _ | Tpoly _ | Tsubst _ | Texpand _ ->
           copy_type_desc (typexp copy_scope s) desc
     in

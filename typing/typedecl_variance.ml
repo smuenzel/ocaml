@@ -107,7 +107,7 @@ let compute_variance env visited vari ty =
         compute_same (row_more row)
     | Tpoly (ty, _) ->
         compute_same ty
-    | Tvar _ | Tnil | Tunivar _ -> ()
+    | Tvar _ | Tnil _ | Tunivar _ -> ()
     | Tpackage pack ->
         let v = Variance.(compose vari full) in
         List.iter

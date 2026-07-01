@@ -87,7 +87,7 @@ let simpl_class_type t =
         (* we delete vals and methods in order to not print them when
            displaying the type *)
       let self_row =
-        Btype.newty2 Tnil ~level:0
+        Btype.newty2 Types.nil ~level:0
       in
       let tself =
         let t = cs.csig_self in

@@ -226,7 +226,7 @@ let fixed_explanation row =
   | None ->
       let ty = row_more row in
       match get_desc ty with
-      | Tvar _ | Tnil -> None
+      | Tvar _ | Tnil _ -> None
       | Tunivar _ -> Some (Univar ty)
       | Tconstr (p,_,_) -> Some (Reified p)
       | _ -> assert false
@@ -262,7 +262,7 @@ let proxy ty =
         match get_desc ty with
           Tfield (_, _, _, ty) -> proxy_obj ty
         | Tvar _ | Tunivar _ | Tconstr _ -> ty
-        | Tnil -> ty
+        | Tnil _ -> ty
         | _ -> assert false
       in proxy_obj ty
   | _ -> ty
@@ -327,7 +327,7 @@ let fold_row f init row =
       (row_fields row)
   in
   match get_desc (row_more row) with
-  | Tvar _ | Tunivar _ | Tsubst _ | Tconstr _ | Tnil ->
+  | Tvar _ | Tunivar _ | Tsubst _ | Tconstr _ | Tnil _ ->
     begin match
       Option.map (fun (_,l) -> List.fold_left f result l) (row_name row)
     with
@@ -356,7 +356,7 @@ let fold_type_desc f init = function
   | Tfield (_, _, ty1, ty2) ->
       let result = f init ty1 in
       f result ty2
-  | Tnil                -> init
+  | Tnil _              -> init
   | Tunivar _           -> init
   | Tpoly (ty, tyl)     ->
       let result = f init ty in
@@ -575,7 +575,7 @@ let copy_type_desc ?(keep_names=false) f = function
   | Tfield (p, k, ty1, ty2) ->
       Tfield (p, field_kind_internal_repr k, f ty1, f ty2)
       (* the kind is kept shared, with indirections removed for performance *)
-  | Tnil                -> Tnil
+  | Tnil _ as ty        -> ty
   | Tunivar _ as ty     -> ty (* always keep the name *)
   | Tpoly (ty, tyl)     ->
       let tyl = List.map f tyl in

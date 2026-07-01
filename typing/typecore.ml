@@ -278,7 +278,7 @@ end = struct
   let deep_copy_desc id_map copy_with_map =
     let copy x = copy_with_map id_map x in
     function
-    | Tvar _ | Tnil | Tunivar _ as desc -> desc
+    | Tvar _ | Tnil _ | Tunivar _ as desc -> desc
     | Tvariant _ as desc ->
         (* The row_desc does contain some type exprs, but:
            - the absence of specific handling hasn't been reported as

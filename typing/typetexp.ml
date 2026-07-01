@@ -728,7 +728,7 @@ and transl_type_aux env ~row_context ~aliased ~policy styp =
         create_row ~fields ~more ~closed:(closed = Closed) ~fixed:None ~name
       in
       let more =
-        if Btype.static_row (make_row (newvar ())) then newty Tnil else
+        if Btype.static_row (make_row (newvar ())) then newty Types.nil else
            TyVarEnv.new_var policy
       in
       more_slot := Some more;
@@ -841,7 +841,7 @@ and transl_fields env ~policy ~row_context o fields =
         let t = expand_head env cty.ctyp_type in
         match get_desc t, nm with
           Tobject (tf, _), _
-          when (match get_desc tf with Tfield _ | Tnil -> true | _ -> false) ->
+          when (match get_desc tf with Tfield _ | Tnil _ -> true | _ -> false) ->
             begin
               if opened_object t then
                 Error.log_and_raise sty.ptyp_loc env (Opened_object nm);
@@ -850,7 +850,7 @@ and transl_fields env ~policy ~row_context o fields =
                 | Tfield (s, _k, ty1, ty2) ->
                     add_typed_field sty.ptyp_loc s ty1;
                     iter_add ty2
-                | Tnil -> ()
+                | Tnil _ -> ()
                 | _ -> assert false
               in
               iter_add tf;
@@ -867,7 +867,7 @@ and transl_fields env ~policy ~row_context o fields =
   let fields = HMap.fold (fun s ty l -> (s, ty) :: l) !hfields [] in
   let ty_init =
      match o with
-     | Closed -> newty Tnil
+     | Closed -> newty Types.nil
      | Open -> TyVarEnv.new_var policy
   in
   let ty = List.fold_left (fun ty (s, ty') ->

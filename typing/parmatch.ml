@@ -746,7 +746,7 @@ let close_variant env row =
         | Rabsent | Rpresent _ -> (nm, static))
       (orig_name, true) fields in
   if not closed || name != orig_name then begin
-    let more' = if static then Btype.newgenty Tnil else Btype.newgenvar () in
+    let more' = if static then Btype.newgenty Types.nil else Btype.newgenvar () in
     (* this unification cannot fail *)
     Ctype.unify env more
       (Btype.newgenty

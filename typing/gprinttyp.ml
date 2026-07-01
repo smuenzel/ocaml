@@ -704,7 +704,7 @@ module Digraph = struct
               mk "[obj(%a)]" pp_path p
           | Some (p, (rv_or_nil :: tl)) ->
               match Types.get_desc rv_or_nil with
-              | Tnil ->
+              | Tnil _ ->
                   mk "[obj(%a)]" pp_path p |> std_edge t |> numbered tl
               | _ ->
                   mk "[obj(#%a)]" pp_path p
@@ -723,7 +723,7 @@ module Digraph = struct
         group_fields ~params ~prev_id:id ~lvl
           dg.elts dg.graph empty_subgraph
           ~color ~id ~desc
-    | Types.Tnil -> mk "[Nil]"
+    | Types.Tnil _ -> mk "[Nil]"
     | Types.Tlink t -> add_tynode Decoration.(make [Style Dash]) |> std_edge t
     | Types.Texpand (t, _, _) ->
         add_tynode Decoration.(make [Style Dash]) |> std_edge t
@@ -826,7 +826,7 @@ module Digraph = struct
           add (labelr "row variable") (Edge(prev_id,id)) dg
         in
         merge elts ~main ~fields
-    | Types.Tnil -> merge elts ~main ~fields
+    | Types.Tnil _ -> merge elts ~main ~fields
     | _ ->
         let dg = merge elts ~main ~fields in
         node params color ~lvl id (Node id) desc dg

@@ -61,6 +61,8 @@ type row_field
 type field_kind
 type commutable
 
+type nil = private unit
+
 type type_desc =
   | Tvar of string option
   (** [Tvar (Some "a")] ==> ['a] or ['_a]
@@ -108,7 +110,7 @@ type type_desc =
   | Tfield of string * field_kind * type_expr * type_expr
   (** [Tfield ("foo", field_public, t, ts)] ==> [<...; foo : t; ts>] *)
 
-  | Tnil
+  | Tnil of nil
   (** [Tnil] ==> [<...; >] *)
 
   | Tvariant of row_desc
@@ -188,6 +190,8 @@ and abbrev_memo =
 
   | Mlink of abbrev_memo ref
   (** Abbreviations can be found after this indirection *)
+
+val nil : type_desc
 
 (** [commutable] is a flag appended to every arrow type.
 

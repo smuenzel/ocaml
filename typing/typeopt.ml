@@ -111,7 +111,7 @@ let classify env ty : classification =
           Any
       end
   | Tarrow _ | Ttuple _ | Tpackage _ | Tobject _
-  | Tnil | Tvariant _ | Tfunctor _ -> Addr
+  | Tnil _ | Tvariant _ | Tfunctor _ -> Addr
   | Tlink _ | Tsubst _ | Texpand _ | Tpoly _ | Tfield _ ->
       assert false
 

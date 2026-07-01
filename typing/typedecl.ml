@@ -885,7 +885,7 @@ let reachable
      think we are dealing with a constructor, rather than a Texpand node.
      We will then fail to expand the type, and assume that it is abstract. *)
   match get_desc ty with
-  | Tobject _ | Tfield _ | Tnil -> ()
+  | Tobject _ | Tfield _ | Tnil _ -> ()
   | Tvariant _ -> ()
   | Tvar _ | Tunivar _ -> ()
   | Tarrow (_, t1, t2, _) ->

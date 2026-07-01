@@ -1428,7 +1428,7 @@ let rec copy ?partial ?keep_names ?scope ?(unscoped = empty_unscoped_mapping)
                   Tsubst (ty, None) -> ty
                   (* TODO: is this case possible?
                      possibly an interaction with (copy more) below? *)
-                | Tconstr _ | Tnil ->
+                | Tconstr _ | Tnil _ ->
                     copy more
                 | Tvar _ | Tunivar _ ->
                     if keep then more else newty mored
@@ -2087,7 +2087,7 @@ let rec extract_concrete_typedecl env ty =
           end
       end
   | Tpoly(ty, _) -> extract_concrete_typedecl env ty
-  | Tarrow _ | Ttuple _ | Tobject _ | Tfield _ | Tnil
+  | Tarrow _ | Ttuple _ | Tobject _ | Tfield _ | Tnil _
   | Tvariant _ | Tpackage _ | Tfunctor _ -> Has_no_typedecl
   | Tvar _ | Tunivar _ -> May_have_typedecl
   | Tlink _ | Tsubst _ | Texpand _ -> assert false
@@ -2968,7 +2968,7 @@ let rec mcomp type_pairs env t1 t2 =
             mcomp_fields type_pairs env fi1 fi2
         | (Tfield _, Tfield _) ->       (* Actually unused *)
             mcomp_fields type_pairs env t1' t2'
-        | (Tnil, Tnil) ->
+        | (Tnil _, Tnil _) ->
             ()
         | (Tpoly (t1, []), Tpoly (t2, [])) ->
             mcomp type_pairs env t1 t2
@@ -3009,8 +3009,8 @@ and mcomp_fields type_pairs env ty1 ty2 =
   let has_present =
     List.exists (fun (_, k, _) -> field_kind_repr k = Fpublic) in
   mcomp type_pairs env rest1 rest2;
-  if has_present miss1  && get_desc (object_row ty2) = Tnil
-  || has_present miss2  && get_desc (object_row ty1) = Tnil
+  if has_present miss1  && (match get_desc (object_row ty2) with Tnil _ -> true | _ -> false)
+  || has_present miss2  && (match get_desc (object_row ty1) with Tnil _ -> true | _ -> false)
   then raise Incompatible;
   List.iter
     (function (_n, k1, t1, k2, t2) ->
@@ -3535,7 +3535,7 @@ and unify3 uenv t1' t2' =
           begin match get_desc t2' with
             Tobject (_, {contents = Some (_, va::_)}) when
               (match get_desc va with
-                Tvar _|Tunivar _|Tnil -> true | _ -> false) -> ()
+                Tvar _|Tunivar _|Tnil _ -> true | _ -> false) -> ()
           | Tobject (_, nm2) -> set_name nm2 !nm1
           | _ -> ()
           end
@@ -3552,21 +3552,25 @@ and unify3 uenv t1' t2' =
               mcomp_for Unify (get_env uenv) t1' t2';
               record_equation uenv t1' t2'
           end
-      | (Tfield(f,kind,_,rem), Tnil) | (Tnil, Tfield(f,kind,_,rem)) ->
+      | (Tfield(f,kind,_,rem), Tnil _) | (Tnil _, Tfield(f,kind,_,rem)) ->
           begin match field_kind_repr kind with
             Fprivate when f <> dummy_method ->
               link_kind ~inside:kind field_absent;
-              if d2 = Tnil then unify uenv rem t2'
-              else unify uenv (newgenty Tnil) rem
+              begin match d2 with
+              | Tnil _ -> unify uenv rem t2'
+              | _ -> unify uenv (newgenty Types.nil) rem
+              end
           | _      ->
               if f = dummy_method then
                 raise_for Unify (Obj Self_cannot_be_closed)
-              else if d1 = Tnil then
-                raise_for Unify (Obj (Missing_field(First, f)))
-              else
-                raise_for Unify (Obj (Missing_field(Second, f)))
+              else begin match d1 with
+                  Tnil _ ->
+                    raise_for Unify (Obj (Missing_field(First, f)))
+                | _ ->
+                    raise_for Unify (Obj (Missing_field(Second, f)))
+              end
           end
-      | (Tnil, Tnil) ->
+      | (Tnil _, Tnil _) ->
           ()
       | (Tpoly (t1, []), Tpoly (t2, [])) ->
           unify uenv t1 t2
@@ -3575,9 +3579,9 @@ and unify3 uenv t1' t2' =
             (unify uenv)
       | (Tpackage pack1, Tpackage pack2) ->
           unify_package uenv (get_level t1') pack1 (get_level t2') pack2
-      | (Tnil,  Tconstr _ ) ->
+      | (Tnil _,  Tconstr _ ) ->
           raise_for Unify (Obj (Abstract_row Second))
-      | (Tconstr _,  Tnil ) ->
+      | (Tconstr _,  Tnil _) ->
           raise_for Unify (Obj (Abstract_row First))
       | (_, _) -> raise_unexplained_for Unify
       end
@@ -3775,7 +3779,7 @@ and unify_row uenv row1 row2 =
       pairs;
     if static_row row1 then begin
       let rm = row_more row1 in
-      if is_Tvar rm then link_type rm (newty2 ~level:(get_level rm) Tnil)
+      if is_Tvar rm then link_type rm (newty2 ~level:(get_level rm) Types.nil)
     end
   with exn ->
     Transient_expr.set_desc tm1 md1;
@@ -4232,7 +4236,7 @@ let rec filter_method_row env name priv ty =
         let row = newty2 ~level (Tfield (n, kind, ty1, row)) in
         kind', field, row
       end
-  | Tnil ->
+  | Tnil _ ->
       if name = Btype.dummy_method then raise Filter_method_row_failed
       else begin
         match priv with
@@ -4490,7 +4494,7 @@ let close_class_signature env sign =
     match get_desc ty with
     | Tvar _ ->
         let level = get_level ty in
-        link_type ty (newty2 ~level Tnil); true
+        link_type ty (newty2 ~level Types.nil); true
     | Tfield(lab, _, _, _) when lab = dummy_method ->
         false
     | Tfield(_, kind, _, ty') -> begin
@@ -4501,7 +4505,7 @@ let close_class_signature env sign =
             link_kind ~inside:kind field_absent;
             close env ty'
       end
-    | Tnil -> true
+    | Tnil _ -> true
     | _ -> assert false
   in
   let row = expand_head env sign.csig_self_row in
@@ -4522,7 +4526,7 @@ let rec copy_spine ~unscoped copy_scope ty =
   match get_desc ty with
   | Tsubst (ty, _) -> ty
   | Tvar _
-  | Tnil
+  | Tnil _
   | Tlink _
   | Tunivar _
   | Texpand _-> ty
@@ -4666,15 +4670,15 @@ let rec moregen type_pairs env t1 t2 =
           | (Tpackage pack1, Tpackage pack2) ->
               moregen_package type_pairs env (get_level t1') pack1
                 (get_level t2') pack2
-          | (Tnil,  Tconstr _ ) -> raise_for Moregen (Obj (Abstract_row Second))
-          | (Tconstr _,  Tnil ) -> raise_for Moregen (Obj (Abstract_row First))
+          | (Tnil _,  Tconstr _ ) -> raise_for Moregen (Obj (Abstract_row Second))
+          | (Tconstr _,  Tnil _) -> raise_for Moregen (Obj (Abstract_row First))
           | (Tvariant row1, Tvariant row2) ->
               moregen_row type_pairs env row1 row2
           | (Tobject (fi1, _nm1), Tobject (fi2, _nm2)) ->
               moregen_fields type_pairs env fi1 fi2
           | (Tfield _, Tfield _) ->           (* Actually unused *)
               moregen_fields type_pairs env t1' t2'
-          | (Tnil, Tnil) ->
+          | (Tnil _, Tnil _) ->
               ()
           | (Tpoly (t1, []), Tpoly (t2, [])) ->
               moregen type_pairs env t1 t2
@@ -4750,7 +4754,7 @@ and moregen_row type_pairs env row1 row2 =
            fixed = row2_fixed} = row_repr row2 in
   if eq_type rm1 rm2 then () else
   let may_inst =
-    is_Tvar rm1 && may_instantiate rm1 || get_desc rm1 = Tnil in
+    is_Tvar rm1 && may_instantiate rm1 || (match get_desc rm1 with Tnil _ -> true | _ -> false) in
   let r1, r2, pairs = merge_row_fields row1_fields row2_fields in
   let r1, r2 =
     if row2_closed then
@@ -5068,9 +5072,9 @@ let rec eqtype rename type_pairs subst env t1 t2 =
           | (Tpackage pack1, Tpackage pack2) ->
               eqtype_package rename type_pairs subst env
                 (get_level t1') pack1 (get_level t2') pack2
-          | (Tnil,  Tconstr _ ) ->
+          | (Tnil _,  Tconstr _ ) ->
               raise_for Equality (Obj (Abstract_row Second))
-          | (Tconstr _,  Tnil ) ->
+          | (Tconstr _,  Tnil _) ->
               raise_for Equality (Obj (Abstract_row First))
           | (Tvariant row1, Tvariant row2) ->
               eqtype_row rename type_pairs subst env row1 row2
@@ -5079,7 +5083,7 @@ let rec eqtype rename type_pairs subst env t1 t2 =
           | (Tfield _, Tfield _) ->       (* Actually unused *)
               eqtype_fields rename type_pairs subst env
                 t1' t2'
-          | (Tnil, Tnil) ->
+          | (Tnil _, Tnil _) ->
               ()
           | (Tpoly (t1, []), Tpoly (t2, [])) ->
               eqtype rename type_pairs subst env t1 t2
@@ -5761,7 +5765,7 @@ let rec build_subtype env (visited : transient_expr list)
       let c = max_change c1 c2 in
       if c > Unchanged then (newty (Tfield(s, field_public, t1', t2')), c)
       else (t, Unchanged)
-  | Tnil ->
+  | Tnil _ ->
       if posi then
         let v = newvar () in
         (v, Changed)
@@ -6018,7 +6022,7 @@ and subtype_fields env trace ty1 ty2 constraints =
   let (fields2, rest2) = flatten_fields ty2 in
   let (pairs, miss1, miss2) = associate_fields fields1 fields2 in
   let constraints =
-    if get_desc rest2 = Tnil then constraints else
+    if match get_desc rest2 with Tnil _ -> true | _ -> false then constraints else
     if miss1 = [] then
       subtype_rec
         env
@@ -6062,7 +6066,7 @@ and subtype_row env trace row1 row2 constraints =
         (Subtype.Diff {got = more1; expected = more2} :: trace)
         more1 more2
         constraints
-  | (Tvar _|Tconstr _|Tnil), (Tvar _|Tconstr _|Tnil)
+  | (Tvar _|Tconstr _|Tnil _), (Tvar _|Tconstr _|Tnil _)
     when row1_closed && r1 = [] ->
       List.fold_left
         (fun constraints (l,f1,f2) ->
@@ -6146,7 +6150,7 @@ let rec unalias_object ty =
   match get_desc ty with
     Tfield (s, k, t1, t2) ->
       newty2 ~level (Tfield (s, k, t1, unalias_object t2))
-  | Tvar _ | Tnil as desc ->
+  | Tvar _ | Tnil _ as desc ->
       newty2 ~level desc
   | Tunivar _ ->
       ty
@@ -6325,7 +6329,7 @@ let rec normalize_type_rec mark ty =
             else
             begin match get_desc v with
             | Tvar _ | Tunivar _ -> ()
-            | Tnil -> set_type_desc ty (Tconstr (n, l, ref Mnil))
+            | Tnil _ -> set_type_desc ty (Tconstr (n, l, ref Mnil))
             | _    -> set_name nm None
             end
         | _ ->
@@ -6528,7 +6532,7 @@ let rec nondep_type_rec_aux ?(expand_private=false) env
             Nondep_scope.add_copied_variant scope ~row:more ty';
             let static = static_row row in
             let more' =
-              if static then newgenty Tnil else nondep_trec more
+              if static then newgenty Types.nil else nondep_trec more
             in
             (* Return a new copy *)
             let row =

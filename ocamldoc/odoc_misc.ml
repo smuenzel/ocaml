@@ -505,7 +505,7 @@ let remove_option typ =
     | Ttuple _
     | Tobject _
     | Tfield _
-    | Tnil
+    | Tnil _
     | Tvariant _
     | Tpackage _ -> t
     | Tlink t2 -> trim (get_desc t2)

@@ -74,7 +74,7 @@ let parameter_list_from_arrows typ =
     | Tconstr _
     | Tobject _
     | Tfield _
-    | Tnil
+    | Tnil _
     | Tunivar _
     | Tpackage _
     | Tvariant _ ->

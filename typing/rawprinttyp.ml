@@ -107,7 +107,7 @@ and raw_type_desc ppf = function
       fprintf ppf "@[<hov1>Tfield(@,%s,@,%s,@,%a,@;<0 -1>%a)@]" f
         (string_of_field_kind k)
         raw_type t1 raw_type t2
-  | Tnil -> fprintf ppf "Tnil"
+  | Tnil _ -> fprintf ppf "Tnil"
   | Tlink t -> fprintf ppf "@[<1>Tlink@,%a@]" raw_type t
   | Tsubst (t, None) -> fprintf ppf "@[<1>Tsubst@,(%a,None)@]" raw_type t
   | Tsubst (t, Some t') ->

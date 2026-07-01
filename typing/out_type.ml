@@ -1216,7 +1216,7 @@ let rec tree_of_typexp mode ty =
         end
     | Tobject (fi, nm) ->
         tree_of_typobject mode fi !nm
-    | Tnil | Tfield _ ->
+    | Tnil _ | Tfield _ ->
         tree_of_typobject mode ty None
     | Tsubst _ ->
         (* This case should only happen when debugging the compiler *)
@@ -1312,7 +1312,7 @@ and tree_of_typfields mode rest = function
             Orow_open_anonymous
         | Tconstr _ ->
             Orow_open (tree_of_typexp mode rest)
-        | Tnil -> Orow_closed
+        | Tnil _ -> Orow_closed
         | _ -> fatal_error "typfields (1)"
       in
       ([], open_row)

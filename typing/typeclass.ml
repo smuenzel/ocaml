@@ -337,7 +337,7 @@ let rec class_type_field env sign self_scope ctf =
            | Ptyp_poly ([],sty'), Public ->
                let expected_ty = Ctype.newvar () in
                add_method loc env lab priv virt expected_ty sign;
-               let returned_cty = ctyp Ttyp_any (Ctype.newty Tnil) env loc in
+               let returned_cty = ctyp Ttyp_any (Ctype.newty Types.nil) env loc in
                delayed_meth_specs :=
                  Warnings.mk_lazy (fun () ->
                    let cty = transl_simple_type_univars env sty' in
@@ -1623,7 +1623,7 @@ let class_infos define_class kind
   let constr = Ctype.newconstr (Path.Pident obj_id) obj_params in
   begin
     let row = Btype.self_type_row obj_type in
-    Ctype.unify env row (Ctype.newty Tnil);
+    Ctype.unify env row (Ctype.newty Types.nil);
     begin try
       List.iter2 (Ctype.unify env) obj_params obj_params'
     with Ctype.Unify _ ->

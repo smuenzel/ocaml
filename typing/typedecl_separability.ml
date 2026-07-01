@@ -153,7 +153,7 @@ let rec immediate_subtypes : type_expr -> type_expr list = fun ty ->
 
   (* the cases below are not called from [check_type],
      they are here for completeness *)
-  | Tnil | Tfield _ ->
+  | Tnil _ | Tfield _ ->
       (* these should only occur under Tobject and not at the toplevel,
          but "better safe than sorry" *)
       immediate_subtypes_object_row [] ty
@@ -168,7 +168,7 @@ let rec immediate_subtypes : type_expr -> type_expr list = fun ty ->
   | Tsubst _ -> assert false
 
 and immediate_subtypes_object_row acc ty = match get_desc ty with
-  | Tnil -> acc
+  | Tnil _ -> acc
   | Tfield (_label, _kind, ty, rest) ->
       let acc = ty :: acc in
       immediate_subtypes_object_row acc rest
@@ -421,7 +421,7 @@ let check_type
     | (Ttuple _           , Sep    )
     | (Tvariant(_)        , Sep    )
     | (Tobject(_,_)       , Sep    )
-    | ((Tnil | Tfield _)  , Sep    )
+    | ((Tnil _| Tfield _) , Sep    )
     | (Tfunctor _         , Sep    )
     | (Tpackage _         , Sep    ) -> empty
     (* "Deeply separable" case for these same constructors. *)
@@ -429,7 +429,7 @@ let check_type
     | (Ttuple _           , Deepsep)
     | (Tvariant(_)        , Deepsep)
     | (Tobject(_,_)       , Deepsep)
-    | ((Tnil | Tfield _)  , Deepsep)
+    | ((Tnil _| Tfield _) , Deepsep)
     | (Tpackage _         , Deepsep) ->
         let tys = immediate_subtypes ty in
         let on_subtype context ty =
