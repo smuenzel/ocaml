@@ -39,16 +39,17 @@ and type_desc =
   | Ttuple of (string option * type_expr) list
   | Tconstr of Path.t * type_expr list * abbrev_memo ref
   | Tobject of type_expr * (Path.t * type_expr list) option ref
-  | Tfield of string * field_kind * type_expr * type_expr
   | Tnil of nil
   | Tvariant of row_desc
   | Tunivar of string option
   | Tpoly of type_expr * type_expr list
   | Tpackage of package
   | Tfunctor of arg_label * Ident.Unscoped.t * package * type_expr
+  | Tsubst of type_expr * type_expr option
+  (* These three need to come last for efficient matching in repr *)
   | Texpand of type_expr * Path.t * type_expr list
   | Tlink of type_expr
-  | Tsubst of type_expr * type_expr option
+  | Tfield of string * field_kind * type_expr * type_expr
 
 and package =
     { pack_path : Path.t;
@@ -605,6 +606,22 @@ let repr t =
   | Tfield (_, k, _, t') when field_kind_internal_repr k = FKabsent ->
       repr_link true t t'
   | _ -> t
+
+let repr t =
+  match t.desc with
+    Tvar _
+  | Tarrow _
+  | Ttuple _
+  | Tconstr _
+  | Tobject _
+  | Tnil _
+  | Tvariant _
+  | Tunivar _
+  | Tpoly _
+  | Tpackage _
+  | Tfunctor _
+  | Tsubst _ -> t
+  | _ -> repr t
 
 (* scope_field and marks *)
 

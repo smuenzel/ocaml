@@ -107,9 +107,6 @@ type type_desc =
       where [rv] is the hidden row variable.
   *)
 
-  | Tfield of string * field_kind * type_expr * type_expr
-  (** [Tfield ("foo", field_public, t, ts)] ==> [<...; foo : t; ts>] *)
-
   | Tnil of nil
   (** [Tnil] ==> [<...; >] *)
 
@@ -131,13 +128,6 @@ type type_desc =
   | Tfunctor of arg_label * Ident.Unscoped.t * package * type_expr
   (** Type of a dependent arrow *)
 
-  | Texpand of type_expr * Path.t * type_expr list
-  (** [Texpand] is like [Tlink] but the result of an expansion;
-      [Path.t] and [type_expr list] remember the original declaration. *)
-
-  | Tlink of type_expr
-  (** Indirection used by unification engine. *)
-
   | Tsubst of type_expr * type_expr option
   (** [Tsubst] is used temporarily to store information in low-level
       functions manipulating representation of types, such as
@@ -146,6 +136,18 @@ type type_desc =
       The second is available only when the first is the row variable of
       a polymorphic variant.  It then contains a copy of the whole variant.
       This constructor should not appear outside of these cases. *)
+
+  | Texpand of type_expr * Path.t * type_expr list
+  (** [Texpand] is like [Tlink] but the result of an expansion;
+      [Path.t] and [type_expr list] remember the original declaration. *)
+
+  | Tlink of type_expr
+  (** Indirection used by unification engine. *)
+
+  | Tfield of string * field_kind * type_expr * type_expr
+  (** [Tfield ("foo", field_public, t, ts)] ==> [<...; foo : t; ts>] *)
+
+
 
 (** [package] corresponds to the type of a first-class module *)
 and package =
