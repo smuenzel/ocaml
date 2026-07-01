@@ -587,11 +587,17 @@ let rec repr_link update t_orig t =
  *)
 
 let repr t =
+  (* The deep match cases below must be synchronized with the functions above,
+     they are only present to improve performance *)
   match t.desc with
-  | Tlink t' ->
+  | Tlink ({desc = (Tlink _ | Texpand _ | Tfield _); _ } as t') ->
       repr_link false t t'
-  | Texpand (t', path, args) ->
+  | Tlink t' -> t'
+  | Texpand ({desc = (Tlink _ | Texpand _ | Tfield _); _} as t', path, args) ->
       repr_expand false t t' path args
+  | Texpand (t', _, _) -> t'
+  | Tfield (_, FKpublic, _, _) ->
+      t
   | Tfield (_, k, _, t') when field_kind_internal_repr k = FKabsent ->
       repr_link true t t'
   | _ -> t
