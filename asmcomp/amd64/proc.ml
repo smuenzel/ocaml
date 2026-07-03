@@ -304,13 +304,7 @@ let destroyed_at_c_call =
        100;101;102;103;104;105;106;107;
        108;109;110;111;112;113;114;115])
 
-let destroyed_at_alloc_or_poll =
-(*
-  if X86_proc.use_plt then
-    destroyed_by_plt_stub
-  else
-*)
-[| r10; r11 |]
+let destroyed_at_alloc_or_poll = [| |]
 
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
