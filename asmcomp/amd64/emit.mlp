@@ -39,6 +39,8 @@ open! Branch_relaxation
 
 let _label s = D.label ~typ:QWORD s
 
+let r14 = Reg64 R14 (* scratch for stack overflow check *)
+
 (* Override proc.ml *)
 
 let int_reg_name =
@@ -911,8 +913,8 @@ let fundecl fundecl =
     || max_frame_size >= stack_threshold_size then begin
       let overflow = new_label () and ret = new_label () in
       let threshold_offset = Domainstate.stack_ctx_words * 8 + stack_threshold_size in
-      I.lea (mem64 NONE (-(max_frame_size + threshold_offset)) RSP) r10;
-      I.cmp (domain_field Domainstate.Domain_current_stack) r10;
+      I.lea (mem64 NONE (-(max_frame_size + threshold_offset)) RSP) r14;
+      I.cmp (domain_field Domainstate.Domain_current_stack) r14;
       I.jb (label overflow);
       def_label ret;
       Some (overflow, ret)
@@ -932,7 +934,7 @@ let fundecl fundecl =
       cfi_adjust_cfa_offset 8;
         (* measured in words *)
       emit_call "caml_call_realloc_stack";
-      I.pop r10; (* ignored *)
+      I.pop r14; (* ignored *)
       cfi_adjust_cfa_offset (-8);
       I.jmp (label ret)
     end
