@@ -164,6 +164,7 @@ let load_symbol_addr s arg =
     I.mov (sym (emit_symbol s)) arg
 
 let domain_field f =
+  (* The register is ignored here *)
   mem64 ~scale:0 ~segment:GS QWORD (Domainstate.idx_of_field f * 8) R14
 
 (* Output a label *)
