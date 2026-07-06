@@ -1869,8 +1869,15 @@ let subst ~env ~level ?scope ~priv ~abbrev ?oty ~params ~args body =
     let uenv = Expression {env; in_subst = true} in
     try
       !unify_var' uenv body0 body';
-      List.iter2 (!unify_var' uenv) params' args;
-      body'
+      match params', args with
+      | [t1], [t2] when match get_desc t1 with | Tvar _ -> true | _ -> false ->
+          update_level_for Unify env (get_level t1) t2;
+          update_scope_for Unify (get_scope t1) t2;
+          link_type t1 t2;
+          body'
+      | _ ->
+          List.iter2 (!unify_var' uenv) params' args;
+          body'
     with Unify _ ->
       undo_abbrev ();
       raise Cannot_subst
