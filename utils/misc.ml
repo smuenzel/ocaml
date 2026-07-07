@@ -207,6 +207,14 @@ module Stdlib = struct
           }
       in
       find_prefix ~longest_common_prefix_rev:[] first second
+
+    let partition_first p l =
+      let rec part no = function
+        | [] -> None, List.rev no
+        | x :: xs when p x -> Some x, List.rev_append no xs
+        | x :: xs -> part (x :: no) xs
+      in
+      part [] l
   end
 
   module Option = struct

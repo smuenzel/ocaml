@@ -1869,12 +1869,36 @@ let subst ~env ~level ?scope ~priv ~abbrev ?oty ~params ~args body =
     let uenv = Expression {env; in_subst = true} in
     try
       !unify_var' ~check_occur:true uenv body0 body';
-      begin match params', args with
-      | [t1], [t2] when match get_desc t1 with | Tvar _ -> true | _ -> false ->
-          !unify_var' ~check_occur:false uenv t1 t2
-      | _ ->
-          List.iter2 (!unify_var' uenv ~check_occur:true) params' args;
+      let first_var, rest =
+        Misc.Stdlib.List.partition_first
+          (fun (p,_a) ->
+             match get_desc p with
+             | Tvar _ -> true
+             | _ -> false
+          )
+          (List.combine params' args)
+      in
+      (* We can elide the occurs-check for the first parameter that is
+         a variable (and therefore we don't have to deal with any constraint).
+         This can be beneficial if the argument is a very large type, where
+         the occurs check would be expensive. Subsequent parameter cannot
+         avoid the occurs-check, since we can no longer show that the parameter
+         does not occur due to the previous unifications.
+
+         See
+         Stickel, M.E. A prolog technology theorem prover: Implementation by an
+         extended prolog compiler. J Autom Reasoning 4, 353–380 (1988).
+         https://doi.org/10.1007/BF00297245
+
+         "During unification of the actual and formal arguments, which are
+         initially variable-disjoint, the first binding of a variable is
+         guaranteed not to need the occurs check; ..."
+      *)
+      begin match first_var with
+      | Some (p, a) -> !unify_var' ~check_occur:false uenv p a;
+      | None -> ()
       end;
+      List.iter (fun (p,a) -> !unify_var' uenv ~check_occur:true p a) rest;
       body'
     with Unify _ ->
       undo_abbrev ();

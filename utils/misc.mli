@@ -180,6 +180,11 @@ module Stdlib : sig
     (** Returns the longest list that, with respect to the provided equality
         function, is a prefix of both of the given lists.  The input lists,
         each with such longest common prefix removed, are also returned. *)
+
+     val partition_first
+       :  ('a -> bool)
+       -> 'a list
+       -> 'a option * 'a list
   end
 
 (** {2 Extensions to the Option module} *)
