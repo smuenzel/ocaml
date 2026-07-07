@@ -1869,36 +1869,31 @@ let subst ~env ~level ?scope ~priv ~abbrev ?oty ~params ~args body =
     let uenv = Expression {env; in_subst = true} in
     try
       !unify_var' ~check_occur:true uenv body0 body';
-      let first_var, rest =
-        Misc.Stdlib.List.partition_first
-          (fun (p,_a) ->
+      let _, first_gen_vars, others =
+        Misc.Stdlib.List.fold_left3
+          (fun (previous_gen, first_gen, others) p p' a ->
              match get_desc p with
-             | Tvar _ -> true
-             | _ -> false
+             | Tvar _ when get_level p = generic_level
+                        && not (List.exists (eq_type p) previous_gen) ->
+                 p :: previous_gen, (p', a) :: first_gen, others
+             | _ ->
+                 previous_gen, first_gen, (p', a) :: others
           )
-          (List.combine params' args)
+          ([],[],[])
+          params params' args
       in
-      (* We can elide the occurs-check for the first parameter that is
-         a variable (and therefore we don't have to deal with any constraint).
+      (* We can elide the occurs-check for the first occurence of parameters
+         that are a generalizable variable (and therefore will be instiated
+         to a fresh variable).
          This can be beneficial if the argument is a very large type, where
-         the occurs check would be expensive. Subsequent parameter cannot
-         avoid the occurs-check, since we can no longer show that the parameter
-         does not occur due to the previous unifications.
-
-         See
-         Stickel, M.E. A prolog technology theorem prover: Implementation by an
-         extended prolog compiler. J Autom Reasoning 4, 353-380 (1988).
-         https://doi.org/10.1007/BF00297245
-
-         "During unification of the actual and formal arguments, which are
-         initially variable-disjoint, the first binding of a variable is
-         guaranteed not to need the occurs check; ..."
+         the occurs check would be expensive. Non-generalizable type variables
+         or non-variables cannot avoid the check, since we're not able to show
+         they cannot occur
       *)
-      begin match first_var with
-      | Some (p, a) -> !unify_var' ~check_occur:false uenv p a;
-      | None -> ()
-      end;
-      List.iter (fun (p,a) -> !unify_var' uenv ~check_occur:true p a) rest;
+      Misc.Stdlib.List.rev_iter
+        (fun (p,a) -> !unify_var' uenv ~check_occur:false p a) first_gen_vars;
+      Misc.Stdlib.List.rev_iter
+        (fun (p,a) -> !unify_var' uenv ~check_occur:true p a) others;
       body'
     with Unify _ ->
       undo_abbrev ();

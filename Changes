@@ -98,7 +98,7 @@ Working version
 
 ### Type system:
 
-* #11648, #14766, #14768, #14776, #14842, #14845, #?????: Keep expansion and
+* #11648, #14766, #14768, #14776, #14842, #14845, #14897: Keep expansion and
   new well-foundedness check implementation.
   Do expansion in place during unification, rather than only memoizing it
   in a temporary cache. This fixes a number of non-terminations and crashes
