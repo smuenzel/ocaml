@@ -1887,7 +1887,7 @@ let subst ~env ~level ?scope ~priv ~abbrev ?oty ~params ~args body =
 
          See
          Stickel, M.E. A prolog technology theorem prover: Implementation by an
-         extended prolog compiler. J Autom Reasoning 4, 353–380 (1988).
+         extended prolog compiler. J Autom Reasoning 4, 353-380 (1988).
          https://doi.org/10.1007/BF00297245
 
          "During unification of the actual and formal arguments, which are
