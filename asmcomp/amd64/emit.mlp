@@ -139,14 +139,16 @@ let mem__imp s =
   let imp_s = get_imp_symbol s in
   mem64_rip QWORD (emit_symbol imp_s)
 
-let rel_plt s =
+let rel_sym s =
   if windows && !Clflags.dlcode then mem__imp s
   else
-    sym (if use_plt then emit_symbol s ^ "@PLT" else emit_symbol s)
+    if use_got
+    then mem64_rip QWORD (emit_symbol s ^ "@GOTPCREL")
+    else sym (emit_symbol s)
 
-let emit_call s = I.call (rel_plt s)
+let emit_call s = I.call (rel_sym s)
 
-let emit_jump s = I.jmp (rel_plt s)
+let emit_jump s = I.jmp (rel_sym s)
 
 let load_symbol_addr s arg =
   if !Clflags.dlcode then
@@ -926,8 +928,8 @@ let fundecl fundecl =
     || max_frame_size >= stack_threshold_size then begin
       let overflow = new_label () and ret = new_label () in
       let threshold_offset = Domainstate.stack_ctx_words * 8 + stack_threshold_size in
-      I.lea (mem64 NONE (-(max_frame_size + threshold_offset)) RSP) r10;
-      I.cmp (domain_field Domainstate.Domain_current_stack) r10;
+      I.lea (mem64 NONE (-(max_frame_size + threshold_offset)) RSP) r11;
+      I.cmp (domain_field Domainstate.Domain_current_stack) r11;
       I.jb (label overflow);
       def_label ret;
       Some (overflow, ret)
@@ -947,7 +949,7 @@ let fundecl fundecl =
       cfi_adjust_cfa_offset 8;
         (* measured in words *)
       emit_call "caml_call_realloc_stack";
-      I.pop r10; (* ignored *)
+      I.pop r11; (* ignored *)
       cfi_adjust_cfa_offset (-8);
       I.jmp (label ret)
     end
