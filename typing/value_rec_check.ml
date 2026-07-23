@@ -1458,24 +1458,32 @@ module Node = struct
 
   end
 
+  type state = Unvisited | Visited | Visiting
+
   type 'payload t =
     { name : Name.t;
       properties : 'payload Properties.t;
-      mutable incoming_edges : t list;
+      mutable outgoing_edges : t list;
+      mutable state : state;
     }
 
-  let create id mode properties incoming_edges =
+  let create id mode properties outgoing_edges =
     { name = { id; mode };
       properties;
-      incoming_edges;
+      outgoing_edges;
+      state = Unvisited;
     }
 
-  let add_new table id mode properties incoming_edges =
-    let node = create id mode properties incoming_edges in
+  let add_new table id mode properties outgoing_edges =
+    let node = create id mode properties outgoing_edges in
     Table.add table node.name node;
     node
 
 end
+
+type 'payload sort_result =
+  | Cycle_in_definition of Ident.t list
+  | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
 let sort_nodes
   (type payload)
@@ -1518,9 +1526,40 @@ let sort_nodes
             match Node.Table.find_opt nodes { id; mode } with
             | None -> ()
             | Some node' ->
-                node'.incoming_edges <- node :: node'.incoming_edges
+                node.outgoing_edges <- node' :: node.outgoing_edges
          )
          env
     )
     nodes;
-  ()
+  let sorted = ref [] in
+  let exception Has_cycle of Node.Name.t list in
+  let rec visit path node =
+    match node.state with
+    | Node.Visited -> ()
+    | Node.Unvisited ->
+        node.state <- Node.Visiting;
+        List.iter (visit (node.name :: path)) node.outgoing_edges;
+        node.state <- Node.Visited;
+        sorted := node :: !sorted
+    | Node.Visiting ->
+        raise (Has_cycle (node.name :: path))
+  in
+  try
+    Hashtbl.iter
+      (fun _ node -> visit [] node)
+      nodes;
+    let sorted =
+      List.rev !sorted
+      |> List.filter_map
+        (fun node ->
+           node.name.id, node.properties.kind, node.properties.payload
+        )
+    in
+    Sorted_definition sorted
+  with
+  | Has_cycle cycle ->
+      let cycle =
+        List.rev_map
+          (fun { Node.name = { id; _ }; _ } -> id)
+      in
+      Cycle_in_definition cycle
