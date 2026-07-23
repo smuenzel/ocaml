@@ -434,6 +434,8 @@ sig
   (** Remove all the identifiers of a list from an environment. *)
 
   val equal : t -> t -> bool
+
+  val iter : (Ident.t -> Mode.t -> unit) -> t -> unit
 end = struct
   module M = Ident.Map
 
@@ -471,6 +473,8 @@ end = struct
 
   let remove_list l env =
     List.fold_left (fun env id -> M.remove id env) env l
+
+  let iter f env = M.iter f env
 end
 
 let remove_pat pat env =
@@ -1399,3 +1403,124 @@ let is_valid_class_expr idlist ce =
   match Env.unguarded (class_expr Return ce) idlist with
   | [] -> true
   | _ :: _ -> false
+
+
+(* Sorting of values.
+   We attempt to topologically sort values in such a way that they can
+   be defined.
+   Because using a value of the recursive definition will create dependencies
+   depending on the mode of usage of the value, we must create nodes that
+   represent the different usages.
+
+   So, for the value [x], we have the following nodes: (from [compose] above)
+
+   [ Ignore x ] - No dependencies, don't need to create this node
+   [ Dereference x] - Depends on all Dereference nodes of dependencies of [x]
+   [ Delay x ] - Depends on all Delay nodes of dependencies of [x]
+   [ Guard x ] - Unmodified dependencies (depends on nodes of the original mode), except Return nodes, which are changed to Guard
+   [ Return x ] - Unmodified dependencies
+
+   In addition, we have the following self-dependencies:
+   [ Dereference x ] -> [ Return x ] -> [ Guard x ] -> [ Delay x ]
+
+
+   The previous applies to values which have a statically known size, but if the value
+   has a dynamic size, any usage of its address also needs to know its size.
+   Since even the [Delay] context requires an address, we need to add all dependencies
+   of [Dereference] to the [Delay] context.
+   Thus, in the case of a dynamic value, all node types are merged into a single node.
+
+   After the topological sort, our final ordering of the definitions is the order
+   of the [Dereference] nodes.
+*)
+
+module Node = struct
+  module Name = struct
+    type t =
+      { id : Ident.t;
+        mode : mode;
+      }
+
+    let equal {id = id1; mode = m1} {id = id2; mode = m2} =
+      Ident.equal id1 id2 && Mode.equal m1 m2
+
+    let hash = Hashtbl.hash
+  end
+
+  module Table = Hashtbl.Make(Name)
+
+  module Properties = struct
+    type 'payload t =
+      { kind : Value_rec_types.recursive_binding_kind;
+        payload : 'payload;
+        ty : term_judg;
+      }
+
+  end
+
+  type 'payload t =
+    { name : Name.t;
+      properties : 'payload Properties.t;
+      mutable incoming_edges : t list;
+    }
+
+  let create id mode properties incoming_edges =
+    { name = { id; mode };
+      properties;
+      incoming_edges;
+    }
+
+  let add_new table id mode properties incoming_edges =
+    let node = create id mode properties incoming_edges in
+    Table.add table node.name node;
+    node
+
+end
+
+let sort_nodes
+  (type payload)
+  (valbinds : (Ident.t * (Typedtree.expression * payload)) list)
+  =
+  let nodes = Node.Table.create 27 in
+  List.iter
+    (fun (id, (expr, payload)) ->
+       let kind = classify_expression expr in
+       let properties =
+         { Node.Properties.kind;
+           payload;
+           ty = expression expr;
+         }
+       in
+       match classify_expression expr with
+       | Static ->
+           let delay = Node.add_new nodes id Delay properties [] in
+           let guard = Node.add_new nodes id Guard properties [delay] in
+           let return = Node.add_new nodes id Return properties [guard] in
+           let deref = Node.add_new nodes id Dereference properties [return] in
+           ()
+       | Dynamic ->
+           let deref = Node.add_new nodes id Dereference properties [] in
+           let delay = Node.add_new nodes id Delay properties [deref] in
+           let guard = Node.add_new nodes id Guard properties [deref] in
+           let return = Node.add_new nodes id Return properties [deref] in
+           ()
+    ) valbinds;
+  Hashtbl.iter
+    (fun _ node ->
+       let env =
+         match node.properties.kind, node.name.mode with
+         | Dynamic, Dereference -> node.properties.ty Dereference
+         | Dynamic, _ -> Env.empty
+         | Static, mode -> node.properties.ty mode
+       in
+       Env.iter
+         (fun id mode ->
+            match Node.Table.find_opt nodes { id; mode } with
+            | None -> ()
+            | Some node' ->
+                node'.incoming_edges <- node :: node'.incoming_edges
+         )
+         env
+    )
+    nodes;
+  ()
