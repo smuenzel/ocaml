@@ -1608,4 +1608,9 @@ let sort_value_bindings
           ([], None)
           cycle
       in
+      let cycle =
+        match cycle with
+          [ single ] -> [ single; single ]
+        | _ -> cycle
+      in
       Cycle_in_definition (representative_payload, cycle)

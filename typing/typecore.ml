@@ -3687,10 +3687,13 @@ let annotate_and_sort_recursive_bindings env valbinds =
   let valbinds' =
     List.map
       (fun ({vb_pat = _; vb_expr; vb_rec_kind = _;
-             vb_attributes = _; vb_loc = _} as vb) ->
+             vb_attributes = _; vb_loc} as vb) ->
          (* Only variable-like bindings are allowed, we already checked *)
          let name = match let_bound_idents [vb] with
-           | [name] -> name | _ -> assert false in
+           | [name] -> name
+           | _ ->
+               Error.log_and_raise vb_loc env Illegal_letrec_pat
+         in
          name, (vb_expr, vb)
       )
       valbinds
@@ -3705,18 +3708,6 @@ let annotate_and_sort_recursive_bindings env valbinds =
            { vb with vb_rec_kind }
         )
         sorted
-
-let annotate_recursive_bindings env valbinds =
-  let ids = let_bound_idents valbinds in
-  List.map
-    (fun ({vb_pat; vb_expr; vb_rec_kind = _; vb_attributes; vb_loc} as vb) ->
-       match (Value_rec_check.is_valid_recursive_expression ids vb_expr) with
-       | None ->
-           Error.log_or_raise vb_expr.exp_loc env Illegal_letrec_expr;
-           vb
-       | Some vb_rec_kind ->
-         { vb_pat; vb_expr; vb_rec_kind; vb_attributes; vb_loc})
-    valbinds
 
 let check_recursive_class_bindings env ids exprs =
   List.iter

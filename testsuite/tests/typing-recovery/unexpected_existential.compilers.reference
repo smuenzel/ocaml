@@ -14,6 +14,10 @@ File "unexpected_existential.ml", line 19, characters 10-15:
 19 |   let rec Any x = Any () in
                ^^^^^
   Only variables are allowed as left-hand side of let rec
+File "unexpected_existential.ml", line 19, characters 2-24:
+19 |   let rec Any x = Any () in
+       ^^^^^^^^^^^^^^^^^^^^^^
+  Only variables are allowed as left-hand side of let rec
 File "unexpected_existential.ml", line 23, characters 18-23:
 23 |   let[@attribute] Any x = Any () in
                        ^^^^^
@@ -47,6 +51,10 @@ File "unexpected_existential.ml", line 37, characters 8-13:
 File "unexpected_existential.ml", line 41, characters 12-17:
 41 |     let rec Any x = Any () in
                  ^^^^^
+  Only variables are allowed as left-hand side of let rec
+File "unexpected_existential.ml", line 41, characters 4-26:
+41 |     let rec Any x = Any () in
+         ^^^^^^^^^^^^^^^^^^^^^^
   Only variables are allowed as left-hand side of let rec
 File "unexpected_existential.ml", line 45, characters 20-25:
 45 |     let[@attribute] Any x = Any () in

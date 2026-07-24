@@ -491,8 +491,8 @@ Error: The signature for this packaged module couldn't be inferred.
 let rec f () = g (module Map.Make(Int)) and g (m : 'a. (module Map.S)) = ();;
 
 [%%expect{|
-val f : unit -> unit = <fun>
 val g : (module Map.S) -> unit = <fun>
+val f : unit -> unit = <fun>
 |}]
 
 (* Check that we are getting the right behaviour for polymorphic variants
