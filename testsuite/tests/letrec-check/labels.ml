@@ -13,7 +13,7 @@ Line 1, characters 0-16:
 1 | let rec x = f ~x;;
     ^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let f x ~y = x + y
@@ -33,5 +33,5 @@ Lines 7-9, characters 0-11:
 9 |   ref "foo"..
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       g-> y-> g-> y
+       y -> g -> y -> g -> g
 |}]

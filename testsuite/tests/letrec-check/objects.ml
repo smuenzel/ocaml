@@ -17,7 +17,7 @@ Line 2, characters 0-19:
 2 | let rec x = new c x;;
     ^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = y#m and y = object method m = () end;;
@@ -32,7 +32,7 @@ Line 1, characters 0-44:
 1 | let rec x = (object method m _ = () end)#m x;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = object val mutable v = 0 method m = v <- y end and y = 1;;
@@ -47,7 +47,7 @@ Line 1, characters 0-35:
 1 | let rec x = object method m = x end;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = object method m = ignore x end;;
@@ -56,5 +56,5 @@ Line 1, characters 0-42:
 1 | let rec x = object method m = ignore x end;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;

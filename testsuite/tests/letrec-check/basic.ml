@@ -28,7 +28,7 @@ Line 1, characters 0-27:
 1 | let rec x = let y = () in x;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = [y]
@@ -83,7 +83,7 @@ Line 1, characters 0-20:
 1 | let rec x = ignore x;;
     ^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = y 0 and y _ = ();;
@@ -98,7 +98,7 @@ Line 1, characters 0-37:
 1 | let rec b = if b then true else false;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): b-> b
+       non-statically constructive values (see manual section 12.1): b -> b
 |}];;
 
 let rec x = function
@@ -120,7 +120,7 @@ Line 1, characters 0-59:
 1 | let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 (* this is rejected as `c` will be dereferenced during the copy,
@@ -131,7 +131,7 @@ Line 1, characters 0-39:
 1 | let rec c = { c with Complex.re = 1.0 };;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): c-> c
+       non-statically constructive values (see manual section 12.1): c -> c
 |}];;
 
 let rec x = `A y
@@ -170,7 +170,7 @@ Line 2, characters 0-18:
 2 | let rec x = r := x;;
     ^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x =
@@ -184,7 +184,7 @@ Line 5, characters 0-13:
     ^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       x-> y-> x-> y
+       y -> x -> y -> x -> x
 |}];;
 
 let rec x =
@@ -219,7 +219,7 @@ Lines 1-4, characters 0-6:
 3 |     let y = x in ignore y
 4 |   done
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x =
@@ -244,7 +244,7 @@ Lines 1-4, characters 0-6:
 3 |     let y = x in ignore y
 4 |   done
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x-> x
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 
@@ -294,7 +294,7 @@ Line 6, characters 2-26:
       ^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       y-> x-> y-> x
+       x -> y -> x -> y -> y
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
@@ -313,7 +313,7 @@ Lines 4-5, characters 2-56:
 5 |     if not p then (fun y -> x - f y) else (fun y -> f y)
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       g-> f-> g
+       g -> f -> g -> g
 |}];;
 
 let rec x =
@@ -328,7 +328,7 @@ Lines 5-6, characters 0-15:
 6 |   z -> ("y", z)..
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       y-> x-> y
+       y -> x -> y -> y
 |}];;
 
 
@@ -363,7 +363,7 @@ Lines 1-12, characters 0-25:
 12 |   in ref ("foo" ^ ! ! !x)..
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       wrong-> wrong
+       wrong -> wrong
 |}]
 
 (* in this case, x does not depend on y, so everything is fine *)

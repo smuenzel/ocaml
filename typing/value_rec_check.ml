@@ -1601,7 +1601,7 @@ let sort_value_bindings
     Sorted_definition sorted
   with
   | Has_cycle (representative_payload, cycle) ->
-      let cycle, _ =
+      let cycle, last_opt =
         List.fold_left
           (fun (acc, last_opt) { Node.Name.id; mode = _ } ->
              match last_opt with
@@ -1611,9 +1611,13 @@ let sort_value_bindings
           ([], None)
           cycle
       in
+      let cycle = match last_opt with
+        | Some last -> last :: cycle
+        | None -> cycle
+      in
       let cycle =
         match cycle with
           [ single ] -> [ single; single ]
         | _ -> cycle
       in
-      Cycle_in_definition (representative_payload, cycle)
+      Cycle_in_definition (representative_payload, List.rev cycle)

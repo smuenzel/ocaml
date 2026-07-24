@@ -7,5 +7,5 @@ Line 5, characters 0-52:
 5 | let rec r = let rec x () = r and y () = x () in y () in r "oops";;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): r-> r
+       non-statically constructive values (see manual section 12.1): r -> r
 

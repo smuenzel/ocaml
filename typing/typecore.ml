@@ -8674,7 +8674,7 @@ let report_error ~loc env =
       let[@manual.ref "s:letrecvalues"] manual_ref =
         [ 12; 1 ]
       in
-      let pp_sep ppf () = fprintf ppf "-> " in
+      let pp_sep ppf () = fprintf ppf " -> " in
       let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
       Location.errorf ~loc
         "The following recursive definitions form a cycle of@ \

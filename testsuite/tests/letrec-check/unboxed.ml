@@ -26,7 +26,7 @@ Line 2, characters 0-15:
 2 | let rec y = A y;;
     ^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): y-> y
+       non-statically constructive values (see manual section 12.1): y -> y
 |}];;
 
 (* This test is not allowed if 'a' is unboxed, but should be accepted
@@ -66,7 +66,7 @@ Lines 4-9, characters 0-10:
 8 |      else
 9 |        Y)}..
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): a-> a
+       non-statically constructive values (see manual section 12.1): a -> a
 |}];;
 
 (* This test is not allowed if 'c' is unboxed, but should be accepted
@@ -108,5 +108,5 @@ Lines 4-9, characters 0-9:
 8 |      else
 9 |        W)..
 Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): d-> d
+       non-statically constructive values (see manual section 12.1): d -> d
 |}];;
