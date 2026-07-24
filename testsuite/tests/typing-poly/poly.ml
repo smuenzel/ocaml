@@ -505,8 +505,8 @@ and b = object (_ : #id_spec)
 end
 ;;
 [%%expect {|
->> Fatal error: b/1314 unbound at toplevel
-Exception: Misc.Fatal_error.
+class a : object method m : bool end
+and b : object method id : 'a -> 'a end
 |}];;
 
 
@@ -821,9 +821,10 @@ class o : object method x : unit -> unit end
 class c = object method m = new d () end and d ?(x=0) () = object end;;
 class d ?(x=0) () = object end and c = object method m = new d () end;;
 [%%expect {|
->> Fatal error: d/1822 unbound at toplevel
-Exception: Misc.Fatal_error.
-Unexecuted phrases: 1 phrases did not execute due to an error
+class c : object method m : d end
+and d : ?x:int -> unit -> object  end
+class d : ?x:int -> unit -> object  end
+and c : object method m : d end
 |}];;
 
 class type numeral = object method fold : ('a -> 'a) -> 'a -> 'a end
@@ -1622,12 +1623,12 @@ let rec depth : 'a. 'a t -> _ =
   function Leaf _ -> 1 | Node x -> 1 + d x
 and d x = depth x;; (* fails *)
 [%%expect {|
-val g : 'a -> int = <fun>
 val f : 'a -> int = <fun>
+val g : 'a -> int = <fun>
 type 'a t = Leaf of 'a | Node of ('a * 'a) t
 val depth : 'a t -> int = <fun>
-val depth : 'a t -> int = <fun>
 val d : ('a * 'a) t -> int = <fun>
+val depth : 'a t -> int = <fun>
 |}];;
 let rec depth : 'a. 'a t -> _ =
   function Leaf x -> x | Node x -> 1 + depth x;; (* fails *)
