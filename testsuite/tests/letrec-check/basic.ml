@@ -293,10 +293,10 @@ let _ =
   in (x, y)
 ;;
 [%%expect{|
-Line 6, characters 14-26:
+Line 6, characters 2-26:
 6 |   let rec x = Stdlib.ref y
-                  ^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+      ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle: x-> y-> x
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
@@ -310,10 +310,10 @@ let foo p x =
   (f, g)
 ;;
 [%%expect{|
-Line 3, characters 4-52:
-3 |     if p then (fun y -> x + g y) else (fun y -> g y)
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Lines 4-5, characters 2-56:
+4 | ..and g =
+5 |     if not p then (fun y -> x - f y) else (fun y -> f y)
+Error: The following recursive definitions form a cycle: g-> f-> g
 |}];;
 
 let rec x =

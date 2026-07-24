@@ -1428,10 +1428,16 @@ let is_valid_class_expr idlist ce =
    has a dynamic size, any usage of its address also needs to know its size.
    Since even the [Delay] context requires an address, we need to add all dependencies
    of [Dereference] to the [Delay] context.
-   Thus, in the case of a dynamic value, all node types are merged into a single node.
+   Thus, in the case of a dynamic value, all node types depend on the [Dereference]
+   node (opposite dependency order).
 
-   After the topological sort, our final ordering of the definitions is the order
-   of the [Dereference] nodes.
+   In the topological sort, we only start at [ Return ] / [ Guard ] / [ Delay ] nodes
+   for the DFS. This means that some [ Dereference ] nodes may remain unvisited and
+   don't pariticipate in the ordering -- because they are never dereferenced in the
+   recursive group.
+   The final ordering is the ordering of the [ Return ] nodes, except in case
+   where a [Dereference] node has been visited, which then takes priority (CR smuenzel:
+   or should it be the first one????)
 *)
 
 module Node = struct
@@ -1481,12 +1487,14 @@ module Node = struct
 
 end
 
+(*
 let mode_to_string : Mode.t -> string = function
   | Ignore -> "Ignore"
   | Delay -> "Delay"
   | Guard -> "Guard"
   | Return -> "Return"
   | Dereference -> "Dereference"
+   *)
 
 type 'payload sort_result =
   | Cycle_in_definition of 'payload * Ident.t list
@@ -1586,17 +1594,18 @@ let sort_value_bindings
            | _ -> None
         )
     in
+    assert (List.length sorted = List.length valbinds);
     Sorted_definition sorted
   with
   | Has_cycle (representative_payload, cycle) ->
-      let cycle =
-        List.rev_map
-          (fun { Node.Name.id; mode } ->
-             Format.eprintf "%s(%s)\n"
-               (Ident.name id)
-               (mode_to_string mode)
-             ;
-             id)
+      let cycle, _ =
+        List.fold_left
+          (fun (acc, last_opt) { Node.Name.id; mode = _ } ->
+             match last_opt with
+             | Some last when Ident.equal id last -> acc, last_opt
+             | _ -> (id :: acc, Some id)
+          )
+          ([], None)
           cycle
       in
       Cycle_in_definition (representative_payload, cycle)
