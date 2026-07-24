@@ -1481,8 +1481,15 @@ module Node = struct
 
 end
 
+let mode_to_string : Mode.t -> string = function
+  | Ignore -> "Ignore"
+  | Delay -> "Delay"
+  | Guard -> "Guard"
+  | Return -> "Return"
+  | Dereference -> "Dereference"
+
 type 'payload sort_result =
-  | Cycle_in_definition of Ident.t list
+  | Cycle_in_definition of 'payload * Ident.t list
   | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
 let sort_value_bindings
@@ -1523,16 +1530,22 @@ let sort_value_bindings
        in
        Env.iter
          (fun id mode ->
-            match Node.Table.find_opt nodes { id; mode } with
-            | None -> ()
-            | Some node' ->
-                node.outgoing_edges <- node' :: node.outgoing_edges
+            match Mode.compose node.name.mode mode with
+            | Ignore -> ()
+            | Delay -> ()
+            | Guard -> ()
+            | Return -> ()
+            | Dereference ->
+                match Node.Table.find_opt nodes { id; mode } with
+                | None -> ()
+                | Some node' ->
+                    node.outgoing_edges <- node' :: node.outgoing_edges
          )
          env
     )
     nodes;
   let sorted = ref [] in
-  let exception Has_cycle of Node.Name.t list in
+  let exception Has_cycle of payload * Node.Name.t list in
   let rec visit path (node : _ Node.t) =
     match node.state with
     | Visited -> ()
@@ -1542,28 +1555,48 @@ let sort_value_bindings
         node.state <- Visited;
         sorted := node :: !sorted
     | Visiting ->
-        raise (Has_cycle (node.name :: path))
+        raise (Has_cycle (node.properties.payload,
+                          node.name :: path))
+  in
+  let initial_visit (node : _ Node.t) =
+    match node.state with
+    | Visited -> ()
+    | Visiting -> assert false
+    | Unvisited ->
+        match node.name.mode with
+        | Dereference -> ()
+        | _ -> visit [] node
   in
   try
     Node.Table.iter
-      (fun _ node -> visit [] node)
+      (fun _ node -> initial_visit node)
       nodes;
     let sorted =
       List.rev !sorted
       |> List.filter_map
         (fun (node : _ Node.t) ->
-           match node.name.mode with
-           | Dereference ->
+           match node.name.mode, node.state with
+           | Dereference, Visited ->
                Some (node.name.id, node.properties.kind, node.properties.payload)
+           | Return, Visited ->
+               begin match Node.Table.find_opt nodes { node.name with mode = Dereference } with
+               | Some { Node.state = Visited; _ } -> None
+               | _ -> Some (node.name.id, node.properties.kind, node.properties.payload)
+               end
            | _ -> None
         )
     in
     Sorted_definition sorted
   with
-  | Has_cycle cycle ->
+  | Has_cycle (representative_payload, cycle) ->
       let cycle =
         List.rev_map
-          (fun { Node.Name.id; _ } -> id)
+          (fun { Node.Name.id; mode } ->
+             Format.eprintf "%s(%s)\n"
+               (Ident.name id)
+               (mode_to_string mode)
+             ;
+             id)
           cycle
       in
-      Cycle_in_definition cycle
+      Cycle_in_definition (representative_payload, cycle)

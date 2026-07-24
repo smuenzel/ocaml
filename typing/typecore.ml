@@ -196,6 +196,7 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
+  | Letrec_cycle of Ident.t list
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -3682,6 +3683,29 @@ and is_nonexpansive_arg = function
 
 let maybe_expansive e = not (is_nonexpansive e)
 
+let annotate_and_sort_recursive_bindings env valbinds =
+  let valbinds' =
+    List.map
+      (fun ({vb_pat = _; vb_expr; vb_rec_kind = _;
+             vb_attributes = _; vb_loc = _} as vb) ->
+         (* Only variable-like bindings are allowed, we already checked *)
+         let name = match let_bound_idents [vb] with
+           | [name] -> name | _ -> assert false in
+         name, (vb_expr, vb)
+      )
+      valbinds
+  in
+  match Value_rec_check.sort_value_bindings valbinds' with
+  | Cycle_in_definition (repr, cycle) ->
+      Error.log_or_raise repr.vb_loc env (Letrec_cycle cycle);
+      valbinds
+  | Sorted_definition sorted ->
+      List.map
+        (fun (_name, vb_rec_kind, vb) ->
+           { vb with vb_rec_kind }
+        )
+        sorted
+
 let annotate_recursive_bindings env valbinds =
   let ids = let_bound_idents valbinds in
   List.map
@@ -4638,7 +4662,7 @@ and type_expect_
           let pat_exp_list, new_env = type_let_rec env spat_sexp_list in
           let body = type_expect new_env sbody ty_expected_explained in
           let pat_exp_list =
-            annotate_recursive_bindings env pat_exp_list
+            annotate_and_sort_recursive_bindings env pat_exp_list
           in
           pat_exp_list, body
         | Nonrecursive ->
@@ -8655,6 +8679,13 @@ let report_error ~loc env =
       Location.errorf ~loc
         "This kind of expression is not allowed as right-hand side of %a"
         Style.inline_code "let rec"
+  | Letrec_cycle ids ->
+      let pp_sep ppf () = fprintf ppf "-> " in
+      let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
+      Location.errorf ~loc
+        "The following recursive definitions form a cycle:@ %a"
+        (pp_print_list ~pp_sep pp_ident)
+        ids
   | Illegal_class_expr ->
       Location.errorf ~loc
         "This kind of recursive class expression is not allowed"

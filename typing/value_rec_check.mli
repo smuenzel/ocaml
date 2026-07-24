@@ -20,7 +20,7 @@ val is_valid_recursive_expression :
 val is_valid_class_expr : Ident.t list -> Typedtree.class_expr -> bool
 
 type 'payload sort_result =
-  | Cycle_in_definition of Ident.t list
+  | Cycle_in_definition of 'payload * Ident.t list
   | Sorted_definition of (Ident.t
                           * Value_rec_types.recursive_binding_kind
                           * 'payload) list
