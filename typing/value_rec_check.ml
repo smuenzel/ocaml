@@ -1463,7 +1463,7 @@ module Node = struct
   type 'payload t =
     { name : Name.t;
       properties : 'payload Properties.t;
-      mutable outgoing_edges : t list;
+      mutable outgoing_edges : 'payload t list;
       mutable state : state;
     }
 
@@ -1504,17 +1504,17 @@ let sort_value_bindings
            let delay = Node.add_new nodes id Delay properties [] in
            let guard = Node.add_new nodes id Guard properties [delay] in
            let return = Node.add_new nodes id Return properties [guard] in
-           let deref = Node.add_new nodes id Dereference properties [return] in
+           let _deref = Node.add_new nodes id Dereference properties [return] in
            ()
        | Dynamic ->
            let deref = Node.add_new nodes id Dereference properties [] in
-           let delay = Node.add_new nodes id Delay properties [deref] in
-           let guard = Node.add_new nodes id Guard properties [deref] in
-           let return = Node.add_new nodes id Return properties [deref] in
+           let _delay = Node.add_new nodes id Delay properties [deref] in
+           let _guard = Node.add_new nodes id Guard properties [deref] in
+           let _return = Node.add_new nodes id Return properties [deref] in
            ()
     ) valbinds;
-  Hashtbl.iter
-    (fun _ node ->
+  Node.Table.iter
+    (fun _ (node : _ Node.t) ->
        let env =
          match node.properties.kind, node.name.mode with
          | Dynamic, Dereference -> node.properties.ty Dereference
@@ -1533,26 +1533,29 @@ let sort_value_bindings
     nodes;
   let sorted = ref [] in
   let exception Has_cycle of Node.Name.t list in
-  let rec visit path node =
+  let rec visit path (node : _ Node.t) =
     match node.state with
-    | Node.Visited -> ()
-    | Node.Unvisited ->
-        node.state <- Node.Visiting;
+    | Visited -> ()
+    | Unvisited ->
+        node.state <- Visiting;
         List.iter (visit (node.name :: path)) node.outgoing_edges;
-        node.state <- Node.Visited;
+        node.state <- Visited;
         sorted := node :: !sorted
-    | Node.Visiting ->
+    | Visiting ->
         raise (Has_cycle (node.name :: path))
   in
   try
-    Hashtbl.iter
+    Node.Table.iter
       (fun _ node -> visit [] node)
       nodes;
     let sorted =
       List.rev !sorted
       |> List.filter_map
-        (fun node ->
-           node.name.id, node.properties.kind, node.properties.payload
+        (fun (node : _ Node.t) ->
+           match node.name.mode with
+           | Dereference ->
+               Some (node.name.id, node.properties.kind, node.properties.payload)
+           | _ -> None
         )
     in
     Sorted_definition sorted
@@ -1560,6 +1563,7 @@ let sort_value_bindings
   | Has_cycle cycle ->
       let cycle =
         List.rev_map
-          (fun { Node.name = { id; _ }; _ } -> id)
+          (fun { Node.Name.id; _ } -> id)
+          cycle
       in
       Cycle_in_definition cycle
