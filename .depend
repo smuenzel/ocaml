@@ -5004,6 +5004,7 @@ lambda/translprim.cmi : \
     typing/env.cmi
 lambda/value_rec_compiler.cmo : \
     typing/value_rec_types.cmi \
+    lambda/printlambda.cmi \
     typing/primitive.cmi \
     utils/misc.cmi \
     utils/lazy_backtrack.cmi \
@@ -5014,6 +5015,7 @@ lambda/value_rec_compiler.cmo : \
     lambda/value_rec_compiler.cmi
 lambda/value_rec_compiler.cmx : \
     typing/value_rec_types.cmi \
+    lambda/printlambda.cmx \
     typing/primitive.cmx \
     utils/misc.cmx \
     utils/lazy_backtrack.cmx \
