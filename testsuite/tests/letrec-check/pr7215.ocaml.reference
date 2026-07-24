@@ -3,5 +3,6 @@ val cast : ('a, 'b) eq -> 'a -> 'b = <fun>
 Line 3, characters 2-55:
 3 |   let rec (p : (int, a) eq) = match p with Refl -> Refl in
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle: p
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): p-> p
 

@@ -26,8 +26,9 @@ module S = struct
     | Some {x = _; self} -> assert (self.x = t.x)
 end;;
 [%%expect {|
-Line 3, characters 10-31:
-3 |   and u = Some { t with x = 2 }
-              ^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Line 4, characters 2-25:
+4 |   and t = { x; self = t }
+      ^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): u-> t
 |}];;

@@ -9,10 +9,11 @@ val f : x:(unit -> 'a) -> unit -> 'a = <fun>
 
 let rec x = f ~x;;
 [%%expect{|
-Line 1, characters 12-16:
+Line 1, characters 0-16:
 1 | let rec x = f ~x;;
-                ^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x-> x
 |}];;
 
 let f x ~y = x + y
@@ -26,8 +27,11 @@ and y =
   ref "foo";;
 [%%expect {|
 val f : int -> y:int -> int = <fun>
-Line 6, characters 12-38:
-6 | let rec g = f ~y:(print_endline !y; 0)
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Lines 7-9, characters 0-11:
+7 | and y =
+8 |   let _ = g in (* ignore g to have a real dependency *)
+9 |   ref "foo"..
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       g-> y-> g-> y
 |}]

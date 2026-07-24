@@ -10,10 +10,11 @@ val f : x:'a -> y:'b -> z:'c -> unit = <fun>
 (* Passing self immediately: forbidden *)
 let rec x = f ~x;;
 [%%expect{|
-Line 1, characters 12-16:
+Line 1, characters 0-16:
 1 | let rec x = f ~x;;
-                ^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x-> x
 |}];;
 
 (* Passing self after an omitted argument: allowed *)
@@ -25,10 +26,11 @@ val y : x:'a -> z:'b -> unit = <fun>
 (* Passing self immediately: forbidden even if other arguments are omitted *)
 let rec x = f ~x ~z:0;;
 [%%expect{|
-Line 1, characters 12-21:
+Line 1, characters 0-21:
 1 | let rec x = f ~x ~z:0;;
-                ^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x-> x
 |}];;
 
 (* Calling self: allowed if the first argument is omitted *)
@@ -47,8 +49,9 @@ let rec f : omitted_g:_ -> omitted_f:_ -> given:_ -> _ =
 val g :
   omitted_g:'a ->
   given:(omitted_f:unit -> 'b) -> omitted_f:'c -> given:'d -> 'b = <fun>
-Line 3, characters 2-37:
-3 |   g ~given:(f ~omitted_g:() ~given:0);;
-      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+Lines 2-3, characters 0-37:
+2 | let rec f : omitted_g:_ -> omitted_f:_ -> given:_ -> _ =
+3 |   g ~given:(f ~omitted_g:() ~given:0)..
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): f-> f
 |}];;
