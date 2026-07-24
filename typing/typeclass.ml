@@ -113,7 +113,6 @@ type error =
   | Duplicate of string * string
   | Closing_self_type of class_signature
   | Polymorphic_class_parameter
-  | Class_cycle of Ident.t list
 
 exception Error_forward of Location.error
 
@@ -1961,15 +1960,6 @@ let class_declarations env cls =
   let info, env =
     type_classes true approx_declaration class_declaration env cls
   in
-  let info =
-    match
-      Value_rec_check.sort_class_expr
-        (List.map (fun ci -> ci.cls_id, (ci.cls_info.ci_expr, ci)) info)
-    with
-    | Sorted_definition list -> List.map (fun (_,_,info) -> info) list
-    | Cycle_in_definition (repr, cycle) ->
-        Error.log_and_raise repr.cls_info.ci_loc env (Class_cycle cycle)
-  in
   let ids, exprs =
     List.split
       (List.map
@@ -2284,13 +2274,6 @@ let report_error_doc env ppf =
   | Polymorphic_class_parameter ->
       fprintf ppf
         "Class parameters cannot be polymorphic."
-  | Class_cycle ids ->
-      let pp_sep ppf () = fprintf ppf " -> " in
-      let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
-      fprintf ppf
-        "The following recursive class definitions form a cycle:@ %a"
-        (pp_print_list ~pp_sep pp_ident)
-        ids
 
 let report_error_doc env ppf err =
   Printtyp.wrap_printing_env ~error:true

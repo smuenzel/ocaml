@@ -24,13 +24,13 @@ Line 5, characters 16-22:
                     ^^^^^^
 Warning 17 [undeclared-virtual-method]: the virtual method "z" is not declared.
 
-class virtual ['a] x' :
+class virtual ['a] x :
   object ('a)
     constraint 'a = < q : unit -> unit; .. >
     method q : unit -> unit
     method private virtual z : unit -> unit
   end
-and virtual ['a] x :
+and virtual ['a] x' :
   object ('a)
     constraint 'a = < q : unit -> unit; .. >
     method q : unit -> unit

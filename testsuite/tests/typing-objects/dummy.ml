@@ -14,11 +14,11 @@ and virtual child2 =
   end
 
 [%%expect{|
-class virtual child2 :
+class virtual child1 : 'a -> object method private parent : 'a end
+and virtual child2 :
   object ('a)
     method private virtual parent : < previous : 'a option; .. >
   end
-and virtual child1 : 'a -> object method private parent : 'a end
 |}]
 
 class virtual child1' parent =

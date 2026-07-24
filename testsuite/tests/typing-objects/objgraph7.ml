@@ -83,16 +83,85 @@ module M2 : sig type c1 = M.c2 end = M
 module M3 : sig val f : unit -> M.c2 end = struct let f () = new M.c1 end
 
 [%%expect{|
-Lines 56-64, characters 2-5:
-56 | ..and c7 = object
-57 |     method c1 = new c7
-58 |     method c2 = new c1
-59 |     method c3 = new c2
-60 |     method c4 = new c3
-61 |     method c5 = new c4
-62 |     method c6 = new c5
-63 |     method c7 = new c6
-64 |   end
-Error: The following recursive class definitions form a cycle: c1 -> c7
-Unexecuted phrases: 5 phrases did not execute due to an error
+module M :
+  sig
+    class c1 :
+      object
+        method c1 : c1
+        method c2 : c2
+        method c3 : c3
+        method c4 : c4
+        method c5 : c5
+        method c6 : c6
+        method c7 : c7
+      end
+    and c2 :
+      object
+        method c1 : c2
+        method c2 : c3
+        method c3 : c4
+        method c4 : c5
+        method c5 : c6
+        method c6 : c7
+        method c7 : c1
+      end
+    and c3 :
+      object
+        method c1 : c3
+        method c2 : c4
+        method c3 : c5
+        method c4 : c6
+        method c5 : c7
+        method c6 : c1
+        method c7 : c2
+      end
+    and c4 :
+      object
+        method c1 : c4
+        method c2 : c5
+        method c3 : c6
+        method c4 : c7
+        method c5 : c1
+        method c6 : c2
+        method c7 : c3
+      end
+    and c5 :
+      object
+        method c1 : c5
+        method c2 : c6
+        method c3 : c7
+        method c4 : c1
+        method c5 : c2
+        method c6 : c3
+        method c7 : c4
+      end
+    and c6 :
+      object
+        method c1 : c6
+        method c2 : c7
+        method c3 : c1
+        method c4 : c2
+        method c5 : c3
+        method c6 : c4
+        method c7 : c5
+      end
+    and c7 :
+      object
+        method c1 : c7
+        method c2 : c1
+        method c3 : c2
+        method c4 : c3
+        method c5 : c4
+        method c6 : c5
+        method c7 : c6
+      end
+  end
+val f : M.c1 -> M.c2 = <fun>
+val g : M.c1 -> M.c2 = <fun>
+val h :
+  < c1 : #M.c2; c2 : #M.c3; c3 : #M.c4; c4 : #M.c5; c5 : #M.c6; c6 :
+    #M.c7; c7 : #M.c1; .. > ->
+  M.c2 = <fun>
+module M2 : sig type c1 = M.c2 end
+module M3 : sig val f : unit -> M.c2 end
 |}]

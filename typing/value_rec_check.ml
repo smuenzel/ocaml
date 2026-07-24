@@ -1487,45 +1487,34 @@ module Node = struct
 
 end
 
+(*
 let mode_to_string : Mode.t -> string = function
   | Ignore -> "Ignore"
   | Delay -> "Delay"
   | Guard -> "Guard"
   | Return -> "Return"
   | Dereference -> "Dereference"
-
-let () = ignore mode_to_string
-
-let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
-
-let comma ppf () =
-  Format.fprintf ppf ", "
-
-let pp_ident ppf (ident, _, _) =
-  Format.fprintf ppf "%s" (Ident.name ident)
+   *)
 
 type 'payload sort_result =
   | Cycle_in_definition of 'payload * Ident.t list
   | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
-let sort_generic
+let sort_value_bindings
   (type payload)
-  (type e)
-  ~(classify : e -> sd)
-  ~get_ty
-  (valbinds : (Ident.t * (e * payload)) list)
+  (valbinds : (Ident.t * (Typedtree.expression * payload)) list)
   =
   let nodes = Node.Table.create 27 in
   List.iter
     (fun (id, (expr, payload)) ->
-       let kind = classify expr in
+       let kind = classify_expression expr in
        let properties =
          { Node.Properties.kind;
            payload;
-           ty = get_ty expr;
+           ty = expression expr;
          }
        in
-       match classify expr with
+       match classify_expression expr with
        | Static ->
            let delay = Node.add_new nodes id Delay properties [] in
            let guard = Node.add_new nodes id Guard properties [delay] in
@@ -1605,9 +1594,6 @@ let sort_generic
            | _ -> None
         )
     in
-    if do_print then
-      Format.eprintf "Sorted: %a@."
-        Format.(pp_print_list ~pp_sep:comma pp_ident) sorted ;
     assert (List.length sorted = List.length valbinds);
     Sorted_definition sorted
   with
@@ -1628,21 +1614,3 @@ let sort_generic
         | _ -> cycle
       in
       Cycle_in_definition (representative_payload, cycle)
-
-let sort_value_bindings
-  (type payload)
-  (valbinds : (Ident.t * (Typedtree.expression * payload)) list)
-  =
-  sort_generic
-    ~classify:classify_expression
-    ~get_ty:expression
-    valbinds
-
-let sort_class_expr
-  (type payload)
-  (valbinds : (Ident.t * (Typedtree.class_expr * payload)) list)
-  =
-  sort_generic
-    ~classify:(fun _ -> Static)
-    ~get_ty:class_expr
-    valbinds

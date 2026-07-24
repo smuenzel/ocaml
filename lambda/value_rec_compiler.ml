@@ -867,8 +867,6 @@ let compile_update size dummy newval =
 
 (** Compilation function *)
 
-let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
-
 let compile_letrec input_bindings body =
   let subst_for_constants =
     List.fold_left (fun subst (id, _, _) ->
@@ -941,10 +939,8 @@ let compile_letrec input_bindings body =
     List.fold_left (fun body binding ->
         match binding with
         | Patch (id, size, lam) ->
-            if do_print then Format.eprintf "Patch %s@." (Ident.name id);
             Lsequence (compile_update size (Lvar id) lam, body)
         | Dynamic (id, lam) ->
-            if do_print then Format.eprintf "Dynamic %s@." (Ident.name id);
             Llet(Strict, Pgenval, id, lam, body)
       ) body all_bindings_rev.bindings
   in
