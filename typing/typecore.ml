@@ -8671,10 +8671,15 @@ let report_error ~loc env =
         "This kind of expression is not allowed as right-hand side of %a"
         Style.inline_code "let rec"
   | Letrec_cycle ids ->
+      let[@manual.ref "s:letrecvalues"] manual_ref =
+        [ 12; 1 ]
+      in
       let pp_sep ppf () = fprintf ppf "-> " in
       let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
       Location.errorf ~loc
-        "The following recursive definitions form a cycle:@ %a"
+        "The following recursive definitions form a cycle of@ \
+         non-statically constructive values %a:@ %a"
+        Misc.print_see_manual manual_ref
         (pp_print_list ~pp_sep pp_ident)
         ids
   | Illegal_class_expr ->
