@@ -24,9 +24,8 @@
 let f (z: int) = let rec x = [| y; z |] and y = z in x;;
 let f (z: bytes) = let rec x = [| y; z |] and y = z in x;;
 [%%expect {|
->> Fatal error: y unbound at toplevel
-Exception: Misc.Fatal_error.
-Unexecuted phrases: 1 phrases did not execute due to an error
+val f : int -> int array = <fun>
+val f : bytes -> bytes array = <fun>
 |}];;
 
 (* In this test, `z` has a generic/polymorphic type,

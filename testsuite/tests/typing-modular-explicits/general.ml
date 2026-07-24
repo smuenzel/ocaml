@@ -1038,11 +1038,6 @@ let rec m = (fun (module T : Typ) (x : T.t) -> x) (module Int) 3
 
 [%%expect{|
 val m : int List.t = [3]
-val g : int list = [3; 3]
-val m : int List.t = [3]
-val m : Int.t = 3
-|}, Principal{|
-val m : int List.t = [3]
 val m : int List.t = [3]
 val g : int list = [3; 3]
 val m : Int.t = 3

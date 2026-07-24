@@ -1494,6 +1494,8 @@ let mode_to_string : Mode.t -> string = function
   | Guard -> "Guard"
   | Return -> "Return"
   | Dereference -> "Dereference"
+
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
    *)
 
 type 'payload sort_result =
@@ -1538,15 +1540,16 @@ let sort_value_bindings
        in
        Env.iter
          (fun id mode ->
-            match Mode.compose node.name.mode mode with
-            | Ignore -> ()
-            | Delay -> ()
-            | Guard -> ()
-            | Return -> ()
-            | Dereference ->
-                match Node.Table.find_opt nodes { id; mode } with
-                | None -> ()
-                | Some node' ->
+            let mode' = Mode.compose node.name.mode mode in
+            match Node.Table.find_opt nodes { id; mode } with
+            | None -> ()
+            | Some node' ->
+                match mode' with
+                | Ignore -> ()
+                | Delay | Guard | Return when node'.Node.properties.kind = Value_rec_types.Dynamic ->
+                    node.outgoing_edges <- node' :: node.outgoing_edges
+                | Delay | Guard | Return -> ()
+                | Dereference ->
                     node.outgoing_edges <- node' :: node.outgoing_edges
          )
          env

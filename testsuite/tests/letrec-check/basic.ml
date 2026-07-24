@@ -294,7 +294,7 @@ Line 6, characters 2-26:
       ^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       x-> y-> x
+       y-> x-> y-> x
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
