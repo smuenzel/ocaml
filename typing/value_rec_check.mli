@@ -28,3 +28,7 @@ type 'payload sort_result =
 val sort_value_bindings :
   (Ident.t * (Typedtree.expression * 'payload)) list ->
   'payload sort_result
+
+val sort_class_expr :
+  (Ident.t * (Typedtree.class_expr * 'payload)) list ->
+  'payload sort_result

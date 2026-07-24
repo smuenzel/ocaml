@@ -124,6 +124,7 @@ type error =
   | Duplicate of string * string
   | Closing_self_type of class_signature
   | Polymorphic_class_parameter
+  | Class_cycle of Ident.t list
 
 exception Error_forward of Location.error
 
