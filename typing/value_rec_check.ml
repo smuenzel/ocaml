@@ -1485,7 +1485,7 @@ type 'payload sort_result =
   | Cycle_in_definition of Ident.t list
   | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
-let sort_nodes
+let sort_value_bindings
   (type payload)
   (valbinds : (Ident.t * (Typedtree.expression * payload)) list)
   =
