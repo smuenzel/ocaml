@@ -867,8 +867,6 @@ let compile_update size dummy newval =
 
 (** Compilation function *)
 
-let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
-
 let compile_letrec input_bindings body =
   let subst_for_constants =
     List.fold_left (fun subst (id, _, _) ->
@@ -879,27 +877,30 @@ let compile_letrec input_bindings body =
     List.fold_left (fun rev_bindings (id, rkind, def) ->
         match (rkind : Value_rec_types.recursive_binding_kind) with
         | Dynamic ->
-          { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
+            { rev_bindings
+              with bindings = Dynamic (id, def) :: rev_bindings.bindings }
         | Static ->
           let size = compute_static_size def in
           begin match size with
           | Constant const_def ->
             if Lambda.is_evaluated def
             then begin
-              { rev_bindings with constants = (id, def) :: rev_bindings.constants }
+              { rev_bindings
+                with constants = (id, def) :: rev_bindings.constants }
             end
             else begin
               let def =
-                Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton id const_def) def
+                Lambda.subst
+                  (fun _ _ env -> env) (Ident.Map.singleton id const_def) def
               in
               let id_dyn = Ident.rename id in
-              if do_print then
-                Format.eprintf "Const %s with %a@." (Ident.name id) Printlambda.lambda def;
               (* The dynamic binding evaluates any side effects, whereas the
-                 constant is the actual value (which may be used in other expressions).
+                 constant is the actual value (which may be used in other
+                 expressions).
               *)
-              { rev_bindings with bindings = Dynamic (id_dyn, def) :: rev_bindings.bindings
-                                ; constants = (id, def) :: rev_bindings.constants }
+              { rev_bindings
+                with bindings = Dynamic (id_dyn, def) :: rev_bindings.bindings
+                   ; constants = (id, def) :: rev_bindings.constants }
             end
           | Unreachable ->
             (* The result never escapes any recursive variables, so as we know
@@ -909,9 +910,8 @@ let compile_letrec input_bindings body =
             let def =
               Lambda.subst (fun _ _ env -> env) subst_for_constants def
             in
-            if do_print then
-              Format.eprintf "Unreachable %s with %a@." (Ident.name id) Printlambda.lambda def;
-            { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
+            { rev_bindings
+              with bindings = Dynamic (id, def) :: rev_bindings.bindings }
           | Block size ->
             { rev_bindings with
               bindings = Patch (id, size, def) :: rev_bindings.bindings;
@@ -937,8 +937,10 @@ let compile_letrec input_bindings body =
                 let functions = (id, lfun) :: rev_bindings.functions in
                 let block_size = Regular_block free_vars_block_size in
                 { functions;
-                  pre_allocations = (ctx_id, block_size) :: rev_bindings.pre_allocations;
-                  bindings = Patch (ctx_id, block_size, lam) :: rev_bindings.bindings;
+                  pre_allocations =
+                    (ctx_id, block_size) :: rev_bindings.pre_allocations;
+                  bindings =
+                    Patch (ctx_id, block_size, lam) :: rev_bindings.bindings;
                   constants = rev_bindings.constants;
                 }
               end
@@ -950,12 +952,8 @@ let compile_letrec input_bindings body =
     List.fold_left (fun body binding ->
         match binding with
         | Patch (id, size, lam) ->
-            if do_print then
-              Format.eprintf "Patch %s with %a@." (Ident.name id) Printlambda.lambda lam;
             Lsequence (compile_update size (Lvar id) lam, body)
         | Dynamic (id, lam) ->
-            if do_print then
-              Format.eprintf "Dynamic %s with %a@." (Ident.name id) Printlambda.lambda lam;
             Llet(Strict, Pgenval, id, lam, body)
       ) body all_bindings_rev.bindings
   in

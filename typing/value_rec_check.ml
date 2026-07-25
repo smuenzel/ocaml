@@ -1417,27 +1417,29 @@ let is_valid_class_expr idlist ce =
    [ Ignore x ] - No dependencies, don't need to create this node
    [ Dereference x] - Depends on all Dereference nodes of dependencies of [x]
    [ Delay x ] - Depends on all Delay nodes of dependencies of [x]
-   [ Guard x ] - Unmodified dependencies (depends on nodes of the original mode), except Return nodes, which are changed to Guard
+   [ Guard x ] - Unmodified dependencies (depends on nodes of the original
+     mode), except Return nodes, which are changed to Guard
    [ Return x ] - Unmodified dependencies
 
    In addition, we have the following self-dependencies:
    [ Dereference x ] -> [ Return x ] -> [ Guard x ] -> [ Delay x ]
 
 
-   The previous applies to values which have a statically known size, but if the value
-   has a dynamic size, any usage of its address also needs to know its size.
-   Since even the [Delay] context requires an address, we need to add all dependencies
-   of [Dereference] to the [Delay] context.
-   Thus, in the case of a dynamic value, all node types depend on the [Dereference]
-   node (opposite dependency order).
+   The previous applies to values which have a statically known size, but if the
+   value has a dynamic size, any usage of its address also needs to know its
+   size.
+   Since even the [Delay] context requires an address, we need to add all
+   dependencies of [Dereference] to the [Delay] context.
+   Thus, in the case of a dynamic value, all node types depend on the
+   [Dereference] node (opposite dependency order).
 
-   In the topological sort, we only start at [ Return ] / [ Guard ] / [ Delay ] nodes
-   for the DFS. This means that some [ Dereference ] nodes may remain unvisited and
-   don't pariticipate in the ordering -- because they are never dereferenced in the
-   recursive group.
+   In the topological sort, we only start at [ Return ] / [ Guard ] / [ Delay ]
+   nodes for the DFS. This means that some [ Dereference ] nodes may remain
+   unvisited and don't pariticipate in the ordering -- because they are never
+   dereferenced in the recursive group.
    The final ordering is the ordering of the [ Return ] nodes, except in case
-   where a [Dereference] node has been visited, which then takes priority (CR smuenzel:
-   or should it be the first one????)
+   where a [Dereference] node has been visited, which then takes priority
+   (CR smuenzel: or should it be the first one????)
 *)
 
 module Node = struct
@@ -1533,7 +1535,8 @@ let dump_graph ~all ~rep_loc ~ppf_dump nodes =
 
 type 'payload sort_result =
   | Cycle_in_definition of 'payload * Ident.t list
-  | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
+  | Sorted_definition of
+      (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
 let sort_value_bindings
   (type payload)
@@ -1639,11 +1642,17 @@ let sort_value_bindings
         (fun (node : _ Node.t) ->
            match node.name.mode, node.state with
            | Dereference, Visited ->
-               Some (node.name.id, node.properties.kind, node.properties.payload)
+               Some ( node.name.id
+                    , node.properties.kind
+                    , node.properties.payload)
            | Return, Visited ->
-               begin match Node.Table.find_opt nodes { node.name with mode = Dereference } with
+               begin match
+                 Node.Table.find_opt nodes { node.name with mode = Dereference }
+               with
                | Some { Node.state = Visited; _ } -> None
-               | _ -> Some (node.name.id, node.properties.kind, node.properties.payload)
+               | _ -> Some ( node.name.id
+                           , node.properties.kind
+                           , node.properties.payload)
                end
            | _ -> None
         )
