@@ -3705,7 +3705,7 @@ let annotate_and_sort_recursive_bindings env valbinds =
   | Sorted_definition sorted ->
       List.map
         (fun (_name, vb_rec_kind, vb) ->
-           { vb with vb_rec_kind }
+           { vb with vb_rec_kind = Some vb_rec_kind }
         )
         sorted
 
@@ -6769,7 +6769,7 @@ and type_argument_ ?explanation ?recarg env sarg ty_expected' ty_expected =
       re { texp with exp_type = ty_fun; exp_desc =
            Texp_let (Nonrecursive,
                      [{vb_pat=let_pat; vb_expr=texp; vb_attributes=[];
-                       vb_loc=Location.none; vb_rec_kind = Dynamic;
+                       vb_loc=Location.none; vb_rec_kind = None;
                       }],
                      func let_var) }
       end
@@ -7460,7 +7460,7 @@ and value_bindings_of_pat_exp_lists pat_list exp_list ~spat_sexp_list =
           vb_expr = e;
           vb_attributes = pvb.pvb_attributes;
           vb_loc = pvb.pvb_loc;
-          vb_rec_kind = Dynamic;
+          vb_rec_kind = None;
         })
       l spat_sexp_list
   in

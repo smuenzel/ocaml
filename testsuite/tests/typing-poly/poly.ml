@@ -1627,8 +1627,8 @@ val f : 'a -> int = <fun>
 val g : 'a -> int = <fun>
 type 'a t = Leaf of 'a | Node of ('a * 'a) t
 val depth : 'a t -> int = <fun>
-val d : ('a * 'a) t -> int = <fun>
 val depth : 'a t -> int = <fun>
+val d : ('a * 'a) t -> int = <fun>
 |}];;
 let rec depth : 'a. 'a t -> _ =
   function Leaf x -> x | Node x -> 1 + depth x;; (* fails *)
@@ -1668,8 +1668,8 @@ let f : 'a. _ -> _ = fun x -> x;;
 let zero : 'a. [> `Int of int | `B of 'a] as 'a  = `Int 0;; (* ok *)
 let zero : 'a. [< `Int of int] as 'a = `Int 0;; (* fails *)
 [%%expect {|
-val q : unit -> 'a list * '_b list ref = <fun>
 val r : 'a list * '_b list ref = ([], {contents = []})
+val q : unit -> 'a list * '_b list ref = <fun>
 val f : 'a -> 'a = <fun>
 val zero : [> `B of 'a | `Int of int ] as 'a = `Int 0
 Line 5, characters 39-45:
@@ -1703,8 +1703,8 @@ Error: This constructor has type "[> `Int of int ]"
 let rec id : 'a. 'a -> 'a = fun x -> x
 and neg i b = (id (-i), id (not b));;
 [%%expect {|
-val neg : int -> bool -> int * bool = <fun>
 val id : 'a -> 'a = <fun>
+val neg : int -> bool -> int * bool = <fun>
 |}];;
 
 (* De Xavier *)
@@ -1723,8 +1723,8 @@ and transf_alist : 'a. _ -> ('a*t) list -> ('a*t) list = fun f -> function
   | (k,v)::tl -> (k, transf f v) :: transf_alist f tl
 ;;
 [%%expect {|
-val transf_alist : (int -> t) -> ('a * t) list -> ('a * t) list = <fun>
 val transf : (int -> t) -> t -> t = <fun>
+val transf_alist : (int -> t) -> ('a * t) list -> ('a * t) list = <fun>
 |}];;
 
 (* PR#4862 *)

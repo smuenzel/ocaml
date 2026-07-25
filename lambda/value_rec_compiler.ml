@@ -892,7 +892,11 @@ let compile_letrec input_bindings body =
               let def =
                 Lambda.subst (fun _ _ env -> env) (Ident.Map.singleton id const_def) def
               in
-              { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
+              let id_dyn = Ident.rename id in
+              if do_print then
+                Format.eprintf "Const %s with %a@." (Ident.name id) Printlambda.lambda def;
+              { rev_bindings with bindings = Dynamic (id_dyn, def) :: rev_bindings.bindings
+                                ; constants = (id, def) :: rev_bindings.constants }
             end
           | Unreachable ->
             (* The result never escapes any recursive variables, so as we know
@@ -902,6 +906,8 @@ let compile_letrec input_bindings body =
             let def =
               Lambda.subst (fun _ _ env -> env) subst_for_constants def
             in
+            if do_print then
+              Format.eprintf "Unreachable %s with %a@." (Ident.name id) Printlambda.lambda def;
             { rev_bindings with bindings = Dynamic (id, def) :: rev_bindings.bindings }
           | Block size ->
             { rev_bindings with

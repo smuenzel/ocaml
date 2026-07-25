@@ -34,15 +34,15 @@ Error: The following recursive definitions form a cycle of
 let rec x = [y]
 and y = let x = () in x;;
 [%%expect{|
-val y : unit = ()
 val x : unit list = [()]
+val y : unit = ()
 |}];;
 
 let rec x = [y]
 and y = let rec x = () in x;;
 [%%expect{|
-val y : unit = ()
 val x : unit list = [()]
+val y : unit = ()
 |}];;
 
 let rec x =
@@ -57,24 +57,24 @@ val y : (unit -> 'a) list = [<fun>]
 
 let rec x = [|y|] and y = 0;;
 [%%expect{|
-val y : int = 0
 val x : int array = [|0|]
+val y : int = 0
 |}];;
 
 
 let rec x = (y, y)
 and y = fun () -> ignore x;;
 [%%expect{|
-val y : unit -> unit = <fun>
 val x : (unit -> unit) * (unit -> unit) = (<fun>, <fun>)
+val y : unit -> unit = <fun>
 |}];;
 
 let rec x = Some y
 and y = fun () -> ignore x
 ;;
 [%%expect{|
-val y : unit -> unit = <fun>
 val x : (unit -> unit) option = Some <fun>
+val y : unit -> unit = <fun>
 |}];;
 
 let rec x = ignore x;;
@@ -138,8 +138,8 @@ let rec x = `A y
 and y = fun () -> ignore x
 ;;
 [%%expect{|
-val y : unit -> unit = <fun>
 val x : [> `A of unit -> unit ] = `A <fun>
+val y : unit -> unit = <fun>
 |}];;
 
 let rec x = { contents = y }
@@ -294,7 +294,7 @@ Line 6, characters 2-26:
       ^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       x -> y -> x -> y -> y
+       x -> y -> x -> x
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
@@ -308,12 +308,12 @@ let foo p x =
   (f, g)
 ;;
 [%%expect{|
-Lines 4-5, characters 2-56:
-4 | ..and g =
-5 |     if not p then (fun y -> x - f y) else (fun y -> f y)
+Lines 2-3, characters 2-52:
+2 | ..let rec f =
+3 |     if p then (fun y -> x + g y) else (fun y -> g y)
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       g -> f -> g -> g
+       f -> g -> f -> f
 |}];;
 
 let rec x =
@@ -323,12 +323,14 @@ let rec x =
 and y = match x with
   z -> ("y", z);;
 [%%expect{|
-Lines 5-6, characters 0-15:
-5 | and y = match x with
-6 |   z -> ("y", z)..
+Lines 1-4, characters 0-30:
+1 | let rec x =
+2 |   match let _ = y in raise Not_found with
+3 |     _ -> "x"
+4 |   | exception Not_found -> "z"
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       y -> x -> y -> y
+       x -> y -> x -> x
 |}];;
 
 

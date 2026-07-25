@@ -1015,16 +1015,16 @@ let rec f (module T : Typ) x =
 and g x = f (module Int) x
 
 [%%expect{|
-val g : 'a -> 'b = <fun>
 val f : (module Typ) -> 'a -> 'b = <fun>
+val g : 'a -> 'b = <fun>
 |}, Principal{|
 Line 3, characters 12-24:
 3 | and g x = f (module Int) x
                 ^^^^^^^^^^^^
 Warning 18 [not-principal]: this module packing is not principal.
 
-val g : 'a -> 'b = <fun>
 val f : (module Typ) -> 'a -> 'b = <fun>
+val g : 'a -> 'b = <fun>
 |}]
 
 (* Test that the value letrecs does not trivially fails on dependant

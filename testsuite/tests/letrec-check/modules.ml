@@ -90,7 +90,7 @@ Line 2, characters 0-36:
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Error: The following recursive definitions form a cycle of
        non-statically constructive values (see manual section 12.1):
-       x -> y -> x -> y -> y
+       x -> y -> x -> x
 |}];;
 
 (* module constraints *)

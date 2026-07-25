@@ -946,6 +946,12 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
         pat_expr_list in
       let transl_case {vb_expr=expr; vb_attributes; vb_rec_kind = rkind;
                        vb_loc; vb_pat} id =
+        let rkind =
+          match rkind with
+          | None -> Misc.fatal_errorf "Recursive let binding %s has no kind"
+                      (Ident.name id)
+          | Some rkind -> rkind
+        in
         let def = transl_bound_exp ~scopes ~in_structure vb_pat expr in
         let def =
           Translattribute.add_function_attributes def vb_loc vb_attributes
