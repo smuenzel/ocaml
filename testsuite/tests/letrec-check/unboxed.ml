@@ -25,8 +25,9 @@ type r = A of r [@@unboxed]
 Line 2, characters 0-15:
 2 | let rec y = A y;;
     ^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): y -> y
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "y" dereferences "y"
 |}];;
 
 (* This test is not allowed if 'a' is unboxed, but should be accepted
@@ -65,8 +66,9 @@ Lines 4-9, characters 0-10:
 7 |        X a
 8 |      else
 9 |        Y)}..
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): a -> a
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "a" dereferences "a"
 |}];;
 
 (* This test is not allowed if 'c' is unboxed, but should be accepted
@@ -107,6 +109,7 @@ Lines 4-9, characters 0-9:
 7 |        V d
 8 |      else
 9 |        W)..
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): d -> d
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "d" dereferences "d"
 |}];;

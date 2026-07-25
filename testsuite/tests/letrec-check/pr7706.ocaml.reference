@@ -2,8 +2,9 @@ Lines 4-6, characters 0-3:
 4 | let rec x =
 5 |   let y = if false then (fun z -> 1) else (fun z -> x 4 + 1) in
 6 |   y..
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x -> x
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: x dereferences x
 Line 2, characters 17-18:
 2 | let () = ignore (x 42);;
                      ^

@@ -12,8 +12,9 @@ let rec x = f ~x;;
 Line 1, characters 0-16:
 1 | let rec x = f ~x;;
     ^^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x -> x
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "x" dereferences "x"
 |}];;
 
 let f x ~y = x + y
@@ -31,7 +32,9 @@ Lines 7-9, characters 0-11:
 7 | and y =
 8 |   let _ = g in (* ignore g to have a real dependency *)
 9 |   ref "foo"..
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1):
-       y -> g -> y -> g -> g
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "g" dereferences "y"
+Trace: "y" dereferences "g"
+Trace: "g" dereferences "y"
 |}]

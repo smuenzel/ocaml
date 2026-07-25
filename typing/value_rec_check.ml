@@ -1531,8 +1531,19 @@ let dump_graph ~all ~rep_loc ~ppf_dump nodes =
   Format.fprintf ppf_dump "}\n%!";
   ()
 
+type cycle_edge =
+  | Edge_delay
+  | Edge_guard
+  | Edge_return
+  | Edge_deref
+
+type 'payload cycle =
+  { origin : 'payload;
+    path : (Ident.t * cycle_edge * Ident.t) list;
+  }
+
 type 'payload sort_result =
-  | Cycle_in_definition of 'payload * Ident.t list
+  | Cycle_in_definition of 'payload cycle
   | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
 
 let sort_value_bindings
@@ -1579,30 +1590,39 @@ let sort_value_bindings
             | Some node' ->
                 match mode', node'.Node.properties.kind with
                 | Ignore, _ -> ()
-                | Delay | Guard | Return,  Value_rec_types.Dynamic ->
+                | (Delay | Guard | Return | Dereference),  Value_rec_types.Dynamic ->
                     (* Unguarded and Dependent for Dynamic values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
-                | Return | Dereference, Value_rec_types.Static ->
+                | (Return | Dereference), Value_rec_types.Static ->
                     (* Unguarded only for Static values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
-                | Delay | Guard, Value_rec_types.Static -> ()
+                | (Delay | Guard), Value_rec_types.Static -> ()
          )
          env
     )
     nodes;
   let sorted = ref [] in
-  let exception Has_cycle of payload * Node.Name.t list in
+  let exception Has_cycle of payload * (Node.Name.t * cycle_edge * Node.Name.t) list in
   let rec visit path (node : _ Node.t) =
     match node.state with
     | Visited -> ()
     | Unvisited ->
         node.state <- Visiting;
-        List.iter (visit (node.name :: path)) node.outgoing_edges;
+        List.iter (visit_edge ~origin:node.name path) node.outgoing_edges;
         node.state <- Visited;
         sorted := node :: !sorted
     | Visiting ->
-        raise (Has_cycle (node.properties.payload,
-                          node.name :: path))
+        raise (Has_cycle (node.properties.payload, path))
+  and visit_edge ~origin path (node : _ Node.t) =
+    let edge =
+      match node.name.mode with
+      | Ignore -> assert false
+      | Delay -> Edge_delay
+      | Guard -> Edge_guard
+      | Return -> Edge_return
+      | Dereference -> Edge_deref
+    in
+    visit ((origin, edge, node.name) :: path) node
   in
   let initial_visit (node : _ Node.t) =
     match node.state with
@@ -1654,23 +1674,21 @@ let sort_value_bindings
   with
   | Has_cycle (representative_payload, cycle) ->
       maybe_dump ~all:true;
-      let cycle, last_opt =
+      let cycle =
+        List.rev_map
+          (fun (id1, edge, id2) ->
+             (id1.Node.Name.id, edge, id2.Node.Name.id)
+          )
+          cycle
+      in
+      let cycle, _ =
         List.fold_left
-          (fun (acc, last_opt) { Node.Name.id; mode = _ } ->
+          (fun (acc, last_opt) current ->
              match last_opt with
-             | Some last when Ident.equal id last -> acc, last_opt
-             | _ -> (id :: acc, Some id)
+             | Some last when last = current -> acc, last_opt
+             | _ -> current :: acc, Some current
           )
           ([], None)
           cycle
       in
-      let cycle = match last_opt with
-        | Some last -> last :: cycle
-        | None -> cycle
-      in
-      let cycle =
-        match cycle with
-          [ single ] -> [ single; single ]
-        | _ -> cycle
-      in
-      Cycle_in_definition (representative_payload, List.rev cycle)
+      Cycle_in_definition { origin = representative_payload; path = List.rev cycle }

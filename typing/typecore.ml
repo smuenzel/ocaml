@@ -196,7 +196,7 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
-  | Letrec_cycle of Ident.t list
+  | Letrec_cycle of (Ident.t * Value_rec_check.cycle_edge * Ident.t) list
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -3699,8 +3699,8 @@ let annotate_and_sort_recursive_bindings env valbinds =
       valbinds
   in
   match Value_rec_check.sort_value_bindings valbinds' with
-  | Cycle_in_definition (repr, cycle) ->
-      Error.log_or_raise repr.vb_loc env (Letrec_cycle cycle);
+  | Cycle_in_definition { origin; path } ->
+      Error.log_or_raise origin.vb_loc env (Letrec_cycle path);
       valbinds
   | Sorted_definition sorted ->
       List.map
@@ -8670,18 +8670,40 @@ let report_error ~loc env =
       Location.errorf ~loc
         "This kind of expression is not allowed as right-hand side of %a"
         Style.inline_code "let rec"
-  | Letrec_cycle ids ->
+  | Letrec_cycle path ->
       let[@manual.ref "s:letrecvalues"] manual_ref =
         [ 12; 1 ]
       in
-      let pp_sep ppf () = fprintf ppf " -> " in
       let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
-      Location.errorf ~loc
-        "The following recursive definitions form a cycle of@ \
-         non-statically constructive values %a:@ %a"
+      let pp_edge ppf ((edge : Value_rec_check.cycle_edge), next) =
+        match edge with
+        | Edge_delay ->
+            fprintf ppf "creates a function containing %a"
+              (Style.as_inline_code pp_ident) next
+        | Edge_guard ->
+            fprintf ppf "returns %a inside a data structure"
+              (Style.as_inline_code pp_ident) next
+        | Edge_return ->
+            fprintf ppf "returns %a"
+              (Style.as_inline_code pp_ident) next
+        | Edge_deref ->
+            fprintf ppf "dereferences %a"
+              (Style.as_inline_code pp_ident) next
+      in
+      let sub =
+        List.map
+          (fun (id1, edge, id2) ->
+             Location.msg
+               "@[Trace: %a %a@]"
+               (Style.as_inline_code pp_ident) id1
+               pp_edge (edge, id2)
+          )
+          path
+      in
+      Location.errorf ~loc ~sub
+        "This recursive definition forms a cycle of@ \
+         non-statically constructive values %a."
         Misc.print_see_manual manual_ref
-        (pp_print_list ~pp_sep pp_ident)
-        ids
   | Illegal_class_expr ->
       Location.errorf ~loc
         "This kind of recursive class expression is not allowed"

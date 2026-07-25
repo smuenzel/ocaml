@@ -29,7 +29,8 @@ end;;
 Line 4, characters 2-25:
 4 |   and t = { x; self = t }
       ^^^^^^^^^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1):
-       t -> u -> u
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "u" dereferences "t"
+Trace: "t" dereferences "t"
 |}];;

@@ -13,8 +13,9 @@ let rec x = f ~x;;
 Line 1, characters 0-16:
 1 | let rec x = f ~x;;
     ^^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x -> x
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "x" dereferences "x"
 |}];;
 
 (* Passing self after an omitted argument: allowed *)
@@ -29,8 +30,9 @@ let rec x = f ~x ~z:0;;
 Line 1, characters 0-21:
 1 | let rec x = f ~x ~z:0;;
     ^^^^^^^^^^^^^^^^^^^^^
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): x -> x
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "x" dereferences "x"
 |}];;
 
 (* Calling self: allowed if the first argument is omitted *)
@@ -52,6 +54,7 @@ val g :
 Lines 2-3, characters 0-37:
 2 | let rec f : omitted_g:_ -> omitted_f:_ -> given:_ -> _ =
 3 |   g ~given:(f ~omitted_g:() ~given:0)..
-Error: The following recursive definitions form a cycle of
-       non-statically constructive values (see manual section 12.1): f -> f
+Error: This recursive definition forms a cycle of
+       non-statically constructive values (see manual section 12.1).
+Trace: "f" dereferences "f"
 |}];;
