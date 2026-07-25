@@ -558,7 +558,7 @@ let output_corrected oc ~file_contents (correction : _ Correction.t) =
   let output_body oc { str; tag } =
     Printf.fprintf oc "{%s|%s|%s}" tag str tag
   in
-  let output_for_all_clflags ?(output_empty=true) map =
+  let output_for_all_clflags ?(trailing=false) map =
     let normal =
       Parameter.Set.Map.find_opt Parameter.Set.empty map
       |> Option.value ~default:empty_str
@@ -567,10 +567,12 @@ let output_corrected oc ~file_contents (correction : _ Correction.t) =
       coalesce_outputs_and_order_by_lowest_flag ~normal map
     in
     (* don't output empty trailing output *)
-    if (not output_empty) && Parameter.Set.Map.is_empty ordered_by_lowest_flag
+    if trailing && Parameter.Set.Map.is_empty ordered_by_lowest_flag
        && normal.str = empty_str.str
     then ()
     else begin
+      if trailing
+      then Printf.fprintf oc "\n[%%%%expect";
       output_body oc normal;
       Parameter.Set.Map.iter
         (fun _ list ->
@@ -589,6 +591,8 @@ let output_corrected oc ~file_contents (correction : _ Correction.t) =
              list
         )
         ordered_by_lowest_flag;
+      if trailing
+      then Printf.fprintf oc "]\n";
     end
   in
   let ofs =
@@ -599,7 +603,7 @@ let output_corrected oc ~file_contents (correction : _ Correction.t) =
         c.payload_loc.loc_end.pos_cnum)
   in
   output_slice oc file_contents ofs (String.length file_contents);
-  output_for_all_clflags correction.trailing_output ~output_empty:false
+  output_for_all_clflags correction.trailing_output ~trailing:true
 
 let write_corrected ~file ~file_contents correction =
   let oc = open_out file in
