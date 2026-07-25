@@ -1494,7 +1494,7 @@ let mode_to_string : Mode.t -> string = function
   | Return -> "Return"
   | Dereference -> "Dereference"
 
-let dump_graph ~rep_loc ~ppf_dump nodes =
+let dump_graph ~all ~rep_loc ~ppf_dump nodes =
   let pp_node_name ppf (node : _ Node.t) =
     Format.fprintf ppf "\"%s/%s\""
       (Ident.name node.name.id)
@@ -1507,12 +1507,17 @@ let dump_graph ~rep_loc ~ppf_dump nodes =
   Format.fprintf ppf_dump "  node [shape = record];\n";
   Node.Table.iter
     (fun _ (node : _ Node.t) ->
-       match node.state with
-       | Visited ->
-           Format.fprintf ppf_dump "  %a [label = \"%s|%s\"];\n"
+       match node.state, all with
+       | _, true
+       | Visited, _ ->
+           Format.fprintf ppf_dump "  %a [label = \"%s|%s\"%s];\n"
              pp_node_name node
              (Ident.name node.name.id)
-             (mode_to_string node.name.mode);
+             (mode_to_string node.name.mode)
+             (match node.properties.kind with
+              | Static -> ""
+              | Dynamic -> ",style=rounded")
+           ;
            List.iter
              (fun edge ->
                 Format.fprintf ppf_dump "  %a -> %a;\n"
@@ -1523,7 +1528,7 @@ let dump_graph ~rep_loc ~ppf_dump nodes =
        | _ -> ()
     )
     nodes;
-  Format.fprintf ppf_dump "}\n";
+  Format.fprintf ppf_dump "}\n%!";
   ()
 
 type 'payload sort_result =
@@ -1544,7 +1549,7 @@ let sort_value_bindings
            ty = expression expr;
          }
        in
-       match classify_expression expr with
+       match kind with
        | Static ->
            let delay = Node.add_new nodes id Delay properties [] in
            let guard = Node.add_new nodes id Guard properties [delay] in
@@ -1576,8 +1581,13 @@ let sort_value_bindings
                 | Ignore -> ()
                 | Delay | Guard | Return when node'.Node.properties.kind = Value_rec_types.Dynamic ->
                     node.outgoing_edges <- node' :: node.outgoing_edges
+                                                      (*
                 | Delay | Guard | Return -> ()
                 | Dereference ->
+                                                         *)
+                | Delay
+                | Guard -> ()
+                | Return | Dereference ->
                     node.outgoing_edges <- node' :: node.outgoing_edges
          )
          env
@@ -1606,10 +1616,7 @@ let sort_value_bindings
         | Dereference -> ()
         | _ -> visit [] node
   in
-  try
-    Node.Table.iter
-      (fun _ node -> initial_visit node)
-      nodes;
+  let maybe_dump ~all =
     if !Clflags.dump_value_rec
     then begin
       let rep_loc =
@@ -1617,8 +1624,23 @@ let sort_value_bindings
         | [] -> Location.none
         | (_,(expr,_)) :: _ -> expr.exp_loc
       in
-      dump_graph ~rep_loc ~ppf_dump:(Format.err_formatter) nodes;
-    end;
+      dump_graph ~all ~rep_loc ~ppf_dump:(Format.err_formatter) nodes;
+    end
+  in
+  try
+    (*
+    Node.Table.iter
+      (fun _ node -> initial_visit node)
+      nodes;
+       *)
+    List.iter
+      (fun (id, _) ->
+         match Node.Table.find_opt nodes { id; mode = Return } with
+         | None -> ()
+         | Some node -> initial_visit node
+      )
+      valbinds;
+    maybe_dump ~all:false;
     let sorted =
       List.rev !sorted
       |> List.filter_map
@@ -1638,6 +1660,7 @@ let sort_value_bindings
     Sorted_definition sorted
   with
   | Has_cycle (representative_payload, cycle) ->
+      maybe_dump ~all:true;
       let cycle, last_opt =
         List.fold_left
           (fun (acc, last_opt) { Node.Name.id; mode = _ } ->
