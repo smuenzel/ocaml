@@ -1487,7 +1487,6 @@ module Node = struct
 
 end
 
-(*
 let mode_to_string : Mode.t -> string = function
   | Ignore -> "Ignore"
   | Delay -> "Delay"
@@ -1495,8 +1494,37 @@ let mode_to_string : Mode.t -> string = function
   | Return -> "Return"
   | Dereference -> "Dereference"
 
-let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
-   *)
+let dump_graph ~rep_loc ~ppf_dump nodes =
+  let pp_node_name ppf (node : _ Node.t) =
+    Format.fprintf ppf "\"%s/%s\""
+      (Ident.name node.name.id)
+      (mode_to_string node.name.mode)
+  in
+  Format.fprintf ppf_dump "digraph \"%s:%i\" {\n"
+    rep_loc.Location.loc_start.pos_fname
+    rep_loc.Location.loc_start.pos_lnum
+  ;
+  Format.fprintf ppf_dump "  node [shape = record];\n";
+  Node.Table.iter
+    (fun _ (node : _ Node.t) ->
+       match node.state with
+       | Visited ->
+           Format.fprintf ppf_dump "  %a [label = \"%s|%s\"];\n"
+             pp_node_name node
+             (Ident.name node.name.id)
+             (mode_to_string node.name.mode);
+           List.iter
+             (fun edge ->
+                Format.fprintf ppf_dump "  %a -> %a;\n"
+                  pp_node_name node
+                  pp_node_name edge
+             )
+             node.outgoing_edges
+       | _ -> ()
+    )
+    nodes;
+  Format.fprintf ppf_dump "}\n";
+  ()
 
 type 'payload sort_result =
   | Cycle_in_definition of 'payload * Ident.t list
@@ -1582,6 +1610,15 @@ let sort_value_bindings
     Node.Table.iter
       (fun _ node -> initial_visit node)
       nodes;
+    if !Clflags.dump_value_rec
+    then begin
+      let rep_loc =
+        match valbinds with
+        | [] -> Location.none
+        | (_,(expr,_)) :: _ -> expr.exp_loc
+      in
+      dump_graph ~rep_loc ~ppf_dump:(Format.err_formatter) nodes;
+    end;
     let sorted =
       List.rev !sorted
       |> List.filter_map

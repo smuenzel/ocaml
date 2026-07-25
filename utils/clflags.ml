@@ -132,6 +132,7 @@ and dump_flambda = ref false            (* -dflambda *)
 and dump_flambda_let = ref (None : int option) (* -dflambda-let=... *)
 and dump_flambda_verbose = ref false    (* -dflambda-verbose *)
 and dump_instr = ref false              (* -dinstr *)
+and dump_value_rec = ref false          (* -dvalue-rec *)
 and keep_camlprimc_file = ref false     (* -dcamlprimc *)
 
 let keyword_edition: string option ref = ref None
@@ -582,6 +583,7 @@ module Dump_option = struct
     | Raw_lambda
     | Lambda
     | Instr
+    | Value_rec
     | Raw_clambda
     | Clambda
     | Raw_flambda
@@ -612,6 +614,7 @@ module Dump_option = struct
     | Raw_lambda -> "rawlambda"
     | Lambda -> "lambda"
     | Instr -> "instr"
+    | Value_rec -> "value-rec"
     | Raw_clambda -> "rawclambda"
     | Clambda -> "clambda"
     | Raw_flambda -> "rawflambda"
@@ -639,6 +642,7 @@ module Dump_option = struct
     | "rawlambda" -> Some Raw_lambda
     | "lambda" -> Some Lambda
     | "instr" -> Some Instr
+    | "value-rec" -> Some Value_rec
     | "rawclambda" -> Some Raw_clambda
     | "clambda" -> Some Clambda
     | "rawflambda" -> Some Raw_flambda
@@ -667,6 +671,7 @@ module Dump_option = struct
     | Raw_lambda -> dump_rawlambda
     | Lambda -> dump_lambda
     | Instr -> dump_instr
+    | Value_rec -> dump_value_rec
     | Raw_clambda -> dump_rawclambda
     | Clambda -> dump_clambda
     | Raw_flambda -> dump_rawflambda
@@ -708,6 +713,7 @@ module Dump_option = struct
     | Match_comp
     | Raw_lambda
     | Lambda
+    | Value_rec
       -> Frontend
     | Instr
       -> Bytecode
