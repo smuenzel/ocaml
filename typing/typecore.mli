@@ -237,7 +237,7 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
-  | Letrec_cycle of (Ident.t * Value_rec_check.cycle_edge * Ident.t) list
+  | Letrec_cycle of Ident.t list
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error

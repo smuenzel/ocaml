@@ -6,7 +6,6 @@ Warning 20 [ignored-extra-argument]: this argument will not be used by the funct
 Line 5, characters 0-52:
 5 | let rec r = let rec x () = r and y () = x () in y () in r "oops";;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: r dereferences r
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): r -> r
 

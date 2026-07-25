@@ -106,9 +106,8 @@ let rec x = A x;;
 Line 1, characters 0-15:
 1 | let rec x = A x;;
     ^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 (* Representation mismatch between module and signature must be rejected *)

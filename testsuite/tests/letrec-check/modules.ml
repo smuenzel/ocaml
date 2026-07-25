@@ -12,9 +12,8 @@ let rec x = let module M = struct let f = x let g = x () end in fun () -> ();;
 Line 1, characters 0-76:
 1 | let rec x = let module M = struct let f = x let g = x () end in fun () -> ();;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = let module _ = struct let _ = x () end in fun () -> ();;
@@ -22,9 +21,8 @@ let rec x = let module _ = struct let _ = x () end in fun () -> ();;
 Line 1, characters 0-66:
 1 | let rec x = let module _ = struct let _ = x () end in fun () -> ();;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = let module M = struct let f = x () let g = x end in fun () -> ();;
@@ -32,9 +30,8 @@ let rec x = let module M = struct let f = x () let g = x end in fun () -> ();;
 Line 1, characters 0-76:
 1 | let rec x = let module M = struct let f = x () let g = x end in fun () -> ();;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = (let module M = struct let f = y 0 let g = () end in fun () -> ())
@@ -54,9 +51,8 @@ Lines 1-4, characters 0-14:
 2 |   let module M = struct
 3 |     module N = struct let y = x end
 4 |   end in M.N.y..
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 module type T = sig val y: int end
@@ -79,9 +75,8 @@ let rec x = let module M = struct let f = x () and g = x end in fun () -> ();;
 Line 1, characters 0-76:
 1 | let rec x = let module M = struct let f = x () and g = x end in fun () -> ();;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 module type T = sig end
@@ -93,11 +88,9 @@ module type T = sig end
 Line 2, characters 0-36:
 2 | let rec x = (module (val y : T) : T)
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
-Trace: "x" dereferences "y"
-Trace: "y" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       x -> y -> x -> x
 |}];;
 
 (* module constraints *)

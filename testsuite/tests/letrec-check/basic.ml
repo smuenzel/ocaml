@@ -27,9 +27,8 @@ let rec x = let y = () in x;;
 Line 1, characters 0-27:
 1 | let rec x = let y = () in x;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = [y]
@@ -83,9 +82,8 @@ let rec x = ignore x;;
 Line 1, characters 0-20:
 1 | let rec x = ignore x;;
     ^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = y 0 and y _ = ();;
@@ -99,9 +97,8 @@ let rec b = if b then true else false;;
 Line 1, characters 0-37:
 1 | let rec b = if b then true else false;;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "b" dereferences "b"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): b -> b
 |}];;
 
 let rec x = function
@@ -122,9 +119,8 @@ let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
 Line 1, characters 0-59:
 1 | let rec x = { x with contents = 3 }  [@ocaml.warning "-23"];;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 (* this is rejected as `c` will be dereferenced during the copy,
@@ -134,9 +130,8 @@ let rec c = { c with Complex.re = 1.0 };;
 Line 1, characters 0-39:
 1 | let rec c = { c with Complex.re = 1.0 };;
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "c" dereferences "c"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): c -> c
 |}];;
 
 let rec x = `A y
@@ -174,9 +169,8 @@ val r : unit ref = {contents = ()}
 Line 2, characters 0-18:
 2 | let rec x = r := x;;
     ^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x =
@@ -188,11 +182,9 @@ and y = x; ();;
 Line 5, characters 0-13:
 5 | and y = x; ();;
     ^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "y"
-Trace: "y" dereferences "x"
-Trace: "x" dereferences "y"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       y -> x -> y -> x -> x
 |}];;
 
 let rec x =
@@ -226,9 +218,8 @@ Lines 1-4, characters 0-6:
 2 |   while false do
 3 |     let y = x in ignore y
 4 |   done
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x =
@@ -252,9 +243,8 @@ Lines 1-4, characters 0-6:
 2 |   while y do
 3 |     let y = x in ignore y
 4 |   done
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 
@@ -302,11 +292,9 @@ let _ =
 Line 6, characters 2-26:
 6 |   let rec x = Stdlib.ref y
       ^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
-Trace: "x" dereferences "y"
-Trace: "y" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       x -> y -> x -> x
 |}];;
 
 (* An example, from Leo White, of let rec bindings that allocate
@@ -323,11 +311,9 @@ let foo p x =
 Lines 2-3, characters 2-52:
 2 | ..let rec f =
 3 |     if p then (fun y -> x + g y) else (fun y -> g y)
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "f" dereferences "f"
-Trace: "f" dereferences "g"
-Trace: "g" dereferences "f"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       f -> g -> f -> f
 |}];;
 
 let rec x =
@@ -342,11 +328,9 @@ Lines 1-4, characters 0-30:
 2 |   match let _ = y in raise Not_found with
 3 |     _ -> "x"
 4 |   | exception Not_found -> "z"
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "x" dereferences "x"
-Trace: "x" dereferences "y"
-Trace: "y" dereferences "x"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       x -> y -> x -> x
 |}];;
 
 
@@ -379,9 +363,9 @@ Lines 1-12, characters 0-25:
 10 |   let rec x = ref y
 11 |   and y = ref wrong
 12 |   in ref ("foo" ^ ! ! !x)..
-Error: This recursive definition forms a cycle of
-       non-statically constructive values (see manual section 12.1).
-Trace: "wrong" dereferences "wrong"
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1):
+       wrong -> wrong
 |}]
 
 (* in this case, x does not depend on y, so everything is fine *)

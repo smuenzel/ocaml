@@ -19,20 +19,11 @@ val is_valid_recursive_expression :
 
 val is_valid_class_expr : Ident.t list -> Typedtree.class_expr -> bool
 
-type cycle_edge =
-  | Edge_delay
-  | Edge_guard
-  | Edge_return
-  | Edge_deref
-
-type 'payload cycle =
-  { origin : 'payload;
-    path : (Ident.t * cycle_edge * Ident.t) list;
-  }
-
 type 'payload sort_result =
-  | Cycle_in_definition of 'payload cycle
-  | Sorted_definition of (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
+  | Cycle_in_definition of 'payload * Ident.t list
+  | Sorted_definition of (Ident.t
+                          * Value_rec_types.recursive_binding_kind
+                          * 'payload) list
 
 val sort_value_bindings :
   (Ident.t * (Typedtree.expression * 'payload)) list ->
