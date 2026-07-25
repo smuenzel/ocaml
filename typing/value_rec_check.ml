@@ -1577,18 +1577,15 @@ let sort_value_bindings
             match Node.Table.find_opt nodes { id; mode } with
             | None -> ()
             | Some node' ->
-                match mode' with
-                | Ignore -> ()
-                | Delay | Guard | Return when node'.Node.properties.kind = Value_rec_types.Dynamic ->
+                match mode', node'.Node.properties.kind with
+                | Ignore, _ -> ()
+                | Delay | Guard | Return,  Value_rec_types.Dynamic ->
+                    (* Unguarded and Dependent for Dynamic values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
-                                                      (*
-                | Delay | Guard | Return -> ()
-                | Dereference ->
-                                                         *)
-                | Delay
-                | Guard -> ()
-                | Return | Dereference ->
+                | Return | Dereference, Value_rec_types.Static ->
+                    (* Unguarded only for Static values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
+                | Delay | Guard, Value_rec_types.Static -> ()
          )
          env
     )
@@ -1628,11 +1625,7 @@ let sort_value_bindings
     end
   in
   try
-    (*
-    Node.Table.iter
-      (fun _ node -> initial_visit node)
-      nodes;
-       *)
+    (* Attempt to keep declaration order *)
     List.iter
       (fun (id, _) ->
          match Node.Table.find_opt nodes { id; mode = Return } with

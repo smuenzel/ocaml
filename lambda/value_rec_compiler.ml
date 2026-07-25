@@ -895,6 +895,9 @@ let compile_letrec input_bindings body =
               let id_dyn = Ident.rename id in
               if do_print then
                 Format.eprintf "Const %s with %a@." (Ident.name id) Printlambda.lambda def;
+              (* The dynamic binding evaluates any side effects, whereas the
+                 constant is the actual value (which may be used in other expressions).
+              *)
               { rev_bindings with bindings = Dynamic (id_dyn, def) :: rev_bindings.bindings
                                 ; constants = (id, def) :: rev_bindings.constants }
             end
