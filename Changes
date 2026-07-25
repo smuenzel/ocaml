@@ -149,6 +149,10 @@ Working version
   used.
   (Stefan Muenzel, report by Leo White, review by Jacques Garrigue)
 
+- #?????: Accept more recursive definitions by reordering recursive value
+  definitions according to their dependencies.
+  (Stefan Muenzel, review by ????)
+
 ### Code generation and optimizations:
 
 - #14575: Emit direct assembly for `Atomic.fetch_and_add`

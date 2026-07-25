@@ -1573,19 +1573,18 @@ let sort_value_bindings
        in
        Env.iter
          (fun id mode ->
-            let mode' = Mode.compose node.name.mode mode in
             match Node.Table.find_opt nodes { id; mode } with
             | None -> ()
             | Some node' ->
-                match mode', node'.Node.properties.kind with
+                match mode, node'.Node.properties.kind with
                 | Ignore, _ -> ()
-                | Delay | Guard | Return,  Value_rec_types.Dynamic ->
+                | (Delay | Guard),  Value_rec_types.Dynamic ->
                     (* Unguarded and Dependent for Dynamic values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
-                | Return | Dereference, Value_rec_types.Static ->
+                | (Return | Dereference), _ ->
                     (* Unguarded only for Static values *)
                     node.outgoing_edges <- node' :: node.outgoing_edges
-                | Delay | Guard, Value_rec_types.Static -> ()
+                | (Delay | Guard), Value_rec_types.Static -> ()
          )
          env
     )
