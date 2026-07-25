@@ -412,10 +412,6 @@ sig
   (** unguarded e l: the list of all identifiers in l that are dereferenced or
       returned in the environment e. *)
 
-  val dependent : t -> Ident.t list -> Ident.t list
-  (** dependent e l: the list of all identifiers in l that are used in e
-      (not ignored). *)
-
   val join : t -> t -> t
   val join_list : t list -> t
   (** Environments can be joined pointwise (variable per variable) *)
@@ -463,9 +459,6 @@ end = struct
 
   let unguarded env li =
     List.filter (fun id -> Mode.rank (find id env) > Mode.rank Guard) li
-
-  let dependent env li =
-    List.filter (fun id -> Mode.rank (find id env) > Mode.rank Ignore) li
 
   let remove = M.remove
 
@@ -1341,26 +1334,6 @@ and is_destructuring_pattern : type k . k general_pattern -> bool =
     | Tpat_exception _ -> false
     | Tpat_or (l,r,_) ->
         is_destructuring_pattern l || is_destructuring_pattern r
-
-let is_valid_recursive_expression idlist expr : sd option =
-  match expr.exp_desc with
-  | Texp_function _ ->
-     (* Fast path: functions can never have invalid recursive references *)
-     Some Static
-  | _ ->
-     let rkind = classify_expression expr in
-     let is_valid =
-       match rkind with
-       | Static ->
-         (* The expression has known size or is constant *)
-         let ty = expression expr Return in
-         Env.unguarded ty idlist = []
-       | Dynamic ->
-         (* The expression has unknown size *)
-         let ty = expression expr Return in
-         Env.unguarded ty idlist = [] && Env.dependent ty idlist = []
-     in
-     if is_valid then Some rkind else None
 
 (* A class declaration may contain let-bindings. If they are recursive,
    their validity will already be checked by [is_valid_recursive_expression]
