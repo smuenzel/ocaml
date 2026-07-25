@@ -495,6 +495,9 @@ let emit_instr env fallthrough i =
           I.mov (int 0) (res i 0)
       end else if n > 0n && n <= 0xFFFF_FFFFn then begin
         match i.res.(0).loc with
+        | Reg (0 | 1 | 4 | 5) when n <= 0xFFn ->
+            I.xor (res32 i 0) (res32 i 0);
+            I.mov (nat n) (res8 i 0)
         | Reg _ ->
           (* Similarly, setting only the bottom half clears the top half. *)
           I.mov (nat n) (res32 i 0)
@@ -656,10 +659,19 @@ let emit_instr env fallthrough i =
       | None -> def_label lbl_after_poll
       | Some _ -> I.jmp (label gc_call_label)
       end
+  | Lop(Iintop(Icomp cmp)) when i.arg.(0).loc <> i.res.(0).loc
+                             && i.arg.(1).loc <> i.res.(0).loc ->
+      I.xor (res32 i 0) (res32 i 0);
+      I.cmp (arg i 1) (arg i 0);
+      I.set (cond cmp) (res8 i 0)
   | Lop(Iintop(Icomp cmp)) ->
       I.cmp (arg i 1) (arg i 0);
       I.set (cond cmp) al;
       I.movzx al (res i 0)
+  | Lop(Iintop_imm(Icomp cmp, n)) when i.arg.(0).loc <> i.res.(0).loc ->
+      I.xor (res32 i 0) (res32 i 0);
+      I.cmp (int n) (arg i 0);
+      I.set (cond cmp) (res8 i 0)
   | Lop(Iintop_imm(Icomp cmp, n)) ->
       I.cmp (int n) (arg i 0);
       I.set (cond cmp) al;
