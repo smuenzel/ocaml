@@ -496,8 +496,11 @@ let emit_instr env fallthrough i =
       end else if n > 0n && n <= 0xFFFF_FFFFn then begin
         match i.res.(0).loc with
         | Reg (0 | 1 | 4 | 5) when n <= 0xFFn ->
-            I.xor (res32 i 0) (res32 i 0);
-            I.mov (nat n) (res8 i 0)
+          (* For al/bl/cl/dl this sequence is 1 byte shorter than [mov],
+             and, due to [xor] clearing being ~free on modern processors,
+             no slower *)
+          I.xor (res32 i 0) (res32 i 0);
+          I.mov (nat n) (res8 i 0)
         | Reg _ ->
           (* Similarly, setting only the bottom half clears the top half. *)
           I.mov (nat n) (res32 i 0)
