@@ -2408,8 +2408,10 @@ typing/value_rec_check.cmo : \
     typing/primitive.cmi \
     typing/path.cmi \
     utils/misc.cmi \
+    parsing/location.cmi \
     lambda/lambda.cmi \
     typing/ident.cmi \
+    utils/clflags.cmi \
     parsing/asttypes.cmi \
     typing/value_rec_check.cmi
 typing/value_rec_check.cmx : \
@@ -2420,8 +2422,10 @@ typing/value_rec_check.cmx : \
     typing/primitive.cmx \
     typing/path.cmx \
     utils/misc.cmx \
+    parsing/location.cmx \
     lambda/lambda.cmx \
     typing/ident.cmx \
+    utils/clflags.cmx \
     parsing/asttypes.cmx \
     typing/value_rec_check.cmi
 typing/value_rec_check.cmi : \
@@ -5004,7 +5008,6 @@ lambda/translprim.cmi : \
     typing/env.cmi
 lambda/value_rec_compiler.cmo : \
     typing/value_rec_types.cmi \
-    lambda/printlambda.cmi \
     typing/primitive.cmi \
     utils/misc.cmi \
     utils/lazy_backtrack.cmi \
@@ -5015,7 +5018,6 @@ lambda/value_rec_compiler.cmo : \
     lambda/value_rec_compiler.cmi
 lambda/value_rec_compiler.cmx : \
     typing/value_rec_types.cmi \
-    lambda/printlambda.cmx \
     typing/primitive.cmx \
     utils/misc.cmx \
     utils/lazy_backtrack.cmx \
