@@ -900,7 +900,7 @@ let compile_letrec input_bindings body =
               *)
               { rev_bindings
                 with bindings = Dynamic (id_dyn, def) :: rev_bindings.bindings
-                   ; constants = (id, def) :: rev_bindings.constants }
+                   ; constants = (id, const_def) :: rev_bindings.constants }
             end
           | Unreachable ->
             (* The result never escapes any recursive variables, so as we know
