@@ -103,10 +103,11 @@ type t10 = A of t10 [@@unboxed]
 |}];;
 let rec x = A x;;
 [%%expect{|
-Line 1, characters 12-15:
+Line 1, characters 0-15:
 1 | let rec x = A x;;
-                ^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 (* Representation mismatch between module and signature must be rejected *)

@@ -15,10 +15,13 @@ let rec x = (g.f <- y; ()) and y = 2.0;;
 [%%expect{|
 type t = { mutable f : float; }
 val g : t = {f = 0.}
-Line 3, characters 12-26:
+Line 3, characters 0-26:
 3 | let rec x = (g.f <- y; ()) and y = 2.0;;
-                ^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 (* same example, with object instance variables
@@ -32,8 +35,11 @@ module S = struct
   let _ = print_float (new c)#m
 end
 [%%expect{|
-Line 5, characters 18-30:
+Line 5, characters 6-30:
 5 |       let rec x = (f <- y; ()) and y = 2.0 in f
-                      ^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;

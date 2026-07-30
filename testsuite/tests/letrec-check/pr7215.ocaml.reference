@@ -1,7 +1,8 @@
 type (_, _) eq = Refl : ('a, 'a) eq
 val cast : ('a, 'b) eq -> 'a -> 'b = <fun>
-Line 3, characters 30-55:
+Line 3, characters 2-55:
 3 |   let rec (p : (int, a) eq) = match p with Refl -> Refl in
-                                  ^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of let rec
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): p -> p
 

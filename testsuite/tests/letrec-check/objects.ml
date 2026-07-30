@@ -13,48 +13,58 @@ class c _ = object end
 let rec x = new c x;;
 [%%expect{|
 class c : 'a -> object  end
-Line 2, characters 12-19:
+Line 2, characters 0-19:
 2 | let rec x = new c x;;
-                ^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = y#m and y = object method m = () end;;
 [%%expect{|
-Line 1, characters 12-15:
+Line 1, characters 0-15:
 1 | let rec x = y#m and y = object method m = () end;;
-                ^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x = (object method m _ = () end)#m x;;
 [%%expect{|
-Line 1, characters 12-44:
+Line 1, characters 0-44:
 1 | let rec x = (object method m _ = () end)#m x;;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = object val mutable v = 0 method m = v <- y end and y = 1;;
 [%%expect{|
-Line 1, characters 12-58:
+Line 1, characters 0-58:
 1 | let rec x = object val mutable v = 0 method m = v <- y end and y = 1;;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x = object method m = x end;;
 [%%expect{|
-Line 1, characters 12-35:
+Line 1, characters 0-35:
 1 | let rec x = object method m = x end;;
-                ^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;
 
 let rec x = object method m = ignore x end;;
 [%%expect{|
-Line 1, characters 12-42:
+Line 1, characters 0-42:
 1 | let rec x = object method m = ignore x end;;
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Error: This kind of expression is not allowed as right-hand side of "let rec"
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: The following recursive definitions form a cycle of
+       non-statically constructive values (see manual section 12.1): x -> x
 |}];;

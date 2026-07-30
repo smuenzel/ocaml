@@ -726,6 +726,9 @@ let mk_dflambda_verbose f =
 let mk_dinstr f =
   "-dinstr", Arg.Unit f, " (undocumented)"
 
+let mk_dvalue_rec f =
+  "-dvalue-rec", Arg.Unit f, " (undocumented)"
+
 let mk_dcamlprimc f =
   "-dcamlprimc", Arg.Unit f, " (undocumented)"
 
@@ -884,6 +887,7 @@ module type Core_options = sig
   val _dmatchcomp : unit -> unit
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
+  val _dvalue_rec : unit -> unit
 
 end
 
@@ -1208,6 +1212,7 @@ struct
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
+    mk_dvalue_rec F._dvalue_rec;
     mk_dcamlprimc F._dcamlprimc;
     mk_dtimings F._dtimings;
     mk_dprofile F._dprofile;
@@ -1288,6 +1293,7 @@ struct
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_dinstr F._dinstr;
+    mk_dvalue_rec F._dvalue_rec;
 
     mk_args F._args;
     mk_args0 F._args0;
@@ -1432,6 +1438,7 @@ struct
     mk_dtypedtree F._dtypedtree;
     mk_dshape F._dshape;
     mk_dmatchcomp F._dmatchcomp;
+    mk_dvalue_rec F._dvalue_rec;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
     mk_drawclambda F._drawclambda;
@@ -1555,6 +1562,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_dmatchcomp F._dmatchcomp;
     mk_drawlambda F._drawlambda;
     mk_dlambda F._dlambda;
+    mk_dvalue_rec F._dvalue_rec;
     mk_drawclambda F._drawclambda;
     mk_dclambda F._dclambda;
     mk_dcmm_invariants F._dcmm_invariants;
@@ -1724,6 +1732,7 @@ module Default = struct
     let _dlambda = set dump_lambda
     let _dparsetree = set dump_parsetree
     let _dparsetree_loc_ghost_invariants = set parsetree_ghost_loc_invariant
+    let _dvalue_rec = set dump_value_rec
     let _drawlambda = set dump_rawlambda
     let _dsource = set dump_source
     let _dtypedtree = set dump_typedtree

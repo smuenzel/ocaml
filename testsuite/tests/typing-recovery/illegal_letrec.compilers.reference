@@ -8,18 +8,21 @@ File "illegal_letrec.ml", line 17, characters 10-18:
 17 |   let rec (_ as f) = fun () -> f () in
                ^^^^^^^^
   Only variables are allowed as left-hand side of let rec
-File "illegal_letrec.ml", line 20, characters 12-16:
+File "illegal_letrec.ml", line 20, characters 0-16:
 20 | let rec x = f ~x
-                 ^^^^
-  This kind of expression is not allowed as right-hand side of let rec
-File "illegal_letrec.ml", line 21, characters 12-21:
+     ^^^^^^^^^^^^^^^^
+  The following recursive definitions form a cycle of
+  non-statically constructive values (see manual section 12.1): x -> x
+File "illegal_letrec.ml", line 21, characters 0-21:
 21 | let rec x = f ~x ~z:0
-                 ^^^^^^^^^
-  This kind of expression is not allowed as right-hand side of let rec
-File "illegal_letrec.ml", line 25, characters 2-37:
+     ^^^^^^^^^^^^^^^^^^^^^
+  The following recursive definitions form a cycle of
+  non-statically constructive values (see manual section 12.1): x -> x
+File "illegal_letrec.ml", lines 24-25, characters 0-37:
+24 | let rec f : omitted_g:_ -> omitted_f:_ -> given:_ -> _ =
 25 |   g ~given:(f ~omitted_g:() ~given:0)
-       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  This kind of expression is not allowed as right-hand side of let rec
+  The following recursive definitions form a cycle of
+  non-statically constructive values (see manual section 12.1): f -> f
 File "illegal_letrec.ml", line 29, characters 17-19:
 29 | let t : string = 10
                       ^^

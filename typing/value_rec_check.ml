@@ -412,10 +412,6 @@ sig
   (** unguarded e l: the list of all identifiers in l that are dereferenced or
       returned in the environment e. *)
 
-  val dependent : t -> Ident.t list -> Ident.t list
-  (** dependent e l: the list of all identifiers in l that are used in e
-      (not ignored). *)
-
   val join : t -> t -> t
   val join_list : t list -> t
   (** Environments can be joined pointwise (variable per variable) *)
@@ -434,6 +430,8 @@ sig
   (** Remove all the identifiers of a list from an environment. *)
 
   val equal : t -> t -> bool
+
+  val iter : (Ident.t -> Mode.t -> unit) -> t -> unit
 end = struct
   module M = Ident.Map
 
@@ -462,15 +460,14 @@ end = struct
   let unguarded env li =
     List.filter (fun id -> Mode.rank (find id env) > Mode.rank Guard) li
 
-  let dependent env li =
-    List.filter (fun id -> Mode.rank (find id env) > Mode.rank Ignore) li
-
   let remove = M.remove
 
   let take id env = (find id env, remove id env)
 
   let remove_list l env =
     List.fold_left (fun env id -> M.remove id env) env l
+
+  let iter f env = M.iter f env
 end
 
 let remove_pat pat env =
@@ -1338,26 +1335,6 @@ and is_destructuring_pattern : type k . k general_pattern -> bool =
     | Tpat_or (l,r,_) ->
         is_destructuring_pattern l || is_destructuring_pattern r
 
-let is_valid_recursive_expression idlist expr : sd option =
-  match expr.exp_desc with
-  | Texp_function _ ->
-     (* Fast path: functions can never have invalid recursive references *)
-     Some Static
-  | _ ->
-     let rkind = classify_expression expr in
-     let is_valid =
-       match rkind with
-       | Static ->
-         (* The expression has known size or is constant *)
-         let ty = expression expr Return in
-         Env.unguarded ty idlist = []
-       | Dynamic ->
-         (* The expression has unknown size *)
-         let ty = expression expr Return in
-         Env.unguarded ty idlist = [] && Env.dependent ty idlist = []
-     in
-     if is_valid then Some rkind else None
-
 (* A class declaration may contain let-bindings. If they are recursive,
    their validity will already be checked by [is_valid_recursive_expression]
    during type-checking. This function here prevents a different kind of
@@ -1399,3 +1376,282 @@ let is_valid_class_expr idlist ce =
   match Env.unguarded (class_expr Return ce) idlist with
   | [] -> true
   | _ :: _ -> false
+
+
+(* Sorting of values.
+   We attempt to topologically sort values in such a way that they can
+   be defined.
+   Because using a value of the recursive definition will create dependencies
+   depending on the mode of usage of the value, we must create nodes that
+   represent the different usages.
+
+   So, for the value [x], we have the following nodes: (from [compose] above)
+
+   [ Ignore x ] - No dependencies, don't need to create this node
+   [ Dereference x] - Depends on all Dereference nodes of dependencies of [x]
+   [ Delay x ] - Depends on all Delay nodes of dependencies of [x]
+   [ Guard x ] - Unmodified dependencies (depends on nodes of the original
+     mode), except Return nodes, which are changed to Guard
+   [ Return x ] - Unmodified dependencies
+
+   In addition, we have the following self-dependencies:
+   [ Dereference x ] -> [ Return x ] -> [ Guard x ] -> [ Delay x ]
+
+
+   The previous applies to values which have a statically known size, but if the
+   value has a dynamic size, any usage of its address also needs to know its
+   size.
+   Since even the [Delay] context requires an address, we need to add all
+   dependencies of [Dereference] to the [Delay] context.
+   Thus, in the case of a dynamic value, all node types depend on the
+   [Dereference] node (opposite dependency order).
+
+   In the topological sort, we only start at [ Return ] / [ Guard ] / [ Delay ]
+   nodes for the DFS. This means that some [ Dereference ] nodes may remain
+   unvisited and don't pariticipate in the ordering -- because they are never
+   dereferenced in the recursive group.
+   The final ordering is the ordering of the [ Return ] nodes, except in case
+   where a [Dereference] node has been visited, which then takes priority
+   (CR smuenzel: or should it be the first one????)
+*)
+
+module Node = struct
+  module Name = struct
+    type t =
+      { id : Ident.t;
+        mode : mode;
+      }
+
+    let equal {id = id1; mode = m1} {id = id2; mode = m2} =
+      Ident.equal id1 id2 && Mode.equal m1 m2
+
+    let hash = Hashtbl.hash
+  end
+
+  module Table = Hashtbl.Make(Name)
+
+  module Properties = struct
+    type 'payload t =
+      { kind : Value_rec_types.recursive_binding_kind;
+        payload : 'payload;
+        ty : term_judg;
+      }
+
+  end
+
+  type state = Unvisited | Visited | Visiting
+
+  type 'payload t =
+    { name : Name.t;
+      properties : 'payload Properties.t;
+      mutable outgoing_edges : 'payload t list;
+      mutable state : state;
+    }
+
+  let create id mode properties outgoing_edges =
+    { name = { id; mode };
+      properties;
+      outgoing_edges;
+      state = Unvisited;
+    }
+
+  let add_new table id mode properties outgoing_edges =
+    let node = create id mode properties outgoing_edges in
+    Table.add table node.name node;
+    node
+
+end
+
+let mode_to_string : Mode.t -> string = function
+  | Ignore -> "Ignore"
+  | Delay -> "Delay"
+  | Guard -> "Guard"
+  | Return -> "Return"
+  | Dereference -> "Dereference"
+
+let dump_graph ~all ~rep_loc ~ppf_dump nodes =
+  let pp_node_name ppf (node : _ Node.t) =
+    Format.fprintf ppf "\"%s/%s\""
+      (Ident.name node.name.id)
+      (mode_to_string node.name.mode)
+  in
+  Format.fprintf ppf_dump "digraph \"%s:%i\" {\n"
+    rep_loc.Location.loc_start.pos_fname
+    rep_loc.Location.loc_start.pos_lnum
+  ;
+  Format.fprintf ppf_dump "  node [shape = record];\n";
+  Node.Table.iter
+    (fun _ (node : _ Node.t) ->
+       match node.state, all with
+       | _, true
+       | Visited, _ ->
+           Format.fprintf ppf_dump "  %a [label = \"%s|%s\"%s];\n"
+             pp_node_name node
+             (Ident.name node.name.id)
+             (mode_to_string node.name.mode)
+             (match node.properties.kind with
+              | Static -> ""
+              | Dynamic -> ",style=rounded")
+           ;
+           List.iter
+             (fun edge ->
+                Format.fprintf ppf_dump "  %a -> %a;\n"
+                  pp_node_name node
+                  pp_node_name edge
+             )
+             node.outgoing_edges
+       | _ -> ()
+    )
+    nodes;
+  Format.fprintf ppf_dump "}\n%!";
+  ()
+
+type 'payload sort_result =
+  | Cycle_in_definition of 'payload * Ident.t list
+  | Sorted_definition of
+      (Ident.t * Value_rec_types.recursive_binding_kind * 'payload) list
+
+let sort_value_bindings
+  (type payload)
+  (valbinds : (Ident.t * (Typedtree.expression * payload)) list)
+  =
+  let nodes = Node.Table.create 27 in
+  List.iter
+    (fun (id, (expr, payload)) ->
+       let kind = classify_expression expr in
+       let properties =
+         { Node.Properties.kind;
+           payload;
+           ty = expression expr;
+         }
+       in
+       match kind with
+       | Static ->
+           let delay = Node.add_new nodes id Delay properties [] in
+           let guard = Node.add_new nodes id Guard properties [delay] in
+           let return = Node.add_new nodes id Return properties [guard] in
+           let _deref = Node.add_new nodes id Dereference properties [return] in
+           ()
+       | Dynamic ->
+           let deref = Node.add_new nodes id Dereference properties [] in
+           let _delay = Node.add_new nodes id Delay properties [deref] in
+           let _guard = Node.add_new nodes id Guard properties [deref] in
+           let _return = Node.add_new nodes id Return properties [deref] in
+           ()
+    ) valbinds;
+  Node.Table.iter
+    (fun _ (node : _ Node.t) ->
+       let env =
+         match node.properties.kind, node.name.mode with
+         | Dynamic, Dereference -> node.properties.ty Dereference
+         | Dynamic, _ -> Env.empty
+         | Static, mode -> node.properties.ty mode
+       in
+       Env.iter
+         (fun id mode ->
+            match Node.Table.find_opt nodes { id; mode } with
+            | None -> ()
+            | Some node' ->
+                match mode, node'.Node.properties.kind with
+                | Ignore, _ -> ()
+                | (Delay | Guard),  Value_rec_types.Dynamic ->
+                    (* Unguarded and Dependent for Dynamic values *)
+                    node.outgoing_edges <- node' :: node.outgoing_edges
+                | (Return | Dereference), _ ->
+                    (* Unguarded only for Static values *)
+                    node.outgoing_edges <- node' :: node.outgoing_edges
+                | (Delay | Guard), Value_rec_types.Static -> ()
+         )
+         env
+    )
+    nodes;
+  let sorted = ref [] in
+  let exception Has_cycle of payload * Node.Name.t list in
+  let rec visit path (node : _ Node.t) =
+    match node.state with
+    | Visited -> ()
+    | Unvisited ->
+        node.state <- Visiting;
+        List.iter (visit (node.name :: path)) node.outgoing_edges;
+        node.state <- Visited;
+        sorted := node :: !sorted
+    | Visiting ->
+        raise (Has_cycle (node.properties.payload,
+                          node.name :: path))
+  in
+  let initial_visit (node : _ Node.t) =
+    match node.state with
+    | Visited -> ()
+    | Visiting -> assert false
+    | Unvisited ->
+        match node.name.mode with
+        | Dereference -> ()
+        | _ -> visit [] node
+  in
+  let maybe_dump ~all =
+    if !Clflags.dump_value_rec
+    then begin
+      let rep_loc =
+        match valbinds with
+        | [] -> Location.none
+        | (_,(expr,_)) :: _ -> expr.exp_loc
+      in
+      dump_graph ~all ~rep_loc ~ppf_dump:(Format.err_formatter) nodes;
+    end
+  in
+  try
+    (* Attempt to keep declaration order *)
+    List.iter
+      (fun (id, _) ->
+         match Node.Table.find_opt nodes { id; mode = Return } with
+         | None -> ()
+         | Some node -> initial_visit node
+      )
+      valbinds;
+    maybe_dump ~all:false;
+    let sorted =
+      List.rev !sorted
+      |> List.filter_map
+        (fun (node : _ Node.t) ->
+           match node.name.mode, node.state with
+           | Dereference, Visited ->
+               Some ( node.name.id
+                    , node.properties.kind
+                    , node.properties.payload)
+           | Return, Visited ->
+               begin match
+                 Node.Table.find_opt nodes { node.name with mode = Dereference }
+               with
+               | Some { Node.state = Visited; _ } -> None
+               | _ -> Some ( node.name.id
+                           , node.properties.kind
+                           , node.properties.payload)
+               end
+           | _ -> None
+        )
+    in
+    assert (List.length sorted = List.length valbinds);
+    Sorted_definition sorted
+  with
+  | Has_cycle (representative_payload, cycle) ->
+      maybe_dump ~all:true;
+      let cycle, last_opt =
+        List.fold_left
+          (fun (acc, last_opt) { Node.Name.id; mode = _ } ->
+             match last_opt with
+             | Some last when Ident.equal id last -> acc, last_opt
+             | _ -> (id :: acc, Some id)
+          )
+          ([], None)
+          cycle
+      in
+      let cycle = match last_opt with
+        | Some last -> last :: cycle
+        | None -> cycle
+      in
+      let cycle =
+        match cycle with
+          [ single ] -> [ single; single ]
+        | _ -> cycle
+      in
+      Cycle_in_definition (representative_payload, List.rev cycle)

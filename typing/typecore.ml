@@ -196,6 +196,8 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
+  | Letrec_cycle of Ident.t list
+  | Letrec_order of { actual : Ident.t; expected : Ident.t; proposed_order : Ident.t list }
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -3682,17 +3684,42 @@ and is_nonexpansive_arg = function
 
 let maybe_expansive e = not (is_nonexpansive e)
 
-let annotate_recursive_bindings env valbinds =
-  let ids = let_bound_idents valbinds in
-  List.map
-    (fun ({vb_pat; vb_expr; vb_rec_kind = _; vb_attributes; vb_loc} as vb) ->
-       match (Value_rec_check.is_valid_recursive_expression ids vb_expr) with
-       | None ->
-           Error.log_or_raise vb_expr.exp_loc env Illegal_letrec_expr;
-           vb
-       | Some vb_rec_kind ->
-         { vb_pat; vb_expr; vb_rec_kind; vb_attributes; vb_loc})
-    valbinds
+let annotate_and_sort_recursive_bindings env valbinds =
+  let valbinds' =
+    List.map
+      (fun ({vb_pat = _; vb_expr; vb_rec_kind = _;
+             vb_attributes = _; vb_loc} as vb) ->
+         (* Only variable-like bindings are allowed, we already checked *)
+         let name = match let_bound_idents [vb] with
+           | [name] -> name
+           | _ ->
+               Error.log_and_raise vb_loc env Illegal_letrec_pat
+         in
+         name, (vb_expr, vb)
+      )
+      valbinds
+  in
+  match Value_rec_check.sort_value_bindings valbinds' with
+  | Cycle_in_definition (repr, cycle) ->
+      Error.log_or_raise repr.vb_loc env (Letrec_cycle cycle);
+      valbinds
+  | Sorted_definition sorted ->
+      List.iter2
+        (fun (name, (_, {vb_loc; _})) (name', _, _) ->
+           if not (Ident.equal name name')
+           then
+             Error.log_or_raise vb_loc env
+               (Letrec_order
+                  { actual = name';
+                    expected = name;
+                    proposed_order = List.map Misc.fst3 sorted })
+        )
+        valbinds' sorted;
+      List.map
+        (fun (_name, vb_rec_kind, vb) ->
+           { vb with vb_rec_kind = Some vb_rec_kind }
+        )
+        sorted
 
 let check_recursive_class_bindings env ids exprs =
   List.iter
@@ -4638,7 +4665,7 @@ and type_expect_
           let pat_exp_list, new_env = type_let_rec env spat_sexp_list in
           let body = type_expect new_env sbody ty_expected_explained in
           let pat_exp_list =
-            annotate_recursive_bindings env pat_exp_list
+            annotate_and_sort_recursive_bindings env pat_exp_list
           in
           pat_exp_list, body
         | Nonrecursive ->
@@ -6754,7 +6781,7 @@ and type_argument_ ?explanation ?recarg env sarg ty_expected' ty_expected =
       re { texp with exp_type = ty_fun; exp_desc =
            Texp_let (Nonrecursive,
                      [{vb_pat=let_pat; vb_expr=texp; vb_attributes=[];
-                       vb_loc=Location.none; vb_rec_kind = Dynamic;
+                       vb_loc=Location.none; vb_rec_kind = None;
                       }],
                      func let_var) }
       end
@@ -7445,7 +7472,7 @@ and value_bindings_of_pat_exp_lists pat_list exp_list ~spat_sexp_list =
           vb_expr = e;
           vb_attributes = pvb.pvb_attributes;
           vb_loc = pvb.pvb_loc;
-          vb_rec_kind = Dynamic;
+          vb_rec_kind = None;
         })
       l spat_sexp_list
   in
@@ -8655,6 +8682,29 @@ let report_error ~loc env =
       Location.errorf ~loc
         "This kind of expression is not allowed as right-hand side of %a"
         Style.inline_code "let rec"
+  | Letrec_cycle ids ->
+      let[@manual.ref "s:letrecvalues"] manual_ref =
+        [ 12; 1 ]
+      in
+      let pp_sep ppf () = fprintf ppf " -> " in
+      let pp_ident ppf id = pp_print_string ppf (Ident.name id) in
+      Location.errorf ~loc
+        "The following recursive definitions form a cycle of@ \
+         non-statically constructive values %a:@ %a"
+        Misc.print_see_manual manual_ref
+        (pp_print_list ~pp_sep pp_ident)
+        ids
+  | Letrec_order { actual; expected; proposed_order } ->
+      let pp_sep ppf () = fprintf ppf ", " in
+      Location.errorf ~loc
+        "In this recursive value definition, %a must be evaluated before %a.@ \
+         Recursive values must be ordered such that values cannot be@ \
+         dereferenced before they are defined.@ \
+         The proposed order for this definition is:@ %a"
+        (Style.as_inline_code Printtyp.ident) actual
+        (Style.as_inline_code Printtyp.ident) expected
+        (pp_print_list ~pp_sep (Style.as_inline_code Printtyp.ident))
+        proposed_order
   | Illegal_class_expr ->
       Location.errorf ~loc
         "This kind of recursive class expression is not allowed"

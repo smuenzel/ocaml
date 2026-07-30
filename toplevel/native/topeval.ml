@@ -139,7 +139,7 @@ let name_expression ~loc ~attrs exp =
    let vb =
      { vb_pat = pat;
        vb_expr = exp;
-       vb_rec_kind = Dynamic;
+       vb_rec_kind = None;
        vb_attributes = attrs;
        vb_loc = loc; }
    in

@@ -237,6 +237,8 @@ type error =
   | Unknown_literal of string * char
   | Illegal_letrec_pat
   | Illegal_letrec_expr
+  | Letrec_cycle of Ident.t list
+  | Letrec_order of { actual : Ident.t; expected : Ident.t; proposed_order : Ident.t list }
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -298,7 +300,7 @@ val check_package_closed:
 
 val constant: Parsetree.constant -> (Asttypes.constant, error) result
 
-val annotate_recursive_bindings :
+val annotate_and_sort_recursive_bindings :
   Env.t -> Typedtree.value_binding list -> Typedtree.value_binding list
 val check_recursive_class_bindings :
   Env.t -> Ident.t list -> Typedtree.class_expr list -> unit

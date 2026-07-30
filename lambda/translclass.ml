@@ -1117,13 +1117,15 @@ let transl_class ~scopes ids cl_id pub_meths cl vflag =
     in
     let lam, rkind = mk_lam_and_kind (free_variables cl_init) in
     Llet(Strict, Pgenval, class_init, cl_init, lam), rkind
-  and lbody fv =
+  and lbody _fv =
+    (*
     if List.for_all (fun id -> not (Ident.Set.mem id fv)) ids then
       (* Not recursive: can use make_class directly *)
       mkappl (oo_prim "make_class",[transl_meth_list pub_meths;
                                     Lvar class_init]),
       Dynamic
     else
+       *)
       (* Recursive: need to have an actual allocation for let rec compilation
          to work, so hardcode make_class *)
       ltable table (
