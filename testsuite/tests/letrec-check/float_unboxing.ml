@@ -15,8 +15,13 @@ let rec x = (g.f <- y; ()) and y = 2.0;;
 [%%expect{|
 type t = { mutable f : float; }
 val g : t = {f = 0.}
-val y : float = 2.
-val x : unit = ()
+Line 3, characters 0-26:
+3 | let rec x = (g.f <- y; ()) and y = 2.0;;
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 (* same example, with object instance variables
@@ -30,16 +35,11 @@ module S = struct
   let _ = print_float (new c)#m
 end
 [%%expect{|
-Line 5, characters 14-15:
+Line 5, characters 6-30:
 5 |       let rec x = (f <- y; ()) and y = 2.0 in f
-                  ^
-Warning 26 [unused-var]: unused variable "x".
-
-Line 5, characters 35-36:
-5 |       let rec x = (f <- y; ()) and y = 2.0 in f
-                                       ^
-Warning 26 [unused-var]: unused variable "y".
-
-module S :
-  sig class c : object val mutable f : float method m : float end end
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;

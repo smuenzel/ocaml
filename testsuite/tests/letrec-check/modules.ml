@@ -37,8 +37,13 @@ Error: The following recursive definitions form a cycle of
 let rec x = (let module M = struct let f = y 0 let g = () end in fun () -> ())
     and y = succ;;
 [%%expect{|
-val y : int -> int = <fun>
-val x : unit -> unit = <fun>
+Line 1, characters 0-78:
+1 | let rec x = (let module M = struct let f = y 0 let g = () end in fun () -> ())
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x =
@@ -104,6 +109,11 @@ and (m : (module T)) = (module (struct let x = 10.0 and y = 20.0 end) : T);;
 module type S = sig val y : float end
 module type T = sig val x : float val y : float end
 type t = T : (module S) -> t
-val m : (module T) = <module>
-val x : t = T <module>
+Line 5, characters 0-50:
+5 | let rec x = let module M = (val m) in T (module M)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "m" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "m", "x"
 |}];;

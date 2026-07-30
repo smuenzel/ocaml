@@ -4,8 +4,13 @@
 
 let rec a = lazy b and b = 3;;
 [%%expect{|
-val b : int = 3
-val a : int lazy_t = lazy 3
+Line 1, characters 0-18:
+1 | let rec a = lazy b and b = 3;;
+    ^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "b" must be evaluated before "a".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "b", "a"
 |}];;
 
 let rec e = lazy (fun _ -> f) and f = ();;

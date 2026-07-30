@@ -22,8 +22,13 @@ Error: The following recursive definitions form a cycle of
 
 let rec x = y#m and y = object method m = () end;;
 [%%expect{|
-val y : < m : unit > = <obj>
-val x : unit = ()
+Line 1, characters 0-15:
+1 | let rec x = y#m and y = object method m = () end;;
+    ^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x = (object method m _ = () end)#m x;;
@@ -37,8 +42,13 @@ Error: The following recursive definitions form a cycle of
 
 let rec x = object val mutable v = 0 method m = v <- y end and y = 1;;
 [%%expect{|
-val y : int = 1
-val x : < m : unit > = <obj>
+Line 1, characters 0-58:
+1 | let rec x = object val mutable v = 0 method m = v <- y end and y = 1;;
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x = object method m = x end;;

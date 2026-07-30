@@ -24,8 +24,14 @@
 let f (z: int) = let rec x = [| y; z |] and y = z in x;;
 let f (z: bytes) = let rec x = [| y; z |] and y = z in x;;
 [%%expect {|
-val f : int -> int array = <fun>
-val f : bytes -> bytes array = <fun>
+Line 1, characters 17-39:
+1 | let f (z: int) = let rec x = [| y; z |] and y = z in x;;
+                     ^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
+Unexecuted phrases: 1 phrases did not execute due to an error
 |}];;
 
 (* In this test, `z` has a generic/polymorphic type,
@@ -33,7 +39,13 @@ val f : bytes -> bytes array = <fun>
    A dynamic check will occur, so the definition must be rejected. *)
 let f z = let rec x = [| y; z |] and y = z in x;;
 [%%expect {|
-val f : 'a -> 'a array = <fun>
+Line 1, characters 10-32:
+1 | let f z = let rec x = [| y; z |] and y = z in x;;
+              ^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}]
 
 (* In this test, `z` is known to be a float, so a float array will be
@@ -42,5 +54,11 @@ val f : 'a -> 'a array = <fun>
    must be rejected. *)
 let f (z: float) = let rec x = [| y; z |] and y = z in x;;
 [%%expect {|
-val f : float -> float array = <fun>
+Line 1, characters 19-41:
+1 | let f (z: float) = let rec x = [| y; z |] and y = z in x;;
+                       ^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}]

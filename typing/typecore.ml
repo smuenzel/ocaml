@@ -197,6 +197,7 @@ type error =
   | Illegal_letrec_pat
   | Illegal_letrec_expr
   | Letrec_cycle of Ident.t list
+  | Letrec_order of { actual : Ident.t; expected : Ident.t; proposed_order : Ident.t list }
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
@@ -3703,6 +3704,17 @@ let annotate_and_sort_recursive_bindings env valbinds =
       Error.log_or_raise repr.vb_loc env (Letrec_cycle cycle);
       valbinds
   | Sorted_definition sorted ->
+      List.iter2
+        (fun (name, (_, {vb_loc; _})) (name', _, _) ->
+           if not (Ident.equal name name')
+           then
+             Error.log_or_raise vb_loc env
+               (Letrec_order
+                  { actual = name';
+                    expected = name;
+                    proposed_order = List.map Misc.fst3 sorted })
+        )
+        valbinds' sorted;
       List.map
         (fun (_name, vb_rec_kind, vb) ->
            { vb with vb_rec_kind = Some vb_rec_kind }
@@ -8682,6 +8694,17 @@ let report_error ~loc env =
         Misc.print_see_manual manual_ref
         (pp_print_list ~pp_sep pp_ident)
         ids
+  | Letrec_order { actual; expected; proposed_order } ->
+      let pp_sep ppf () = fprintf ppf ", " in
+      Location.errorf ~loc
+        "In this recursive value definition, %a must be evaluated before %a.@ \
+         Recursive values must be ordered such that values cannot be@ \
+         dereferenced before they are defined.@ \
+         The proposed order for this definition is:@ %a"
+        (Style.as_inline_code Printtyp.ident) actual
+        (Style.as_inline_code Printtyp.ident) expected
+        (pp_print_list ~pp_sep (Style.as_inline_code Printtyp.ident))
+        proposed_order
   | Illegal_class_expr ->
       Location.errorf ~loc
         "This kind of recursive class expression is not allowed"

@@ -14,8 +14,13 @@ type t = {x: int64} [@@unboxed]
 let rec x = {x = y} and y = 3L;;
 [%%expect{|
 type t = { x : int64; } [@@unboxed]
-val y : int64 = 3L
-val x : t = {x = 3L}
+Line 2, characters 0-19:
+2 | let rec x = {x = y} and y = 3L;;
+    ^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 type r = A of r [@@unboxed]

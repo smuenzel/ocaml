@@ -88,8 +88,13 @@ Error: The following recursive definitions form a cycle of
 
 let rec x = y 0 and y _ = ();;
 [%%expect{|
-val y : int -> unit = <fun>
-val x : unit = ()
+Line 1, characters 0-15:
+1 | let rec x = y 0 and y _ = ();;
+    ^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec b = if b then true else false;;
@@ -193,8 +198,15 @@ let rec x =
   done
 and y = 10;;
 [%%expect{|
-val y : int = 10
-val x : unit = ()
+Lines 1-4, characters 0-6:
+1 | let rec x =
+2 |   for i = 0 to y do
+3 |     ()
+4 |   done
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x =
@@ -203,8 +215,15 @@ let rec x =
   done
 and y = 0;;
 [%%expect{|
-val y : int = 0
-val x : unit = ()
+Lines 1-4, characters 0-6:
+1 | let rec x =
+2 |   for i = y to 10 do
+3 |     ()
+4 |   done
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x =
@@ -228,8 +247,15 @@ let rec x =
   done
 and y = false;;
 [%%expect{|
-val y : bool = false
-val x : unit = ()
+Lines 1-4, characters 0-6:
+1 | let rec x =
+2 |   while y do
+3 |     ()
+4 |   done
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x =
@@ -251,14 +277,24 @@ Error: The following recursive definitions form a cycle of
 
 let rec x = y.contents and y = { contents = 3 };;
 [%%expect{|
-val y : int ref = {contents = 3}
-val x : int = 3
+Line 1, characters 0-22:
+1 | let rec x = y.contents and y = { contents = 3 };;
+    ^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 let rec x = assert y and y = true;;
 [%%expect{|
-val y : bool = true
-val x : unit = ()
+Line 1, characters 0-20:
+1 | let rec x = assert y and y = true;;
+    ^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;
 
 (* Recursively constructing arrays of known non-float type is permitted *)

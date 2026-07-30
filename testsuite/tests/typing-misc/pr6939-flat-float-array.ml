@@ -19,11 +19,11 @@ Error: The following recursive definitions form a cycle of
 
 let rec x = let u = [|y|] in 10. and y = 1.;;
 [%%expect{|
-Line 1, characters 16-17:
+Line 1, characters 0-32:
 1 | let rec x = let u = [|y|] in 10. and y = 1.;;
-                    ^
-Warning 26 [unused-var]: unused variable "u".
-
-val y : float = 1.
-val x : float = 10.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: In this recursive value definition, "y" must be evaluated before "x".
+       Recursive values must be ordered such that values cannot be
+       dereferenced before they are defined.
+       The proposed order for this definition is: "y", "x"
 |}];;

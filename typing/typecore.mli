@@ -238,6 +238,7 @@ type error =
   | Illegal_letrec_pat
   | Illegal_letrec_expr
   | Letrec_cycle of Ident.t list
+  | Letrec_order of { actual : Ident.t; expected : Ident.t; proposed_order : Ident.t list }
   | Illegal_class_expr
   | Letop_type_clash of string * Errortrace.unification_error
   | Andop_type_clash of string * Errortrace.unification_error
