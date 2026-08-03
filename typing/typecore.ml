@@ -5953,7 +5953,6 @@ and type_function
   | { pparam_desc = Pparam_newtype newtype; pparam_loc = _ } :: rest ->
       (* Check everything else in the scope of (type a). *)
       let (params, body, newtypes, contains_gadt), exp_type =
-        try
         type_newtype env newtype (fun env ->
           let exp_type, params, body, newtypes, contains_gadt =
             (* mimic the typing of Pexp_newtype by minting a new type var,
@@ -5963,8 +5962,6 @@ and type_function
               ~first:false ~in_function
           in
           (params, body, newtypes, contains_gadt), exp_type)
-        with Unify trace ->
-            Error.log_and_raise loc env (Expr_type_clash(trace, None, None))
       in
       begin
         try
