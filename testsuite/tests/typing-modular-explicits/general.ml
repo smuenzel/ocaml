@@ -1547,3 +1547,43 @@ val f : (module M : N) -> (module M.T) -> (module M.T) = <fun>
 val app : (module S) -> (module S) = <fun>
 val ok : (module S) = <module>
 |}]
+
+(* #14842 *)
+module type Api = sig
+  module type Key = sig
+    type t
+  end
+
+  type 'a key = 'a
+
+  val use : (module Key with type t = 'a) -> 'a -> 'a key -> unit
+end
+
+
+module Make( Api : Api ) = struct
+  let f
+      (type node)
+      (module Node : Api.Key with type t = node)
+      x
+      (_ : Node.t list)
+      y =
+    Api.use (module Node) y x
+end
+
+
+
+[%%expect{|
+module type Api =
+  sig
+    module type Key = sig type t end
+    type 'a key = 'a
+    val use : (module Key with type t = 'a) -> 'a -> 'a key -> unit
+  end
+module Make :
+  (Api : Api) ->
+    sig
+      val f :
+        (module Node : Api.Key with type t = 'node) ->
+        'node -> Node.t list -> 'node -> unit
+    end
+|}]

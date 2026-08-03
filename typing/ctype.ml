@@ -4025,8 +4025,11 @@ let unify_var ~check_occur uenv t1 t2 =
         reset_trace_gadt_instances reset_tracing;
       with Unify_trace trace ->
         reset_trace_gadt_instances reset_tracing;
-        Format.eprintf "t1=%a\n" Rawprinttyp.type_expr t1;
-        Format.eprintf "t2=%a\n" Rawprinttyp.type_expr t2;
+        if do_print
+        then begin
+          Format.eprintf "t1=%a\n" Rawprinttyp.type_expr t1;
+          Format.eprintf "t2=%a\n" Rawprinttyp.type_expr t2;
+        end;
         raise (Unify (expand_to_unification_error
                         env
                         (Diff { got = t1; expected = t2 } :: trace)))
