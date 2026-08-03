@@ -4502,6 +4502,8 @@ let check_let_univars env pat_list exp_list =
     pat_list
     exp_list
 
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
 let rec type_exp ?recarg env sexp =
   (* We now delegate everything to type_expect *)
   type_expect ?recarg env sexp (mk_expected (newvar ()))
@@ -5806,15 +5808,20 @@ and type_newtype
        type. *)
     let seen = Hashtbl.create 8 in
     let rec replace t =
+      if do_print then Format.eprintf "replace %a\n" Rawprinttyp.type_expr t;
       if Hashtbl.mem seen (get_id t) then ()
       else begin
         Hashtbl.add seen (get_id t) ();
         match get_desc t with
-        | Tconstr (Path.Pident id', _, _) when id == id' -> link_type t ty
+        | Tconstr (Path.Pident id', _, _) when id == id' ->
+            if do_print then
+              Format.eprintf "link %a to %a\n" Rawprinttyp.type_expr t Rawprinttyp.type_expr ty;
+            link_type t ty
         | _ -> Btype.iter_type_expr replace t
       end
     in
-    let ety = Subst.type_expr Subst.identity exp_type in
+    let subst = Subst.add_type id (Path.Pident id) Subst.identity in
+    let ety = Subst.type_expr subst exp_type in
     replace ety;
     (result, ety)
   end
@@ -5947,10 +5954,13 @@ and type_function
   let loc : Location.t =
     loc_rest_of_function ~loc_function ~first params_suffix body
   in
+  if do_print then
+  Format.eprintf "type_function\nexpected=%a\nty_fun=%a\n" Rawprinttyp.type_expr ty_expected Rawprinttyp.type_expr ty_fun.ty;
   match params_suffix with
   | { pparam_desc = Pparam_newtype newtype; pparam_loc = _ } :: rest ->
       (* Check everything else in the scope of (type a). *)
       let (params, body, newtypes, contains_gadt), exp_type =
+        try
         type_newtype env newtype (fun env ->
           let exp_type, params, body, newtypes, contains_gadt =
             (* mimic the typing of Pexp_newtype by minting a new type var,
@@ -5960,6 +5970,8 @@ and type_function
               ~first:false ~in_function
           in
           (params, body, newtypes, contains_gadt), exp_type)
+        with Unify trace ->
+            Error.log_and_raise loc env (Expr_type_clash(trace, None, None))
       in
       begin
         try
@@ -5969,6 +5981,8 @@ and type_function
                    && Typing_recovery.is_recoverable exn ->
           Typing_recovery.erroneous_type_register ty_expected
       end;
+      if do_print
+      then Format.eprintf "exp_type=%a\n" Rawprinttyp.type_expr exp_type;
       exp_type, params, body, newtype :: newtypes, contains_gadt
   | { pparam_desc = Pparam_val (arg_label, None, pat); pparam_loc } :: rest
     when is_unpack pat && could_be_functor env ty_expected
@@ -6129,6 +6143,8 @@ and type_function
             };
         }
       in
+      if do_print
+      then Format.eprintf "exp_type=%a\n" Rawprinttyp.type_expr exp_type;
       exp_type, param :: params, body, [], contains_gadt
   | [] ->
     let exp_type, body =
@@ -6199,9 +6215,13 @@ and type_function
         whether [params] (here, the empty list) contains any GADT, not whether
         the body is a [Tfunction_cases] whose patterns include a GADT.
      *)
+      if do_print
+      then Format.eprintf "exp_type=%a\n" Rawprinttyp.type_expr exp_type;
     exp_type, [], body, [], No_gadt
 and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
     ~in_function ~ty_expected ~pparam_loc ~loc ~body_constraint ~body =
+  if do_print
+  then Format.eprintf "type_moddep_fun\n";
   let type_pack pack =
     let pack = Ast_helper.Typ.package ~loc:pack.ppt_loc pack in
     let cpack = Typetexp.transl_simple_type env ~closed:false pack in
@@ -6305,6 +6325,8 @@ and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
       fp_loc = pparam_loc;
     }
   in
+  if do_print
+  then Format.eprintf "moddep exp_type=%a\n" Rawprinttyp.type_expr exp_type;
   exp_type, { has_poly = false; param } :: params, body, [], contains_gadt
 
 

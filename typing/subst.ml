@@ -277,23 +277,42 @@ let rec typexp copy_scope s ty =
             let i' = String.sub i 0 (String.length i - 4) in
             Tconstr(type_path s (Pdot(m,i')), tl, ref Mnil)
         | _ -> assert false
-      else match desc with
-      | Tconstr (p, args, _abbrev) ->
-         let args = List.map (typexp copy_scope s) args in
-         begin match Path.Map.find p s.types with
-         | exception Not_found -> Tconstr(type_path s p, args, ref Mnil)
-         | Path _ -> Tconstr(type_path s p, args, ref Mnil)
-         | Type_function { params; body } ->
-            Tlink (apply_type_function params args body)
-         end
-      | Tpackage pack ->
+      else match desc, get_desc ty with
+      | Tconstr (p, args, _abbrev), Tconstr (p', args', _abbrev') ->
+          begin match Path.Map.find_opt p s.types
+                    , Path.Map.find_opt p' s.types with
+          | None, None ->
+              let args = List.map (typexp copy_scope s) args in
+              Tconstr(type_path s p, args, ref Mnil)
+          | Some (Path p), _ ->
+              let args = List.map (typexp copy_scope s) args in
+              Tconstr(type_path s p, args, ref Mnil)
+          | None, Some (Path p) ->
+              let args = List.map (typexp copy_scope s) args' in
+              Tconstr(type_path s p, args, ref Mnil)
+          | Some (Type_function { params; body }), _ ->
+              let args = List.map (typexp copy_scope s) args in
+              Tlink (apply_type_function params args body)
+          | None, Some (Type_function { params; body }) ->
+              let args = List.map (typexp copy_scope s) args' in
+              Tlink (apply_type_function params args body)
+          end
+      | Tconstr (p, args, _abbrev), _ ->
+          let args = List.map (typexp copy_scope s) args in
+          begin match Path.Map.find_opt p s.types with
+          | None -> Tconstr(type_path s p, args, ref Mnil)
+          | Some (Path p) -> Tconstr(type_path s p, args, ref Mnil)
+          | Some (Type_function { params; body }) ->
+              Tlink (apply_type_function params args body)
+          end
+      | Tpackage pack, _ ->
           Tpackage (package copy_scope s pack)
-      | Tfunctor(lbl, us, pack, ty) ->
+      | Tfunctor(lbl, us, pack, ty), _ ->
           let us' = Ident.Unscoped.refresh us in
           let s' = add_module (Ident.of_unscoped us)
                               (Pident (Ident.of_unscoped us')) s in
           Tfunctor(lbl, us', package copy_scope s pack, typexp copy_scope s' ty)
-      | Tobject (t1, name) ->
+      | Tobject (t1, name),_  ->
           let t1' = typexp copy_scope s t1 in
           let name' =
             match !name with
@@ -304,7 +323,7 @@ let rec typexp copy_scope s ty =
                 else Some (type_path s p, List.map (typexp copy_scope s) tl)
           in
           Tobject (t1', ref name')
-      | Tvariant row ->
+      | Tvariant row,_ ->
           let more = row_more row in
           let mored = get_desc more in
           (* We must substitute in a subtle way *)
@@ -347,10 +366,10 @@ let rec typexp copy_scope s ty =
               | None ->
                   Tvariant row
           end
-      | Tfield(_label, kind, _t1, t2) when field_kind_repr kind = Fabsent ->
+      | Tfield(_label, kind, _t1, t2), _ when field_kind_repr kind = Fabsent ->
           Tlink (typexp copy_scope s t2)
-      | Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil | Tlink _
-      | Tunivar _ | Tpoly _ | Tsubst _ | Texpand _ ->
+      | (Tvar _ | Tarrow _ | Ttuple _ | Tfield _ | Tnil | Tlink _
+      | Tunivar _ | Tpoly _ | Tsubst _ | Texpand _), _ ->
           copy_type_desc (typexp copy_scope s) desc
     in
     Transient_expr.set_stub_desc ty' desc';

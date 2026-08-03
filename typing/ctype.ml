@@ -242,6 +242,8 @@ let create_scope () =
 
 let wrap_end_def f = Misc.try_finally f ~always:end_def
 
+let do_print = Sys.getenv_opt "OCAMLDEBUG" <> None
+
 (* [with_local_level_gen] handles both the scoping structure of levels
    and automatic generalization through pools (cf. btype.ml) *)
 let with_local_level_gen ~begin_def ~structure ?before_generalize f =
@@ -277,6 +279,8 @@ let with_local_level_gen ~begin_def ~structure ?before_generalize f =
            We do not check the scope here, as scope is only restricted for
            GADT equations, and they do not contain type variables. *)
         if ty.level >= level then Transient_expr.set_level ty !current_level;
+        if do_print
+        then Format.eprintf "add_to_pool (ty.level=%i, level=%i) %a@." ty.level level Rawprinttyp.type_expr (Transient_expr.type_expr ty);
         add_to_pool ~level:ty.level ty
     | Tlink _ -> ()
         (* If a node is no longer used as representative, no need
@@ -288,6 +292,8 @@ let with_local_level_gen ~begin_def ~structure ?before_generalize f =
              then we need to move it to an outer pool. *)
           add_to_pool ~level:ty.level ty
         else begin
+          if do_print
+          then Format.eprintf "generalizing (ty.level=%i, level=%i) %a@." ty.level level Rawprinttyp.type_expr (Transient_expr.type_expr ty);
           (* Generalize all remaining nodes *)
           Transient_expr.set_level ty generic_level;
           if structure then match ty.desc with
@@ -961,6 +967,8 @@ let rec update_level env level expand ty =
   if ty_level > level then begin
     if level < get_scope ty then raise_scope_escape_exn ty;
     let set_level () =
+      if do_print && ty_level = generic_level then
+        Format.eprintf "update_level %a to %d\n" Rawprinttyp.type_expr ty level;
       set_level ty level;
       if ty_level = generic_level then
         add_to_pool ~level (Transient_expr.repr ty)
@@ -4017,6 +4025,8 @@ let unify_var ~check_occur uenv t1 t2 =
         reset_trace_gadt_instances reset_tracing;
       with Unify_trace trace ->
         reset_trace_gadt_instances reset_tracing;
+        Format.eprintf "t1=%a\n" Rawprinttyp.type_expr t1;
+        Format.eprintf "t2=%a\n" Rawprinttyp.type_expr t2;
         raise (Unify (expand_to_unification_error
                         env
                         (Diff { got = t1; expected = t2 } :: trace)))
