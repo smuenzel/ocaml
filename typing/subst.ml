@@ -277,33 +277,27 @@ let rec typexp copy_scope s ty =
             let i' = String.sub i 0 (String.length i - 4) in
             Tconstr(type_path s (Pdot(m,i')), tl, ref Mnil)
         | _ -> assert false
-      else match desc, get_desc ty with
+      else
+        let constructor args = function
+          | Path p ->
+              let args = List.map (typexp copy_scope s) args in
+              Tconstr(type_path s p, args, ref Mnil)
+          | Type_function { params; body } ->
+              let args = List.map (typexp copy_scope s) args in
+              Tlink (apply_type_function params args body)
+        in
+        match desc, get_desc ty with
       | Tconstr (p, args, _abbrev), Tconstr (p', args', _abbrev') ->
           begin match Path.Map.find_opt p s.types
                     , Path.Map.find_opt p' s.types with
-          | None, None ->
-              let args = List.map (typexp copy_scope s) args in
-              Tconstr(type_path s p, args, ref Mnil)
-          | Some (Path p), _ ->
-              let args = List.map (typexp copy_scope s) args in
-              Tconstr(type_path s p, args, ref Mnil)
-          | None, Some (Path p) ->
-              let args = List.map (typexp copy_scope s) args' in
-              Tconstr(type_path s p, args, ref Mnil)
-          | Some (Type_function { params; body }), _ ->
-              let args = List.map (typexp copy_scope s) args in
-              Tlink (apply_type_function params args body)
-          | None, Some (Type_function { params; body }) ->
-              let args = List.map (typexp copy_scope s) args' in
-              Tlink (apply_type_function params args body)
+          | None, None -> constructor args (Path p)
+          | Some st, _ -> constructor args st
+          | None, Some st -> constructor args' st
           end
       | Tconstr (p, args, _abbrev), _ ->
-          let args = List.map (typexp copy_scope s) args in
           begin match Path.Map.find_opt p s.types with
-          | None -> Tconstr(type_path s p, args, ref Mnil)
-          | Some (Path p) -> Tconstr(type_path s p, args, ref Mnil)
-          | Some (Type_function { params; body }) ->
-              Tlink (apply_type_function params args body)
+          | None -> constructor args (Path p)
+          | Some st -> constructor args st
           end
       | Tpackage pack, _ ->
           Tpackage (package copy_scope s pack)
