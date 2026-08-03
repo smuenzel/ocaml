@@ -5804,20 +5804,18 @@ and type_newtype
     let result, exp_type = type_body new_env in
     (* Replace every instance of this type constructor in the resulting
        type. *)
-    let seen = Hashtbl.create 8 in
-    let rec replace t =
-      if Hashtbl.mem seen (get_id t) then ()
-      else begin
-        Hashtbl.add seen (get_id t) ();
-        match get_desc t with
-        | Tconstr (Path.Pident id', _, _) when id == id' ->
-            link_type t ty
-        | _ -> Btype.iter_type_expr replace t
-      end
-    in
     let subst = Subst.add_type id (Path.Pident id) Subst.identity in
     let ety = Subst.type_expr subst exp_type in
-    replace ety;
+    with_type_mark begin fun mark ->
+      let rec replace t =
+        if try_mark_node mark t
+        then match get_desc t with
+          | Tconstr (Path.Pident id', _, _) when id == id' ->
+              link_type t ty
+          | _ -> Btype.iter_type_expr replace t
+      in
+      replace ety
+    end;
     (result, ety)
   end
   ~before_generalize:(fun (_,ety) -> enforce_current_level env ety)
