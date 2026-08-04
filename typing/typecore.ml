@@ -6200,7 +6200,7 @@ and type_function
         the body is a [Tfunction_cases] whose patterns include a GADT.
      *)
     exp_type, [], body, [], No_gadt
-and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
+and type_moddep_fun' ~env ~name ~pack_param ~rest ~arg_label ~first
     ~in_function ~ty_expected ~pparam_loc ~loc ~body_constraint ~body =
   let type_pack pack =
     let pack = Ast_helper.Typ.package ~loc:pack.ppt_loc pack in
@@ -6274,7 +6274,7 @@ and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
         let pck_ty = newgenmono (newgenty (Tpackage pack)) in
         newgenty (Tarrow (arg_label, pck_ty, res_ty, commu_ok))
   in
-  let _ =
+  let () =
     try
       unify env ty_expected exp_type
     with Unify trace ->
@@ -6306,7 +6306,16 @@ and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
     }
   in
   exp_type, { has_poly = false; param } :: params, body, [], contains_gadt
-
+and type_moddep_fun ~env ~name ~pack_param ~rest ~arg_label ~first
+    ~in_function ~ty_expected ~pparam_loc ~loc ~body_constraint ~body =
+  let exp_type, params, body, newtypes, contains_gadt =
+    with_local_level (fun () ->
+        type_moddep_fun' ~env ~name ~pack_param ~rest ~arg_label ~first
+          ~in_function ~ty_expected ~pparam_loc ~loc ~body_constraint ~body
+      )
+  in
+  Ctype.enforce_current_level env exp_type;
+  exp_type, params, body, newtypes, contains_gadt
 
 
 and type_label_access env srecord usage lid =
