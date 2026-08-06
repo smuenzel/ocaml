@@ -5803,6 +5803,7 @@ and type_newtype
 
     let result, exp_type =
       with_local_level_generalize_structure (fun () -> type_body new_env) in
+    Ctype.enforce_current_level new_env exp_type;
     let current = get_current_level () in (* actually = scope *)
     let ety = Ctype.instance exp_type in
     (* Replace every instance of this type constructor in the resulting
