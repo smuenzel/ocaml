@@ -240,7 +240,7 @@ let masm =
   | S_win64 -> true
   | _ -> false
 
-let use_plt =
+let use_got =
   match system with
   | S_macosx | S_mingw64 | S_cygwin | S_win64 -> false
   | _ -> !Clflags.dlcode

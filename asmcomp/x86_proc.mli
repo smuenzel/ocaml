@@ -77,8 +77,8 @@ val system: system
 val masm: bool
 val windows:bool
 
-(** Whether calls need to go via the PLT. *)
-val use_plt : bool
+(** Whether calls need to go via the GOT. *)
+val use_got : bool
 
 (** Support for plumbing a binary code emitter *)
 
