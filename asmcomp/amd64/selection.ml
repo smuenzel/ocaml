@@ -31,6 +31,7 @@ type addressing_expr =
   | Ascaledadd of expression * expression * int
 
 let rec select_addr exp =
+  (* Returns addressing, displacement *)
   let default = (Alinear exp, 0) in
   match exp with
     Cconst_symbol (s, _) when not !Clflags.dlcode ->
@@ -55,6 +56,13 @@ let rec select_addr exp =
           (Ascale(e, mult), n * mult)
       | _ -> default
       end
+  | Cop(Cmuli, [arg; Cconst_int((3|5|9 as mult), _)], _)
+  | Cop(Cmuli, [Cconst_int((3|5|9 as mult), _); arg], _) ->
+      begin match select_addr arg with
+      | (Alinear e, n) when Misc.no_overflow_mul n mult ->
+          (Ascaledadd(e, e, mult - 1), n * mult)
+      | _ -> default
+      end;
   | Cop((Caddi | Caddv | Cadda), [arg1; arg2], _) ->
       begin match (select_addr arg1, select_addr arg2) with
           ((Alinear e1, n1), (Alinear e2, n2))
