@@ -127,70 +127,68 @@ let read_upto ic buf ofs len =
    = Sys.max_string_length] (so that it is not possible to resize the buffer at
    all), an exception is raised. *)
 
-let ensure buf ofs n =
-  let len = Bytes.length buf in
-  if len >= ofs + n then buf
-  else begin
-    let new_len = ref len in
-    while !new_len < ofs + n do
-      new_len := 2 * !new_len + 1
-    done;
-    let new_len = !new_len in
-    let new_len =
-      if new_len <= Sys.max_string_length then
-        new_len
-      else if ofs < Sys.max_string_length then
-        Sys.max_string_length
-      else
-        failwith "In_channel.input_all: channel content \
-                  is larger than maximum string length"
-    in
-    let new_buf = Bytes.create new_len in
-    Bytes.blit buf 0 new_buf 0 ofs;
-    new_buf
-  end
-
-let input_all ic =
-  let chunk_size = Sys.io_buffer_size in
-  let initial_size =
-    try
-      Stdlib.in_channel_length ic - Stdlib.pos_in ic
-    with Sys_error _ ->
-      -1
-  in
-  let initial_size = if initial_size < 0 then chunk_size else initial_size in
-  let initial_size =
-    if initial_size <= Sys.max_string_length then
-      initial_size
+let input_all_rev_gen ic =
+  let rec read_one_chunk_at_a_time ic ~acc ~total_size =
+    let chunk_size = Sys.io_buffer_size in
+    let buf = Bytes.create chunk_size in
+    let nread = read_upto ic buf 0 chunk_size in
+    let total_size = total_size + nread in
+    let acc = buf :: acc in
+    if nread < chunk_size then
+      acc, total_size
     else
-      Sys.max_string_length
+      read_one_chunk_at_a_time ic ~acc ~total_size
   in
-  let buf = Bytes.create initial_size in
-  let nread = read_upto ic buf 0 initial_size in
-  if nread < initial_size then (* EOF reached, buffer partially filled *)
-    Bytes.sub_string buf 0 nread
-  else begin (* nread = initial_size, maybe EOF reached *)
-    match Stdlib.input_char ic with
-    | exception End_of_file ->
-        (* EOF reached, buffer is completely filled *)
-        Bytes.unsafe_to_string buf
-    | c ->
-        (* EOF not reached *)
-        let rec loop buf ofs =
-          let buf = ensure buf ofs chunk_size in
-          let rem = Bytes.length buf - ofs in
-          (* [rem] can be < [chunk_size] if buffer size close to
-             [Sys.max_string_length] *)
-          let r = read_upto ic buf ofs rem in
-          if r < rem then (* EOF reached *)
-            Bytes.sub_string buf 0 (ofs + r)
-          else (* r = rem *)
-            loop buf (ofs + rem)
-        in
-        let buf = ensure buf nread (chunk_size + 1) in
-        Bytes.set buf nread c;
-        loop buf (nread + 1)
-  end
+  read_one_chunk_at_a_time ic ~acc:[] ~total_size:0
+
+module type Input_all_param = sig
+  type temporary
+  type result
+  val max_size : int
+  val blit : Bytes.t -> int -> temporary -> int -> int -> unit
+  val create : int -> temporary
+  val finalize : temporary -> result
+end
+
+module Make_input_all(P : Input_all_param) = struct
+  let input_all ic =
+    let acc_rev, total_size = input_all_rev_gen ic in
+    if total_size > P.max_size then
+      invalid_arg "input_all";
+    let total_buf = P.create total_size in
+    (* Final buffer may be shorter than buffer size *)
+    let number_of_full_buffers = total_size / Sys.io_buffer_size in
+    let final_buffer_size = total_size mod Sys.io_buffer_size in
+    let acc_rev =
+      match acc_rev with
+      | [] -> acc_rev
+      | buf :: acc_rev ->
+          P.blit buf
+            0 total_buf
+            (Sys.io_buffer_size * number_of_full_buffers) final_buffer_size;
+          acc_rev
+    in
+    let rec loop acc_rev ~i =
+      match acc_rev with
+      | [] -> P.finalize total_buf
+      | buf :: acc_rev ->
+          P.blit buf 0 total_buf (i * Sys.io_buffer_size) Sys.io_buffer_size;
+          loop acc_rev ~i:(i - 1)
+    in
+    loop acc_rev ~i:(number_of_full_buffers - 1)
+end
+
+module Input_all_bytes =
+  Make_input_all(struct
+    type temporary = Bytes.t
+    type result = string
+    let max_size = Sys.max_string_length
+    let blit = Bytes.blit
+    let create = Bytes.create
+    let finalize = Bytes.unsafe_to_string
+  end)
+
+let input_all = Input_all_bytes.input_all
 
 let [@tail_mod_cons] rec input_lines ic =
   match Stdlib.input_line ic with
