@@ -114,6 +114,9 @@ val input_all : t -> string
     If the same channel is read concurrently by multiple threads, the returned
     string is not guaranteed to contain contiguous characters from the input. *)
 
+val input_all_bigarray :
+  t -> (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+
 val input_lines : t -> string list
 (** [input_lines ic] reads lines using {!input_line}
     until the end of file is reached.  It returns the list of all

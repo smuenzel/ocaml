@@ -1230,15 +1230,30 @@ CAMLprim value caml_ba_sub(value vb, value vofs, value vlen)
 #define LEAVE_RUNTIME_OP_CUTOFF 4096
 #define is_mmapped(ba) ((ba)->flags & CAML_BA_MAPPED_FILE)
 
+static void caml_ba_blit_internal(void * src_data,
+                                  void * dst_data,
+                                  intnat num_bytes,
+                                  int is_mmapped)
+{
+  int leave_runtime;
+
+  leave_runtime =
+    (
+      (num_bytes >= LEAVE_RUNTIME_OP_CUTOFF*sizeof(long))
+      || is_mmapped
+    );
+
+  if (leave_runtime) caml_enter_blocking_section();
+  memmove (dst_data, src_data, num_bytes);
+  if (leave_runtime) caml_leave_blocking_section();
+}
+
 CAMLprim value caml_ba_blit(value vsrc, value vdst)
 {
   CAMLparam2(vsrc, vdst);
   struct caml_ba_array * src = Caml_ba_array_val(vsrc);
   struct caml_ba_array * dst = Caml_ba_array_val(vdst);
-  void *src_data = src->data;
-  void *dst_data = dst->data;
   intnat num_bytes;
-  int leave_runtime;
 
   /* Check same numbers of dimensions and same dimensions */
   if (src->num_dims != dst->num_dims) goto blit_error;
@@ -1248,19 +1263,54 @@ CAMLprim value caml_ba_blit(value vsrc, value vdst)
   num_bytes =
     caml_ba_num_elts(src)
     * caml_ba_element_size[src->flags & CAML_BA_KIND_MASK];
-  leave_runtime =
-    (
-      (num_bytes >= LEAVE_RUNTIME_OP_CUTOFF*sizeof(long))
-      || is_mmapped(src)
-      || is_mmapped(dst)
-    );
-  /* Do the copying */
-  if (leave_runtime) caml_enter_blocking_section();
-  memmove (dst_data, src_data, num_bytes);
-  if (leave_runtime) caml_leave_blocking_section();
+  caml_ba_blit_internal(src->data, dst->data, num_bytes, is_mmapped(src)
+      || is_mmapped(dst));
   CAMLreturn (Val_unit);
  blit_error:
   caml_invalid_argument("Bigarray.blit: dimension mismatch");
+  CAMLreturn (Val_unit);              /* not reached */
+}
+
+CAMLprim value caml_ba_blit_from_bytes(value vsrc, value vsrc_pos, value vdst, value vdst_pos, value velement_count)
+{
+  CAMLparam2(vsrc, vdst);
+  struct caml_ba_array * dst = Caml_ba_array_val(vdst);
+  intnat src_len = caml_string_length(vsrc);
+  intnat element_size = caml_ba_element_size[dst->flags & CAML_BA_KIND_MASK];
+  intnat num_bytes = Long_val(velement_count) * element_size;
+  uint8_t* dst_data_start = (uint8_t*)dst->data + Long_val(vdst_pos)*element_size;
+
+  if(caml_ba_num_elts(dst) - Long_val(vdst_pos) < Long_val(velement_count))
+    goto blit_error;
+
+  if(src_len - Long_val(vsrc_pos) < num_bytes)
+    goto blit_error;
+
+  caml_ba_blit_internal(Bytes_val(vsrc) + Long_val(vsrc_pos), dst_data_start, num_bytes, is_mmapped(dst));
+  CAMLreturn (Val_unit);
+
+ blit_error:
+  caml_invalid_argument("Bigarray.blit_from_bytes: dimension mismatch");
+  CAMLreturn (Val_unit);              /* not reached */
+}
+
+CAMLprim value caml_ba_blit_to_bytes(value vsrc, value vdst)
+{
+  CAMLparam2(vsrc, vdst);
+  struct caml_ba_array * src = Caml_ba_array_val(vsrc);
+  intnat dst_len = caml_string_length(vdst);
+  intnat num_bytes;
+
+  num_bytes =
+    caml_ba_num_elts(src)
+    * caml_ba_element_size[src->flags & CAML_BA_KIND_MASK];
+
+  if (dst_len != num_bytes) goto blit_error;
+  caml_ba_blit_internal(src->data, Bytes_val(vdst), num_bytes, is_mmapped(src));
+  CAMLreturn (Val_unit);
+
+ blit_error:
+  caml_invalid_argument("Bigarray.blit_to_bytes: dimension mismatch");
   CAMLreturn (Val_unit);              /* not reached */
 }
 

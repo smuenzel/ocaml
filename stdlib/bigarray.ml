@@ -152,6 +152,10 @@ module Genarray = struct
      = "caml_ba_slice"
   external blit: ('a, 'b, 'c) t -> ('a, 'b, 'c) t -> unit
      = "caml_ba_blit"
+  external blit_from_bytes : bytes -> src_pos:int -> ('a, 'b, 'c) t -> dst_pos:int -> element_count:int -> unit
+    = "caml_ba_blit_from_bytes"
+  external blit_to_bytes : ('a, 'b, 'c) t -> src_pos:int -> bytes -> dst_pos:int -> element_count:int -> unit
+    = "caml_ba_blit_to_bytes"
   external fill: ('a, 'b, 'c) t -> 'a -> unit = "caml_ba_fill"
 end
 

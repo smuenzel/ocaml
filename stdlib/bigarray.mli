@@ -505,6 +505,16 @@ module Genarray :
      to a sub-array of [dst] can be achieved by applying [Genarray.blit]
      to sub-array or slices of [src] and [dst]. *)
 
+  external blit_from_bytes : bytes -> src_pos:int -> ('a, 'b, 'c) t -> dst_pos:int -> element_count:int -> unit
+    = "caml_ba_blit_from_bytes"
+  (** Copy all elements of a Bigarray from a byte array.
+      @since 5.7 *)
+
+  external blit_to_bytes : ('a, 'b, 'c) t -> src_pos:int -> bytes -> dst_pos:int -> element_count:int -> unit
+    = "caml_ba_blit_to_bytes"
+  (** Copy all elements of a Bigarray to a byte array.
+      @since 5.7 *)
+
   external fill: ('a, 'b, 'c) t -> 'a -> unit = "caml_ba_fill"
   (** Set all elements of a Bigarray to a given value.
      [Genarray.fill a v] stores the value [v] in all elements of

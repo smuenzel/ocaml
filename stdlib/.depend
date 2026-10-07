@@ -452,13 +452,16 @@ stdlib__Iarray.cmi : iarray.mli \
 stdlib__In_channel.cmo : in_channel.ml \
     stdlib__Sys.cmi \
     stdlib.cmi \
+    stdlib__Int.cmi \
     stdlib__Fun.cmi \
     stdlib__Bytes.cmi \
     stdlib__Bigarray.cmi \
+    stdlib__Bigarray.cmo \
     stdlib__In_channel.cmi
 stdlib__In_channel.cmx : in_channel.ml \
     stdlib__Sys.cmx \
     stdlib.cmx \
+    stdlib__Int.cmx \
     stdlib__Fun.cmx \
     stdlib__Bytes.cmx \
     stdlib__Bigarray.cmx \

@@ -115,19 +115,7 @@ let read_upto ic buf ofs len =
   in
   loop ofs len - ofs
 
-(* Best effort attempt to return a buffer with >= (ofs + n) bytes of storage,
-   and such that it coincides with [buf] at indices < [ofs].
-
-   The returned buffer is equal to [buf] itself if it already has sufficient
-   free space.
-
-   The returned buffer may have *fewer* than [ofs + n] bytes of storage if this
-   number is > [Sys.max_string_length]. However the returned buffer will
-   *always* have > [ofs] bytes of storage. In the limiting case when [ofs = len
-   = Sys.max_string_length] (so that it is not possible to resize the buffer at
-   all), an exception is raised. *)
-
-let input_all_rev_gen ic =
+let input_all_rev_list ic =
   let rec read_one_chunk_at_a_time ic ~acc ~total_size =
     let chunk_size = Sys.io_buffer_size in
     let buf = Bytes.create chunk_size in
@@ -152,7 +140,7 @@ end
 
 module Make_input_all(P : Input_all_param) = struct
   let input_all ic =
-    let acc_rev, total_size = input_all_rev_gen ic in
+    let acc_rev, total_size = input_all_rev_list ic in
     if total_size > P.max_size then
       invalid_arg "input_all";
     let total_buf = P.create total_size in
@@ -189,6 +177,19 @@ module Input_all_bytes =
   end)
 
 let input_all = Input_all_bytes.input_all
+
+module Input_all_bigarray =
+  Make_input_all(struct
+    type temporary = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
+    type result = temporary
+    let max_size = Int.max_int
+    let blit src src_pos dest dst_pos element_count =
+      Bigarray.Genarray.blit_from_bytes src ~src_pos (Bigarray.genarray_of_array1 dest) ~dst_pos ~element_count
+    let create = Bigarray.Array1.create Bigarray.Char Bigarray.C_layout
+    let finalize ba = ba
+  end)
+
+let input_all_bigarray = Input_all_bigarray.input_all
 
 let [@tail_mod_cons] rec input_lines ic =
   match Stdlib.input_line ic with
