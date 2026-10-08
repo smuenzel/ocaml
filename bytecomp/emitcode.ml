@@ -41,6 +41,7 @@ type t =
     mutable debug_dirs : String.Set.t;
     mutable label_table : label_definition array;
     mutable hints : (int * optimization_hint) list;
+    cwd : string Lazy.t
   }
 
 (* marshal and possibly check 32bit compat *)
@@ -194,7 +195,7 @@ let record_event t ev =
   let abspath = Location.absolute_path path in
   t.debug_dirs <- String.Set.add (Filename.dirname abspath) t.debug_dirs;
   if Filename.is_relative path then begin
-    let cwd = Location.rewrite_absolute_path (Sys.getcwd ()) in
+    let cwd = Location.rewrite_absolute_path (Lazy.force t.cwd) in
     t.debug_dirs <- String.Set.add cwd t.debug_dirs;
   end;
   ev.ev_pos <- t.out_position;
@@ -217,6 +218,7 @@ let init () =
     debug_dirs = String.Set.empty;
     events = [];
     hints = [];
+    cwd = Lazy.from_fun Sys.getcwd
   }
 
 (* Emission of one instruction *)
