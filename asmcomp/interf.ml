@@ -16,14 +16,66 @@
 (* Construction of the interference graph.
    Annotate pseudoregs with interference lists and preference lists. *)
 
-module IntPairSet =
-  Set.Make(struct
-    type t = int * int
-    let compare ((a1,b1) : t) (a2,b2) =
-      match compare a1 a2 with
-        | 0 -> compare b1 b2
-        | c -> c
-  end)
+module IntPairHashSet = struct
+  type t =
+    { mutable table : int array;
+      mutable size : int;
+    }
+
+  let rec power_2_above x n =
+    if x >= n then x
+    else if x * 2 > Sys.max_array_length then x
+    else power_2_above (x * 2) n
+
+  let empty_slot = -1
+
+  let create capacity =
+    let capacity = power_2_above 16 capacity in
+    { table = Array.make capacity empty_slot; size = 0 }
+
+  let rec probe ~table ~length ~hashed_value ~needle ~i =
+    let location = (hashed_value + i*i) land (length - 1) in
+    let v = Array.unsafe_get table location in
+    if v = empty_slot then location
+    else if v = needle then location
+    else probe ~table ~length ~hashed_value ~needle ~i:(i + 1)
+
+  let max_pair_size =
+    if Sys.int_size >= 63
+    then 1 lsl 30
+    else 1 lsl 15
+
+  let szudzik_pair a b =
+    assert (a <= max_pair_size && b <= max_pair_size);
+    if a >= b
+    then a * a + a + b
+    else b * b + a
+
+  let mem t a b =
+    let pair = szudzik_pair a b in
+    let hashed_value = Int.hash pair in
+    let location = probe ~table:t.table ~length:(Array.length t.table) ~hashed_value ~needle:pair ~i:0 in
+    Array.unsafe_get t.table location = pair
+
+  let double_size t =
+    let new_length = (Array.length t.table) * 2 in
+    let new_table = Array.make new_length empty_slot in
+    Array.iter (fun x ->
+        if x <> empty_slot then begin
+          let location = probe ~table:new_table ~length:new_length ~hashed_value:(Int.hash x) ~needle:x ~i:0 in
+          Array.unsafe_set new_table location x
+        end) t.table;
+    t.table <- new_table
+
+  let add t a b =
+    if 2 * (t.size + 1) >= Array.length t.table then double_size t;
+    let pair = szudzik_pair a b in
+    let hashed_value = Int.hash pair in
+    let location = probe ~table:t.table ~length:(Array.length t.table) ~hashed_value ~needle:pair ~i:0 in
+    if Array.unsafe_get t.table location = empty_slot then
+      t.size <- t.size + 1;
+    Array.unsafe_set t.table location pair
+end
 
 open Reg
 open Mach
@@ -34,16 +86,16 @@ let build_graph fundecl =
      - by adjacency lists for each register
      - by a sparse bit matrix (a set of pairs of register stamps) *)
 
-  let mat = ref IntPairSet.empty in
+  let mat = IntPairHashSet.create (3 * (Reg.num_registers ())) in
 
   (* Record an interference between two registers *)
   let add_interf ri rj =
     if Proc.register_class ri = Proc.register_class rj then begin
       let i = ri.stamp and j = rj.stamp in
       if i <> j then begin
-        let p = if i < j then (i, j) else (j, i) in
-        if not(IntPairSet.mem p !mat) then begin
-          mat := IntPairSet.add p !mat;
+        let i, j = if i < j then (i, j) else (j, i) in
+        if not(IntPairHashSet.mem mat i j) then begin
+          IntPairHashSet.add mat i j;
           if ri.loc = Unknown then begin
             ri.interf <- rj :: ri.interf;
             if not rj.spill then ri.degree <- ri.degree + 1
@@ -135,8 +187,8 @@ let build_graph fundecl =
     if i <> j
     && r1.loc = Unknown
     && Proc.register_class r1 = Proc.register_class r2
-    && (let p = if i < j then (i, j) else (j, i) in
-        not (IntPairSet.mem p !mat))
+    && (let i, j = if i < j then (i, j) else (j, i) in
+        not (IntPairHashSet.mem mat i j))
     then r1.prefer <- (r2, weight) :: r1.prefer
   in
 
