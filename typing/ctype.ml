@@ -5200,57 +5200,80 @@ and eqtype_fields rename type_pairs subst env ty1 ty2 =
     TypePairs.mem type_pairs (row1,row2)
   in
   if same_row then () else
-  match associate_and_flatten_fields_for_equality env ty1 ty2 with
-  | Error oerror -> raise_for Equality (Obj oerror)
-  | Ok (pairs, rest1, rest2) ->
+  eqtype_fields_rec ~acc1:String.Map.empty ~acc2:String.Map.empty
+    rename type_pairs subst env ty1 ty2
+
+and eqtype_fields_rec ~acc1 ~acc2 rename type_pairs subst env ty1 ty2 =
+  match get_desc ty1, get_desc ty2 with
+  | Tfield (name1, k1, t1, rest1), Tfield (name2, k2, t2, rest2) ->
+      if String.equal name1 name2
+      then begin
+        eqtype_field rename type_pairs subst env name1 k1 t1 k2 t2;
+        eqtype_fields_rec ~acc1 ~acc2 rename type_pairs subst env rest1 rest2
+      end else begin
+        let acc1 = String.Map.add name1 (k1, t1) acc1
+        and acc2 = String.Map.add name2 (k2, t2) acc2 in
+        eqtype_fields_rec ~acc1 ~acc2 rename type_pairs subst env rest1 rest2
+      end
+  | _, Tobject (ty2, _) ->
+      eqtype_fields_rec ~acc1 ~acc2 rename type_pairs subst env ty1 ty2
+  | Tfield _, _ ->
+      let ty2' = expand_head_rigid env ty2 in
+      if ty2' == ty2
+      then eqtype_fields_rec_remainder1 ~acc1 ~acc2 rename type_pairs subst env ty1 ty2
+      else eqtype_fields_rec ~acc1 ~acc2 rename type_pairs subst env ty1 ty2'
+  | _, Tfield _ ->
+      eqtype_fields_rec_remainder2 ~acc1 ~acc2 rename type_pairs subst env ty1 ty2
+  | _, _ ->
+      eqtype_fields_rec_finish ~acc1 ~acc2 rename type_pairs subst env ty1 ty2
+
+and eqtype_fields_rec_remainder1 ~acc1 ~acc2 rename type_pairs subst env ty1 rest2 =
+  match get_desc ty1 with
+  | Tfield (name1, k1, t1, rest1) ->
+      let acc1 = String.Map.add name1 (k1, t1) acc1 in
+      eqtype_fields_rec_remainder1 ~acc1 ~acc2 rename type_pairs subst env rest1 rest2
+  | _ ->
+      eqtype_fields_rec_finish ~acc1 ~acc2 rename type_pairs subst env ty1 rest2
+
+and eqtype_fields_rec_remainder2 ~acc1 ~acc2 rename type_pairs subst env rest1 ty2 =
+  match get_desc ty2 with
+  | Tfield (name2, k2, t2, rest2) ->
+      let acc2 = String.Map.add name2 (k2, t2) acc2 in
+      eqtype_fields_rec_remainder2 ~acc1 ~acc2 rename type_pairs subst env rest1 rest2
+  | Tobject (ty2, _) ->
+      eqtype_fields_rec_remainder2 ~acc1 ~acc2 rename type_pairs subst env rest1 ty2
+  | _ ->
+      let ty2' = expand_head_rigid env ty2 in
+      if ty2' == ty2
+      then eqtype_fields_rec_finish ~acc1 ~acc2 rename type_pairs subst env rest1 ty2
+      else eqtype_fields_rec_remainder2 ~acc1 ~acc2 rename type_pairs subst env rest1 ty2'
+
+and eqtype_fields_rec_finish ~acc1 ~acc2 rename type_pairs subst env rest1 rest2 =
   eqtype rename type_pairs subst env rest1 rest2;
-  List.iter
-    (fun (name, k1, t1, k2, t2) ->
-       eqtype_kind name k1 k2;
-       try
-         eqtype rename type_pairs subst env t1 t2;
-       with Equality_trace trace ->
-         raise_trace_for Equality
-           (incompatible_fields ~name ~got:t1 ~expected:t2 :: trace))
-    pairs
-
-and associate_and_flatten_fields_for_equality env ty1 ty2 =
-  let rec build1 acc ty1' =
-    match get_desc ty1' with
-      Tfield(s, k, ty1_current, ty1_next) ->
-        build1 (String.Map.add s (k, ty1_current) acc) ty1_next
-    | _ ->
-        acc, ty1'
+  let _ : _ String.Map.t =
+    String.Map.merge
+      (fun name f1 f2 ->
+         match f1, f2 with
+         | None, None -> None
+         | Some _, None ->
+             raise_for Equality (Obj (Missing_field (Second, name)))
+         | None, Some _ ->
+             raise_for Equality (Obj (Missing_field (First, name)))
+         | Some (k1, t1), Some (k2, t2) ->
+             eqtype_field rename type_pairs subst env name k1 t1 k2 t2;
+             None
+      )
+      acc1 acc2
   in
-  let acc, ty1_rest = build1 String.Map.empty ty1 in
-  let rec build2 acc1 acc_assoc ty2' =
-    let rec desc2 ty2' =
-      match get_desc ty2' with
-      | Tfield _ as desc -> ty2', desc
-      | desc ->
-          (* Try expansion, needed when called from Includecore.type_manifest *)
-          let ty2'' = expand_head_rigid env ty2' in
-          if ty2'' == ty2' then ty2', desc
-          else match get_desc ty2'' with
-            | Tobject (ty2'', _) -> desc2 ty2''
-            | desc -> ty2'', desc
-    in
-    match desc2 ty2' with
-      _, Tfield(s, k, ty2_current, ty2_next) ->
-        begin match String.Map.find_opt s acc1 with
-          None -> Result.Error (Missing_field (First, s))
-        | Some (k', ty1_current) ->
-            let acc_assoc =
-              (s, k', ty1_current, k, ty2_current) :: acc_assoc in
-            build2 (String.Map.remove s acc1) acc_assoc ty2_next
-        end
-    | ty2', _ ->
-        if String.Map.is_empty acc1
-        then Result.Ok (acc_assoc, ty1_rest, ty2')
-        else Result.Error (Missing_field (Second, fst (String.Map.choose acc1)))
-  in
-  build2 acc [] ty2
+  ()
 
+and eqtype_field rename type_pairs subst env name k1 t1 k2 t2 =
+  eqtype_kind name k1 k2;
+  try
+    eqtype rename type_pairs subst env t1 t2;
+  with Equality_trace trace ->
+    raise_trace_for Equality
+      (incompatible_fields ~name ~got:t1 ~expected:t2 :: trace)
 
 and eqtype_kind name k1 k2 =
   let k1 = field_kind_repr k1 in
