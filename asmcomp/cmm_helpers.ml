@@ -2283,13 +2283,62 @@ let assignment_kind
   | Heap_initialization, Immediate
   | Root_initialization, Immediate -> Simple
 
-let setfield n ptr init arg1 arg2 dbg =
-  match assignment_kind ptr init with
-  | Caml_modify ->
+let modify_call n arg1 arg2 dbg =
+  let old_val = V.create_local "old_val" in
+  let minor_start = V.create_local "minor_start" in
+  let minor_end = V.create_local "minor_end" in
+  Clet (VP.create old_val,
+        Cop (Cload
+               { memory_chunk = Word_val
+               ; mutability = Mutable
+               ; is_atomic = false
+               }, [ field_address arg1 n dbg ], dbg),
+  Cifthenelse
+      (Cop (Cand, [ Cvar old_val; Cconst_int (1, dbg) ], dbg),
+       dbg,
+       return_unit dbg
+         (Cop (Cstore (Word_val, Assignment),
+               [ field_address arg1 n dbg; arg2 ], dbg)),
+       dbg,
+  Clet (VP.create minor_start,
+        Cop (Cload
+               { memory_chunk = Word_int
+               ; mutability = Immutable
+               ; is_atomic = false
+               }, [ Cconst_symbol ("caml_minor_heaps_start", dbg) ], dbg),
+  Clet (VP.create minor_end,
+        Cop (Cload
+               { memory_chunk = Word_int
+               ; mutability = Immutable
+               ; is_atomic = false
+               }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
+  Cifthenelse
+    (Cop (Cand,
+          [ Cop (Ccmpa Cgt, [ Cvar minor_start; arg1 ], dbg);
+            Cop (Ccmpa Cgt, [ arg1; Cvar minor_end ], dbg) ], dbg),
+     dbg,
+     return_unit dbg
+       (Cop (Cstore (Word_val, Assignment),
+             [ field_address arg1 n dbg; arg2 ], dbg)),
+     dbg,
       return_unit dbg
         (Cop(Cextcall("caml_modify", typ_void, [], false),
             [field_address arg1 n dbg; arg2],
             dbg))
+    , dbg))), dbg))
+
+
+
+let setfield n ptr init arg1 arg2 dbg =
+  match assignment_kind ptr init with
+  | Caml_modify ->
+      modify_call n arg1 arg2 dbg
+        (*
+      return_unit dbg
+        (Cop(Cextcall("caml_modify", typ_void, [], false),
+            [field_address arg1 n dbg; arg2],
+            dbg))
+           *)
   | Caml_initialize ->
       return_unit dbg
         (Cop(Cextcall("caml_initialize", typ_void, [], false),
