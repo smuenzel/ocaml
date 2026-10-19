@@ -2343,8 +2343,10 @@ let assignment_kind
 let setfield n ptr init arg1 arg2 dbg =
   match assignment_kind ptr init with
   | Caml_modify ->
-      return_unit dbg
-      (modify_call (field_address arg1 n dbg) arg1 arg2 dbg)
+      bind "arg1" arg1 (fun arg1 ->
+          return_unit dbg
+            (modify_call (field_address arg1 n dbg) arg1 arg2 dbg)
+        )
   | Caml_initialize ->
       return_unit dbg
         (Cop(Cextcall("caml_initialize", typ_void, [], false),
