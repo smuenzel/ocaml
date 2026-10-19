@@ -692,6 +692,63 @@ let get_tag ptr dbg =
 let get_size ptr dbg =
   Cop(Clsr, [get_header_masked ptr dbg; Cconst_int (10, dbg)], dbg)
 
+(* caml_modify *)
+let modify_call addr obj newval dbg =
+  bind "val" newval (fun newval ->
+  bind "addr" addr (fun addr ->
+  let old_val = V.create_local "old_val" in
+  let minor_start = V.create_local "minor_start" in
+  let minor_end = V.create_local "minor_end" in
+  let is_young a =
+    Cop (Ccmpa Clt,
+         [Cop (Csubi, [ a; Cvar minor_start ], dbg) ;
+          Cop (Csubi, [ Cvar minor_end; Cvar minor_start ], dbg)
+         ], dbg)
+  in
+  let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
+  Clet (VP.create old_val,
+        Cop (Cload
+               { memory_chunk = Word_val
+               ; mutability = Mutable
+               ; is_atomic = false
+               }, [ addr ], dbg),
+  Cifthenelse
+    (Cop (Cand, [is_int (Cvar old_val); is_int newval], dbg),
+       dbg,
+       return_unit dbg
+         (Cop (Cstore (Word_val, Assignment),
+               [ addr; newval ], dbg)),
+       dbg,
+  Clet (VP.create minor_start,
+        Cop (Cload
+               { memory_chunk = Word_int
+               ; mutability = Mutable
+               ; is_atomic = false
+               }, [ Cconst_symbol ("caml_minor_heaps_start", dbg) ], dbg),
+  Clet (VP.create minor_end,
+        Cop (Cload
+               { memory_chunk = Word_int
+               ; mutability = Mutable
+               ; is_atomic = false
+               }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
+  Cifthenelse
+    (Cop (Cor, [is_young obj;
+                Cop (Cand, [ Cop (Cxor,[is_int (Cvar old_val);
+                                        Cconst_int (1, dbg)], dbg);
+                             is_young (Cvar old_val)], dbg)], dbg),
+     dbg,
+     return_unit dbg
+       (Cop (Cstore (Word_val, Assignment),
+             [ addr; newval ], dbg)),
+     dbg,
+      return_unit dbg
+        (Cop(Cextcall("caml_modify", typ_void, [], false),
+            [addr; newval],
+            dbg))
+    , dbg))), dbg))
+        ))
+
+
 (* Array indexing *)
 
 let log2_size_addr = Misc.log2 size_addr
@@ -768,8 +825,11 @@ let float_array_ref arr ofs dbg =
   box_float dbg (unboxed_float_array_ref arr ofs dbg)
 
 let addr_array_set arr ofs newval dbg =
-  Cop(Cextcall("caml_modify", typ_void, [], false),
-      [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
+  bind "newval" newval (fun newval ->
+  bind "index" ofs (fun ofs ->
+  bind "arr" arr (fun arr ->
+  modify_call (array_indexing log2_size_addr arr ofs dbg) arr newval dbg
+  )))
 let addr_array_initialize arr ofs newval dbg =
   Cop(Cextcall("caml_initialize", typ_void, [], false),
       [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
@@ -2283,73 +2343,10 @@ let assignment_kind
   | Heap_initialization, Immediate
   | Root_initialization, Immediate -> Simple
 
-let modify_call n arg1 arg2 dbg =
-  bind "val" arg2 (fun arg2 ->
-  bind "obj" arg1 (fun arg1 ->
-  let old_val = V.create_local "old_val" in
-  let minor_start = V.create_local "minor_start" in
-  let minor_end = V.create_local "minor_end" in
-  let is_young a =
-    Cop (Ccmpa Clt,
-         [Cop (Csubi, [ a; Cvar minor_start ], dbg) ;
-          Cop (Csubi, [ Cvar minor_end; Cvar minor_start ], dbg)
-         ], dbg)
-  in
-  let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
-  Clet (VP.create old_val,
-        Cop (Cload
-               { memory_chunk = Word_val
-               ; mutability = Mutable
-               ; is_atomic = false
-               }, [ field_address arg1 n dbg ], dbg),
-  Cifthenelse
-    (Cop (Cand, [is_int (Cvar old_val); is_int arg2], dbg),
-       dbg,
-       return_unit dbg
-         (Cop (Cstore (Word_val, Assignment),
-               [ field_address arg1 n dbg; arg2 ], dbg)),
-       dbg,
-  Clet (VP.create minor_start,
-        Cop (Cload
-               { memory_chunk = Word_int
-               ; mutability = Mutable
-               ; is_atomic = false
-               }, [ Cconst_symbol ("caml_minor_heaps_start", dbg) ], dbg),
-  Clet (VP.create minor_end,
-        Cop (Cload
-               { memory_chunk = Word_int
-               ; mutability = Mutable
-               ; is_atomic = false
-               }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
-  Cifthenelse
-    (Cop (Cor, [is_young arg1;
-                Cop (Cand, [ Cop (Cxor,[is_int (Cvar old_val);
-                                        Cconst_int (1, dbg)], dbg);
-                             is_young (Cvar old_val)], dbg)], dbg),
-     dbg,
-     return_unit dbg
-       (Cop (Cstore (Word_val, Assignment),
-             [ field_address arg1 n dbg; arg2 ], dbg)),
-     dbg,
-      return_unit dbg
-        (Cop(Cextcall("caml_modify", typ_void, [], false),
-            [field_address arg1 n dbg; arg2],
-            dbg))
-    , dbg))), dbg))
-        ))
-
-
-
 let setfield n ptr init arg1 arg2 dbg =
   match assignment_kind ptr init with
   | Caml_modify ->
-      modify_call n arg1 arg2 dbg
-        (*
-      return_unit dbg
-        (Cop(Cextcall("caml_modify", typ_void, [], false),
-            [field_address arg1 n dbg; arg2],
-            dbg))
-           *)
+      modify_call (field_address arg1 n dbg) arg1 arg2 dbg
   | Caml_initialize ->
       return_unit dbg
         (Cop(Cextcall("caml_initialize", typ_void, [], false),
