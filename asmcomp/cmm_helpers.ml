@@ -2284,9 +2284,17 @@ let assignment_kind
   | Root_initialization, Immediate -> Simple
 
 let modify_call n arg1 arg2 dbg =
+  bind "obj" arg1 (fun arg1 ->
+  bind "val" arg2 (fun arg2 ->
   let old_val = V.create_local "old_val" in
   let minor_start = V.create_local "minor_start" in
   let minor_end = V.create_local "minor_end" in
+  let is_young a =
+    Cop (Cand,
+         [ Cop (Ccmpa Cgt, [ Cvar minor_start; a ], dbg);
+           Cop (Ccmpa Clt, [ a; Cvar minor_end ], dbg) ], dbg)
+  in
+  let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
   Clet (VP.create old_val,
         Cop (Cload
                { memory_chunk = Word_val
@@ -2294,7 +2302,7 @@ let modify_call n arg1 arg2 dbg =
                ; is_atomic = false
                }, [ field_address arg1 n dbg ], dbg),
   Cifthenelse
-      (Cop (Cand, [ Cvar old_val; Cconst_int (1, dbg) ], dbg),
+    (Cop (Cand, [is_int (Cvar old_val); is_int arg2], dbg),
        dbg,
        return_unit dbg
          (Cop (Cstore (Word_val, Assignment),
@@ -2303,19 +2311,17 @@ let modify_call n arg1 arg2 dbg =
   Clet (VP.create minor_start,
         Cop (Cload
                { memory_chunk = Word_int
-               ; mutability = Immutable
+               ; mutability = Mutable
                ; is_atomic = false
                }, [ Cconst_symbol ("caml_minor_heaps_start", dbg) ], dbg),
   Clet (VP.create minor_end,
         Cop (Cload
                { memory_chunk = Word_int
-               ; mutability = Immutable
+               ; mutability = Mutable
                ; is_atomic = false
                }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
   Cifthenelse
-    (Cop (Cand,
-          [ Cop (Ccmpa Cgt, [ Cvar minor_start; arg1 ], dbg);
-            Cop (Ccmpa Cgt, [ arg1; Cvar minor_end ], dbg) ], dbg),
+    (is_young arg1,
      dbg,
      return_unit dbg
        (Cop (Cstore (Word_val, Assignment),
@@ -2326,6 +2332,7 @@ let modify_call n arg1 arg2 dbg =
             [field_address arg1 n dbg; arg2],
             dbg))
     , dbg))), dbg))
+        ))
 
 
 
