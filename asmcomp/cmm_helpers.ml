@@ -699,8 +699,8 @@ let modify_call addr obj newval dbg =
   let old_val = V.create_local "old_val" in
   let minor_start = V.create_local "minor_start" in
   let minor_end = V.create_local "minor_end" in
-  let is_young a =
-    Cop (Ccmpa Clt,
+  let is_old a =
+    Cop (Ccmpa Cge,
          [Cop (Csubi, [ a; Cvar minor_start ], dbg) ;
           Cop (Csubi, [ Cvar minor_end; Cvar minor_start ], dbg)
          ], dbg)
@@ -731,18 +731,16 @@ let modify_call addr obj newval dbg =
                ; is_atomic = false
                }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
   Cifthenelse
-    (Cop (Cor, [is_young obj;
-                Cop (Cand, [ Cop (Cxor,[is_int (Cvar old_val);
-                                        Cconst_int (1, dbg)], dbg);
-                             is_young (Cvar old_val)], dbg)], dbg),
+    (Cop (Cand, [is_old obj;
+                Cop (Cor, [is_int (Cvar old_val); is_old (Cvar old_val)], dbg)], dbg),
+     dbg,
+     (Cop(Cextcall("caml_modify", typ_void, [], false),
+          [addr; newval],
+          dbg)),
      dbg,
      (Cop (Cstore (Word_val, Assignment),
            [ addr; newval ], dbg)),
-     dbg,
-      (Cop(Cextcall("caml_modify", typ_void, [], false),
-          [addr; newval],
-          dbg))
-    , dbg))), dbg))
+     dbg))), dbg))
         ))
 
 

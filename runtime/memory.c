@@ -312,18 +312,18 @@ Caml_inline void write_barrier(
   if (!Is_young(obj)) {
 
     if (Is_block(old_val)) {
-       /* if old is in the minor heap,
-          then this is in a remembered set already */
-       if (Is_young(old_val)) return;
-       /* old is a block and in the major heap */
-       if (caml_marking_started())
-         caml_darken(Caml_state, old_val, 0);
-     }
-     /* this update is creating a new link from major to minor, remember it */
-     if (Is_block_and_young(new_val)) {
-       Ref_table_add(&Caml_state->minor_tables->major_ref, Op_val(obj) + field);
-     }
-   }
+      /* if old is in the minor heap,
+         then this is in a remembered set already */
+      if (Is_young(old_val)) return;
+      /* old is a block and in the major heap */
+      if (caml_marking_started())
+        caml_darken(Caml_state, old_val, 0);
+    }
+    /* this update is creating a new link from major to minor, remember it */
+    if (Is_block_and_young(new_val)) {
+      Ref_table_add(&Caml_state->minor_tables->major_ref, Op_val(obj) + field);
+    }
+  }
 }
 
 CAMLno_tsan /* We remove the ThreadSanitizer instrumentation of memory accesses
