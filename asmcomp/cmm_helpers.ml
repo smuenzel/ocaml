@@ -2290,9 +2290,15 @@ let modify_call n arg1 arg2 dbg =
   let minor_start = V.create_local "minor_start" in
   let minor_end = V.create_local "minor_end" in
   let is_young a =
+    Cop (Ccmpa Clt,
+         [Cop (Csubi, [ a; Cvar minor_start ], dbg) ;
+          Cop (Csubi, [ Cvar minor_end; Cvar minor_start ], dbg)
+         ], dbg)
+         (*
     Cop (Cand,
          [ Cop (Ccmpa Clt, [ Cvar minor_start; a ], dbg);
            Cop (Ccmpa Clt, [ a; Cvar minor_end ], dbg) ], dbg)
+            *)
   in
   let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
   Clet (VP.create old_val,
