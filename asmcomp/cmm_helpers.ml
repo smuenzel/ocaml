@@ -2294,11 +2294,6 @@ let modify_call n arg1 arg2 dbg =
          [Cop (Csubi, [ a; Cvar minor_start ], dbg) ;
           Cop (Csubi, [ Cvar minor_end; Cvar minor_start ], dbg)
          ], dbg)
-         (*
-    Cop (Cand,
-         [ Cop (Ccmpa Clt, [ Cvar minor_start; a ], dbg);
-           Cop (Ccmpa Clt, [ a; Cvar minor_end ], dbg) ], dbg)
-            *)
   in
   let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
   Clet (VP.create old_val,
@@ -2327,7 +2322,10 @@ let modify_call n arg1 arg2 dbg =
                ; is_atomic = false
                }, [ Cconst_symbol ("caml_minor_heaps_end", dbg) ], dbg),
   Cifthenelse
-    (is_young arg1,
+    (Cop (Cor, [is_young arg1;
+                Cop (Cand, [ Cop (Cxor,[is_int (Cvar old_val);
+                                        Cconst_int (1, dbg)], dbg);
+                             is_young (Cvar old_val)], dbg)], dbg),
      dbg,
      return_unit dbg
        (Cop (Cstore (Word_val, Assignment),
