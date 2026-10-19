@@ -715,9 +715,8 @@ let modify_call addr obj newval dbg =
   Cifthenelse
     (Cop (Cand, [is_int (Cvar old_val); is_int newval], dbg),
        dbg,
-       return_unit dbg
-         (Cop (Cstore (Word_val, Assignment),
-               [ addr; newval ], dbg)),
+       (Cop (Cstore (Word_val, Assignment),
+             [ addr; newval ], dbg)),
        dbg,
   Clet (VP.create minor_start,
         Cop (Cload
@@ -737,14 +736,12 @@ let modify_call addr obj newval dbg =
                                         Cconst_int (1, dbg)], dbg);
                              is_young (Cvar old_val)], dbg)], dbg),
      dbg,
-     return_unit dbg
-       (Cop (Cstore (Word_val, Assignment),
-             [ addr; newval ], dbg)),
+     (Cop (Cstore (Word_val, Assignment),
+           [ addr; newval ], dbg)),
      dbg,
-      return_unit dbg
-        (Cop(Cextcall("caml_modify", typ_void, [], false),
-            [addr; newval],
-            dbg))
+      (Cop(Cextcall("caml_modify", typ_void, [], false),
+          [addr; newval],
+          dbg))
     , dbg))), dbg))
         ))
 
@@ -2346,7 +2343,8 @@ let assignment_kind
 let setfield n ptr init arg1 arg2 dbg =
   match assignment_kind ptr init with
   | Caml_modify ->
-      modify_call (field_address arg1 n dbg) arg1 arg2 dbg
+      return_unit dbg
+      (modify_call (field_address arg1 n dbg) arg1 arg2 dbg)
   | Caml_initialize ->
       return_unit dbg
         (Cop(Cextcall("caml_initialize", typ_void, [], false),
