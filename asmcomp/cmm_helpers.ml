@@ -2284,14 +2284,14 @@ let assignment_kind
   | Root_initialization, Immediate -> Simple
 
 let modify_call n arg1 arg2 dbg =
-  bind "obj" arg1 (fun arg1 ->
   bind "val" arg2 (fun arg2 ->
+  bind "obj" arg1 (fun arg1 ->
   let old_val = V.create_local "old_val" in
   let minor_start = V.create_local "minor_start" in
   let minor_end = V.create_local "minor_end" in
   let is_young a =
     Cop (Cand,
-         [ Cop (Ccmpa Cgt, [ Cvar minor_start; a ], dbg);
+         [ Cop (Ccmpa Clt, [ Cvar minor_start; a ], dbg);
            Cop (Ccmpa Clt, [ a; Cvar minor_end ], dbg) ], dbg)
   in
   let is_int a = Cop (Cand, [ a; Cconst_int (1, dbg) ], dbg) in
