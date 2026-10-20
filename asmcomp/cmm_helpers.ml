@@ -1955,21 +1955,24 @@ let cache_public_method meths tag cache dbg =
               dbg, Cassign(hi_v, Cpure_op(Csubi, [mi; cconst_int 2], dbg)),
               dbg, Cassign(li_v, mi),
               dbg)),
+          let= li' = "li", li in
+          let= hi' = "hi", hi in
           Cifthenelse
-            (Cop(Ccmpi Cge, [Cvar_mut li; Cvar_mut hi], dbg),
+            (Cpure_op(Ccmpi Cge, [li'; hi'], dbg),
              dbg, Cexit (raise_num, []),
-             dbg, Ctuple [],
+             dbg, Cpure (Ctuple []),
              dbg))
        )
        dbg,
-     Ctuple [],
+     Cpure (Ctuple []),
      dbg),
-  Clet (
-    VP.create tagged,
-      Cop(Caddi, [lsl_const (Cvar_mut li) log2_size_addr dbg;
-        cconst_int(1 - 3 * size_addr)], dbg),
-    Csequence(Cop (Cstore (Word_int, Assignment), [cache; Cvar tagged], dbg),
-              Cvar tagged)))
+  let= li' = "li", li in
+  let= tagged = "*tagged*",
+                Cpure (Cpure_op(Caddi, [lsl_const li' log2_size_addr dbg;
+                                        cconst_int(1 - 3 * size_addr)], dbg))
+  in
+  Csequence(Cop (Cstore (Word_int, Assignment), [cache; tagged], dbg),
+            Cpure tagged))
 
 (* CR mshinwell: These will be filled in by later pull requests. *)
 let placeholder_dbg () = Debuginfo.none
