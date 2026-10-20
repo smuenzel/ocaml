@@ -5199,6 +5199,7 @@ middle_end/closure/closure.cmi : \
     middle_end/clambda.cmi \
     middle_end/backend_intf.cmi
 middle_end/closure/closure_middle_end.cmo : \
+    middle_end/flambda/un_anf.cmi \
     middle_end/printclambda.cmi \
     typing/path.cmi \
     lambda/lambda.cmi \
@@ -5209,6 +5210,7 @@ middle_end/closure/closure_middle_end.cmo : \
     middle_end/clambda.cmi \
     middle_end/closure/closure_middle_end.cmi
 middle_end/closure/closure_middle_end.cmx : \
+    middle_end/flambda/un_anf.cmx \
     middle_end/printclambda.cmx \
     typing/path.cmx \
     lambda/lambda.cmx \

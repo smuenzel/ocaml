@@ -288,7 +288,9 @@ asmcomp_SOURCES = \
 # This ensures that the middle end can be linked (e.g. for objinfo) even when
 # the native code compiler is not present for some particular target.
 
-middle_end_closure_SOURCES = $(addprefix middle_end/closure/, \
+middle_end_closure_SOURCES = \
+  middle_end/flambda/un_anf.mli middle_end/flambda/un_anf.ml \
+  $(addprefix middle_end/closure/, \
   closure.mli closure.ml \
   closure_middle_end.mli closure_middle_end.ml)
 
@@ -333,7 +335,6 @@ $(addprefix middle_end/flambda/, \
   traverse_for_exported_symbols.mli traverse_for_exported_symbols.ml \
   build_export_info.mli build_export_info.ml \
   closure_offsets.mli closure_offsets.ml \
-  un_anf.mli un_anf.ml \
   flambda_to_clambda.mli flambda_to_clambda.ml \
   flambda_middle_end.mli flambda_middle_end.ml \
   simplify_boxed_integer_ops_intf.mli)
