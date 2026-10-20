@@ -198,7 +198,7 @@ and pure_expression =
   | Cconst_symbol of string * Debuginfo.t
   | Cvar of Backend_var.t
   | Ctuple of pure_expression list
-  | Cpure_op of pure_operation * pure_expression list
+  | Cpure_op of pure_operation * pure_expression list * Debuginfo.t
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
