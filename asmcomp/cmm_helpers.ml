@@ -69,6 +69,22 @@ let bind_load name arg fn =
   | Cop(Cload _, [Cvar _], _) -> fn arg
   | _ -> bind name arg (fun x -> fn (Cpure x))
 
+let bind_list name args fn =
+  let lets, vars =
+    List.map
+      (function
+        | Cpure (Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _ as arg) ->
+            (fun x -> x), arg
+        | arg ->
+            let id = V.create_local name in
+            (fun next -> Clet(VP.create id, arg, next)), Cvar id)
+      args
+    |> List.split
+  in
+  List.fold_right
+    (fun f acc -> f acc)
+    lets (fn vars)
+
 let ( let= ) (name, arg) fn = bind name arg fn
 let ( let=$ ) (name, arg) fn = bind name arg (fun x -> Cpure (fn x))
 let ( let$=$ ) (name, arg) fn = bind_pure name arg fn
@@ -1993,36 +2009,40 @@ let apply_function_body arity =
   let dbg = placeholder_dbg in
   let arg = Array.make arity (V.create_local "arg") in
   for i = 1 to arity - 1 do arg.(i) <- V.create_local "arg" done;
-  let clos = V.create_local "clos" in
+  let clos_v = V.create_local "clos" in
+  let clos = Cvar clos_v in
   let rec app_fun clos n =
+    let= codeptr = "codeptr", get_field_codepointer Asttypes.Mutable clos 0 (dbg ()) in
     if n = arity-1 then
       Cop(Capply typ_val,
-          [get_field_codepointer Asttypes.Mutable (Cvar clos) 0 (dbg ());
+          [codeptr;
            Cvar arg.(n);
-           Cvar clos],
+           clos],
           dbg ())
     else begin
-      let newclos = V.create_local "clos" in
-      Clet(VP.create newclos,
-           Cop(Capply typ_val,
-               [get_field_codepointer Asttypes.Mutable (Cvar clos) 0 (dbg ());
-                Cvar arg.(n); Cvar clos], dbg ()),
-           app_fun newclos (n+1))
+      let= newclos = "clos",
+                     Cop(Capply typ_val,
+                         [codeptr;
+                          Cvar arg.(n); clos], dbg ())
+      in
+      app_fun newclos (n+1)
     end in
   let args = Array.to_list arg in
-  let all_args = args @ [clos] in
-  (args, clos,
+  let all_args = args @ [clos_v] in
+  (args, clos_v,
    if arity = 1 then app_fun clos 0 else
+     let= clos_field = "clos_field", get_field_gen Asttypes.Mutable clos 1 (dbg ()) in
    Cifthenelse(
-   Cop(Ccmpi Ceq, [Cop(Casr,
-                       [get_field_gen Asttypes.Mutable (Cvar clos) 1 (dbg());
+   Cpure_op(Ccmpi Ceq, [Cpure_op(Casr,
+                       [ clos_field;
                         Cconst_int(pos_arity_in_closinfo, dbg())], dbg());
                    Cconst_int(arity, dbg())], dbg()),
    dbg (),
+   (let= clos_field_2 = "clos_field_2", get_field_gen Asttypes.Mutable clos 2 (dbg ()) in
    Cop(Capply typ_val,
-       get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ())
+       clos_field_2
        :: List.map (fun s -> Cvar s) all_args,
-       dbg ()),
+       dbg ())),
    dbg (),
    app_fun clos 0,
    dbg ()))
@@ -2038,29 +2058,32 @@ let send_function arity =
     let cache = Cvar cache and obj = Cvar obj and tag = Cvar tag in
     let meths = V.create_local "meths" and cached = V.create_local "cached" in
     let real = V.create_local "real" in
-    let mask = get_field_gen Asttypes.Mutable (Cvar meths) 1 (dbg ()) in
     let cached_pos = Cvar cached in
-    let tag_pos = Cop(Cadda, [Cop (Cadda, [cached_pos; Cvar meths], dbg ());
+    let tag_pos = Cpure_op(Cadda, [Cpure_op (Cadda, [cached_pos; Cvar meths], dbg ());
                               cconst_int(3*size_addr-1)], dbg ()) in
-    let tag' = Cop(mk_load_mut Word_int, [tag_pos], dbg ()) in
-    Clet (
-    VP.create meths, Cop(mk_load_mut Word_val, [obj], dbg ()),
-    Clet (
-    VP.create cached,
-      Cop(Cand, [Cop(mk_load_mut Word_int, [cache], dbg ()); mask],
-          dbg ()),
-    Clet (
-    VP.create real,
-    Cifthenelse(Cop(Ccmpa Cne, [tag'; tag], dbg ()),
-                dbg (),
-                cache_public_method (Cvar meths) tag cache (dbg ()),
-                dbg (),
-                cached_pos,
-                dbg ()),
+    let= tag' = "tag'", Cop(mk_load_mut Word_int, [tag_pos], dbg ()) in
+    let= meths = "meths",
+                 Cop(mk_load_mut Word_val, [obj], dbg ())
+    in
+    let= cache_load = "cache_load",
+                 Cop(mk_load_mut Word_val, [cache], dbg ())
+    in
+    let= mask = "mask", get_field_gen Asttypes.Mutable meths 1 (dbg ()) in
+    let= cached = "cached",
+      Cpure (Cpure_op(Cand, [cache_load; mask],
+               dbg ()))
+    in
+    let= real = "real",
+                Cifthenelse(Cpure_op(Ccmpa Cne, [tag'; tag], dbg ()),
+                            dbg (),
+                            cache_public_method meths tag cache (dbg ()),
+                            dbg (),
+                            Cpure cached_pos,
+                            dbg ())
+    in
     Cop(mk_load_mut Word_val,
-      [Cop(Cadda, [Cop (Cadda, [Cvar real; Cvar meths], dbg ());
-       cconst_int(2*size_addr-1)], dbg ())], dbg ()))))
-
+      [Cpure_op(Cadda, [Cpure_op (Cadda, [real; meths], dbg ());
+       cconst_int(2*size_addr-1)], dbg ())], dbg ())
   in
   let body = Clet(VP.create clos', clos, body) in
   let cache = cache in
@@ -2100,22 +2123,25 @@ let tuplify_function arity =
   let dbg = placeholder_dbg in
   let arg = V.create_local "arg" in
   let clos = V.create_local "clos" in
-  let rec access_components i =
-    if i >= arity
-    then []
-    else get_field_gen Asttypes.Mutable (Cvar arg) i (dbg ())
-         :: access_components(i+1)
+  let access_components =
+    bind_list "arg_field"
+      (List.init arity
+         (fun i -> get_field_gen Asttypes.Mutable (Cvar arg) i (dbg ())))
   in
   let fun_name = "caml_tuplify" ^ Int.to_string arity in
   let fun_dbg = placeholder_fun_dbg ~human_name:fun_name in
+  let fun_body =
+    let= codeptr = "codeptr", get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ()) in
+    access_components (fun components ->
+        Cop(Capply typ_val,
+            codeptr
+            :: components @ [Cvar clos],
+            (dbg ())))
+  in
   Cfunction
    {fun_name;
     fun_args = [VP.create arg, typ_val; VP.create clos, typ_val];
-    fun_body =
-      Cop(Capply typ_val,
-          get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ())
-          :: access_components 0 @ [Cvar clos],
-          (dbg ()));
+    fun_body;
     fun_codegen_options = [];
     fun_poll = Default_poll;
     fun_dbg;
