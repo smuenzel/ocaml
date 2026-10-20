@@ -220,7 +220,7 @@ let rec expr ppf = function
   | Clet_mut(id, kind, def, body) ->
     fprintf ppf
       "@[<2>(let_mut@ @[<2>%a: %a@ %a@]@ %a)@]"
-      VP.print id machtype kind expr def sequence body
+      VP.print id machtype kind pure_expr def sequence body
   | Cphantom_let(var, def, (Cphantom_let(_, _, _) as body)) ->
       let print_binding var ppf def =
         fprintf ppf "@[<2>%a@ %a@]" VP.print var
@@ -241,7 +241,7 @@ let rec expr ppf = function
       phantom_defining_expr_opt def
       sequence body
   | Cassign(id, exp) ->
-      fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" V.print id expr exp
+      fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" V.print id pure_expr exp
   | Cop(op, el, dbg) ->
       fprintf ppf "@[<2>(%s" (operation dbg op);
       List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
@@ -265,7 +265,7 @@ let rec expr ppf = function
        for i = 0 to Array.length cases - 1 do
         fprintf ppf "@ @[<2>%t@ %a@]" (print_case i) sequence (fst cases.(i))
        done in
-      fprintf ppf "@[<v 0>@[<2>(switch@ %a@ @]%t)@]" expr e1 print_cases
+      fprintf ppf "@[<v 0>@[<2>(switch@ %a@ @]%t)@]" pure_expr e1 print_cases
   | Ccatch(flag, handlers, e1) ->
       let print_handler ppf (i, ids, e2, _dbg) =
         fprintf ppf "(%d%a)@ %a"

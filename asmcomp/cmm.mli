@@ -172,16 +172,16 @@ and expression =
   | Cvar_mut of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
   | Clet_mut of Backend_var.With_provenance.t * machtype
-                * expression * expression
+                * pure_expression * expression
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
   (* Cassign must refer to a variable bound by Clet_mut *)
-  | Cassign of Backend_var.t * expression
+  | Cassign of Backend_var.t * pure_expression
   | Cop of operation * pure_expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of pure_expression * Debuginfo.t * expression
       * Debuginfo.t * expression * Debuginfo.t
-  | Cswitch of expression * int array * (expression * Debuginfo.t) array
+  | Cswitch of pure_expression * int array * (expression * Debuginfo.t) array
       * Debuginfo.t
   | Ccatch of
       rec_flag
@@ -272,3 +272,6 @@ val map_tail: (expression -> expression) -> expression -> expression
 
 val map_shallow: (expression -> expression) -> expression -> expression
   (** Apply the transformation to each immediate sub-expression. *)
+
+val map_all_pure_expressions: (pure_expression -> pure_expression) -> expression ->
+  expression

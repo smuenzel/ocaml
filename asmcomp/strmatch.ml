@@ -22,7 +22,7 @@ module V = Backend_var
 module VP = Backend_var.With_provenance
 
 module type I = sig
-  val string_block_length : Cmm.expression -> Cmm.expression
+  val string_block_length : Cmm.pure_expression -> Cmm.expression
   val transl_switch :
       Debuginfo.t -> Cmm.pure_expression -> int -> int ->
         (int * Cmm.expression) list -> Cmm.expression ->
@@ -356,7 +356,7 @@ module Make(I:I) = struct
           (by_size cases) in
       let id = gen_size_id () in
       let switch = I.transl_switch dbg (Cvar id) 1 max_int size_cases default in
-      mk_let_size (VP.create id) (Cpure str) switch
+      mk_let_size (VP.create id) str switch
 
 (*
   Compilation entry point: we choose to switch

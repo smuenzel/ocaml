@@ -170,15 +170,15 @@ type expression =
   | Cvar_mut of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
   | Clet_mut of Backend_var.With_provenance.t * machtype
-                * expression * expression
+                * pure_expression * expression
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
-  | Cassign of Backend_var.t * expression
+  | Cassign of Backend_var.t * pure_expression
   | Cop of operation * pure_expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of pure_expression * Debuginfo.t * expression
       * Debuginfo.t * expression * Debuginfo.t
-  | Cswitch of expression * int array * (expression * Debuginfo.t) array
+  | Cswitch of pure_expression * int array * (expression * Debuginfo.t) array
       * Debuginfo.t
   | Ccatch of
       rec_flag
@@ -321,11 +321,11 @@ let map_shallow f = function
   | Clet (id, e1, e2) ->
       Clet (id, f e1, f e2)
   | Clet_mut (id, kind, e1, e2) ->
-      Clet_mut (id, kind, f e1, f e2)
+      Clet_mut (id, kind, e1, f e2)
   | Cphantom_let (id, de, e) ->
       Cphantom_let (id, de, f e)
   | Cassign (id, e) ->
-      Cassign (id, f e)
+      Cassign (id, e)
   | Cop (op, el, dbg) ->
       Cop (op, el, dbg)
         (*
@@ -350,3 +350,57 @@ let map_shallow f = function
   | Cpure _
     as c ->
       c
+
+let rec map_all_pure_expressions f c =
+  match c with
+  | Cpure pure ->
+      let pure' = f pure in
+      if pure == pure' then c else Cpure pure'
+  | Clet(id, e1, e2) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Clet(id, e1', e2')
+  | Clet_mut(id, kind, e1, e2) ->
+      let e1' = f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Clet_mut(id, kind, e1', e2')
+  | Cphantom_let(id, de, e) ->
+      let e' = map_all_pure_expressions f e in
+      if e == e' then c else Cphantom_let(id, de, e')
+  | Cassign(id, e) ->
+      let e' = f e in
+      if e == e' then c else Cassign(id, e')
+  | Cop (op, el, dbg) ->
+      let el' = List.map f el in
+      if List.for_all2 (fun x y -> x == y) el el' then c else Cop(op, el', dbg)
+  | Csequence (e1, e2) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Csequence(e1', e2')
+  | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
+      let cond' = f cond in
+      let ifso' = map_all_pure_expressions f ifso in
+      let ifnot' = map_all_pure_expressions f ifnot in
+      if cond == cond' && ifso == ifso' && ifnot == ifnot' then c
+      else Cifthenelse(cond', ifso_dbg, ifso', ifnot_dbg, ifnot', dbg)
+  | Cswitch (e, ia, ea, dbg) ->
+      let e' = f e in
+      let ea' = Array.map (fun (e, dbg) -> map_all_pure_expressions f e, dbg) ea in
+      if Array.for_all2 (fun (e, _) (e', _) -> e == e') ea ea' && e == e' then c
+      else Cswitch(e', ia, ea', dbg)
+  | Creturn_addr ->
+      Creturn_addr
+  | Cvar_mut _ -> c
+  | Ccatch (rf, hl, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_all_pure_expressions f handler, dbg) in
+      let body' = map_all_pure_expressions f body in
+      let hl' = List.map map_h hl in
+      if body == body' && List.for_all2 (fun (_, _, handler, _) (_, _, handler', _) ->
+          handler == handler') hl hl' then c
+      else Ccatch(rf, hl', body')
+  | Ctrywith (e1, id, e2, dbg) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Ctrywith(e1', id, e2', dbg)
+  | Cexit _ -> c
+

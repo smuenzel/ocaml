@@ -16,7 +16,7 @@
 (* Translation of string matching from closed lambda to C-- *)
 
 module type I = sig
-  val string_block_length : Cmm.expression -> Cmm.expression
+  val string_block_length : Cmm.pure_expression -> Cmm.expression
   val transl_switch :
       Debuginfo.t -> Cmm.pure_expression -> int -> int ->
         (int * Cmm.expression) list -> Cmm.expression ->
