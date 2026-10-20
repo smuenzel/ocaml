@@ -856,8 +856,13 @@ let emit_instr env fallthrough i =
       | Ieventest ->
           I.test (int 1) (arg8 i 0);
           I.je lbl
-      | Ispecific_test _ ->
-          assert false
+      | Ispecific_test (Ibinop_test (Itb_and, Itk_zero, direction)) ->
+          I.and_ (arg i 1) (arg i 0);
+          begin match direction with
+          | true -> I.je lbl
+          | false -> I.jne lbl
+          end
+      | Ispecific_test _ -> assert false
       end
   | Lcondbranch3(lbl0, lbl1, lbl2) ->
       I.cmp (int 1) (arg i 0);

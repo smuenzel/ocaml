@@ -27,7 +27,17 @@ type addressing_mode =
   | Iscaled of int * int                (* reg * scale + displ *)
   | Iindexed2scaled of int * int        (* reg + reg * scale + displ *)
 
-type specific_test = |
+type test_binop =
+  | Itb_and
+  | Itb_or
+  | Itb_xor
+
+type test_kind =
+  | Itk_zero
+  | Itk_parity
+
+type specific_test =
+  | Ibinop_test of test_binop * test_kind * bool
 
 type specific_operation =
     Ilea of addressing_mode             (* "lea" gives scaled adds *)

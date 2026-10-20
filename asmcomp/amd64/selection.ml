@@ -292,6 +292,19 @@ method! select_operation op args dbg =
        args @ [Cconst_symbol ("caml_num_domains_running", dbg)])
   | _ -> super#select_operation op args dbg
 
+method! select_condition = function
+  | Cop (Ccmpi (Ceq | Cne as cmp), [ Cconst_int (0, _); Cop (Cand, [ arg1; arg2 ], _) ], _)
+  | Cop (Ccmpi (Ceq | Cne as cmp), [ Cop (Cand, [ arg1; arg2 ], _); Cconst_int (0, _) ], _) ->
+      let direction =
+        match cmp with
+        | Ceq -> true
+        | Cne -> false
+        | _ -> assert false
+      in
+      (Ispecific_test (Ibinop_test (Itb_and, Itk_zero, direction)), Ctuple [arg1; arg2])
+  | op ->
+      super#select_condition op
+
 (* Recognize float arithmetic with mem *)
 
 method select_floatarith commutative regular_op mem_op args =
