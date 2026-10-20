@@ -508,11 +508,11 @@ let rec div_int c1 c2 is_safe dbg =
 let mod_int c1 c2 is_safe dbg =
   match (c1, c2) with
     (c1, Cconst_int (0, _)) ->
-      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
+      raise_symbol dbg "caml_exn_Division_by_zero"
   | (c1, Cconst_int ((1 | (-1)), _)) ->
-      Csequence(c1, Cconst_int (0, dbg))
+      Cpure(Cconst_int (0, dbg))
   | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
-      Cconst_int (n1 mod n2, dbg)
+      Cpure (Cconst_int (n1 mod n2, dbg))
   | (c1, (Cconst_int (n, _) as c2)) when n <> min_int ->
       let l = Misc.log2 n in
       if n = 1 lsl l then
@@ -522,25 +522,26 @@ let mod_int c1 c2 is_safe dbg =
               t = c1 + t
               t = bit-and(t, -n)
               res = c1 - t
-         *)
-        bind "dividend" c1 (fun c1 ->
-          let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
-          let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
-          let t = add_int c1 t dbg in
-          let t = Cop(Cand, [t; Cconst_int (-n, dbg)], dbg) in
-          sub_int c1 t dbg)
+        *)
+        Cpure (bind_pure "dividend" c1 (fun c1 ->
+            let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
+            let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
+            let t = add_int c1 t dbg in
+            let t = Cpure_op(Cand, [t; Cconst_int (-n, dbg)], dbg) in
+            sub_int c1 t dbg))
       else
-        bind "dividend" c1 (fun c1 ->
-          sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
+        bind "dividend" (Cpure c1) (fun c1 ->
+          bind "div_int" (div_int c1 c2 is_safe dbg) (fun div ->
+          Cpure (sub_int c1 (mul_int div c2 dbg) dbg)))
   | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
       (* Flambda already generates that test *)
-      Cop(Cmodi, [c1; c2], dbg)
+      Cpure (Cpure_op(Cmodi, [c1; c2], dbg))
   | (c1, c2) ->
-      bind "divisor" c2 (fun c2 ->
-        bind "dividend" c1 (fun c1 ->
+      bind "divisor" (Cpure c2) (fun c2 ->
+        bind "dividend" (Cpure c1) (fun c1 ->
           Cifthenelse(c2,
                       dbg,
-                      Cop(Cmodi, [c1; c2], dbg),
+                      Cpure (Cpure_op(Cmodi, [c1; c2], dbg)),
                       dbg,
                       raise_symbol dbg "caml_exn_Division_by_zero",
                       dbg)))
@@ -561,16 +562,16 @@ let safe_divmod_bi mkop is_safe mkm1 c1 c2 bi dbg =
     && bi <> Primitive.Pint32
     && not (is_different_from (-1) c2)
     then
-      Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int (-1, dbg)], dbg),
+      Cifthenelse(Cpure_op(Ccmpi Cne, [c2; Cconst_int (-1, dbg)], dbg),
         dbg, c,
-        dbg, mkm1 c1 dbg,
+        dbg, Cpure (mkm1 c1 dbg),
         dbg)
     else
       c))
 
 let safe_div_bi is_safe =
   safe_divmod_bi div_int is_safe
-    (fun c1 dbg -> Cop(Csubi, [Cconst_int (0, dbg); c1], dbg))
+    (fun c1 dbg -> Cpure_op(Csubi, [Cconst_int (0, dbg); c1], dbg))
 
 let safe_mod_bi is_safe =
   safe_divmod_bi mod_int is_safe (fun _ dbg -> Cconst_int (0, dbg))
@@ -579,14 +580,14 @@ let safe_mod_bi is_safe =
 
 let test_bool dbg cmm =
   match cmm with
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) ->
+  | Cpure_op(Caddi, [Cpure_op(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) ->
       c
   | Cconst_int (n, dbg) ->
       if n = 1 then
         Cconst_int (0, dbg)
       else
         Cconst_int (1, dbg)
-  | c -> Cop(Ccmpi Cne, [c; Cconst_int (1, dbg)], dbg)
+  | c -> Cpure_op(Ccmpi Cne, [c; Cconst_int (1, dbg)], dbg)
 
 (* Float *)
 
@@ -597,15 +598,16 @@ let unbox_float dbg =
     (function
       | Cop(Calloc, [Cconst_natint (hdr, _); c], _)
         when Nativeint.equal hdr float_header ->
-          c
-      | Cconst_symbol (s, _dbg) as cmm ->
+          Cpure c
+      | Cpure (Cconst_symbol (s, _dbg) as cmm) ->
           begin match Cmmgen_state.structured_constant_of_sym s with
           | Some (Uconst_float x) ->
-              Cconst_float (x, dbg) (* or keep _dbg? *)
+              Cpure (Cconst_float (x, dbg)) (* or keep _dbg? *)
           | _ ->
               Cop(mk_load_immut Double, [cmm], dbg)
           end
-      | cmm -> Cop(mk_load_immut Double, [cmm], dbg)
+      | Cpure cmm -> Cop(mk_load_immut Double, [cmm], dbg)
+      | cmm -> bind "f" cmm (fun cmm -> Cop(mk_load_immut Double, [cmm], dbg))
     )
 
 (* Conversions for 16-bit floats *)
@@ -624,11 +626,11 @@ let complex_re c dbg =
   Cop(mk_load_immut Double, [c], dbg)
 let complex_im c dbg =
   Cop(mk_load_immut Double,
-      [Cop(Cadda, [c; Cconst_int (size_float, dbg)], dbg)], dbg)
+      [Cpure_op(Cadda, [c; Cconst_int (size_float, dbg)], dbg)], dbg)
 
 (* Unit *)
 
-let return_unit dbg c = Csequence(c, Cconst_int (1, dbg))
+let return_unit dbg c = Csequence(c, Cpure (Cconst_int (1, dbg)))
 
 let rec remove_unit = function
     Cconst_int (1, _) -> Ctuple []
