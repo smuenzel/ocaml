@@ -66,6 +66,7 @@ let invert_integer_test = function
     Isigned cmp -> Isigned(Cmm.negate_integer_comparison cmp)
   | Iunsigned cmp -> Iunsigned(Cmm.negate_integer_comparison cmp)
 
+[@@@ocaml.warning "-56"]
 let invert_test = function
     Itruetest -> Ifalsetest
   | Ifalsetest -> Itruetest
@@ -74,6 +75,7 @@ let invert_test = function
   | Ifloattest(cmp) -> Ifloattest(Cmm.negate_float_comparison cmp)
   | Ieventest -> Ioddtest
   | Ioddtest -> Ieventest
+  | Ispecific_test specific_test -> Ispecific_test(Arch.invert_specific_test specific_test)
 
 (* The "end" instruction *)
 

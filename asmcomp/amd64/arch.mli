@@ -27,6 +27,8 @@ type addressing_mode =
   | Iscaled of int * int                (* reg * scale + displ *)
   | Iindexed2scaled of int * int        (* reg + reg * scale + displ *)
 
+type specific_test = |
+
 type specific_operation =
     Ilea of addressing_mode             (* "lea" gives scaled adds *)
   | Istore_int of nativeint * addressing_mode * bool
@@ -63,8 +65,14 @@ val identity_addressing : addressing_mode
 
 val offset_addressing : addressing_mode -> int -> addressing_mode
 
+val invert_specific_test : specific_test -> specific_test
+
 val print_addressing :
   (Format.formatter -> 'a -> unit) -> addressing_mode ->
+  Format.formatter -> 'a array -> unit
+
+val print_specific_test :
+  (Format.formatter -> 'a -> unit) -> specific_test ->
   Format.formatter -> 'a array -> unit
 
 val print_specific_operation :

@@ -33,6 +33,8 @@ type addressing_mode =
   | Iscaled of int * int                (* reg * scale + displ *)
   | Iindexed2scaled of int * int        (* reg + reg * scale + displ *)
 
+type specific_test = |
+
 type specific_operation =
     Ilea of addressing_mode             (* "lea" gives scaled adds *)
   | Istore_int of nativeint * addressing_mode * bool
@@ -79,6 +81,8 @@ let offset_addressing addr delta =
   | Iscaled(scale, n) -> Iscaled(scale, n + delta)
   | Iindexed2scaled(scale, n) -> Iindexed2scaled(scale, n + delta)
 
+let invert_specific_test _ = assert false
+
 (* Printing operations and addressing modes *)
 
 let print_addressing printreg addr ppf arg =
@@ -99,6 +103,9 @@ let print_addressing printreg addr ppf arg =
   | Iindexed2scaled(scale, n) ->
       let idx = if n <> 0 then Printf.sprintf " + %i" n else "" in
       fprintf ppf "%a + %a * %i%s" printreg arg.(0) printreg arg.(1) scale idx
+
+let print_specific_test _printreg _op _ppf _arg =
+  assert false
 
 let print_specific_operation printreg op ppf arg =
   match op with

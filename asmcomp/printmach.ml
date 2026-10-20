@@ -92,6 +92,8 @@ let intop = function
   | Icomp cmp -> intcomp cmp
   | Icheckbound -> Printf.sprintf "check > "
 
+[@@@ocaml.warning "-56"]
+
 let test tst ppf arg =
   match tst with
   | Itruetest -> reg ppf arg.(0)
@@ -103,6 +105,7 @@ let test tst ppf arg =
        reg arg.(0) (floatcomp cmp) reg arg.(1)
   | Ieventest -> fprintf ppf "%a & 1 == 0" reg arg.(0)
   | Ioddtest -> fprintf ppf "%a & 1 == 1" reg arg.(0)
+  | Ispecific_test op -> Arch.print_specific_test reg op ppf arg
 
 let operation op arg ppf res =
   if Array.length res > 0 then fprintf ppf "%a := " regs res;

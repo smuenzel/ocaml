@@ -463,6 +463,8 @@ let split_on_domains ndomains ~single ~multi =
 
 (* Output the assembly code for an instruction *)
 
+[@@@ocaml.warning "-56"]
+
 (* Emit an instruction *)
 let emit_instr env fallthrough i =
   let arg8 i n = emit_subreg env reg_low_8_name BYTE i.arg.(n) in
@@ -854,6 +856,8 @@ let emit_instr env fallthrough i =
       | Ieventest ->
           I.test (int 1) (arg8 i 0);
           I.je lbl
+      | Ispecific_test _ ->
+          assert false
       end
   | Lcondbranch3(lbl0, lbl1, lbl2) ->
       I.cmp (int 1) (arg i 0);
