@@ -2679,7 +2679,6 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
             idx],
           int_array_set arr idx newval dbg))))
   | Pfloatarray ->
-      bind_load "newval" arg3 (fun newval ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
                   let= header = "header", get_header_masked arr dbg in
@@ -2688,26 +2687,29 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
             float_array_length_shifted
               header dbg;
             idx],
+          bind "newval" arg3 (fun newval ->
           float_array_set arr idx newval dbg))))
   )
 
 let bytes_set size unsafe arg1 arg2 arg3 dbg =
   return_unit dbg
    (bind "newval" arg3 (fun newval ->
-    bind "index" (untag_int arg2 dbg) (fun idx ->
+    bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
     bind "str" arg1 (fun str ->
-      check_bound unsafe size dbg (string_length str dbg)
+                let= length = "length", string_length str dbg in
+      check_bound unsafe size dbg length
                   idx (unaligned_set size str idx newval dbg)))))
 
 let bigstring_set size unsafe arg1 arg2 arg3 dbg =
   return_unit dbg
    (bind "newval" arg3 (fun newval ->
-    bind "index" (untag_int arg2 dbg) (fun idx ->
+    bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
     bind "ba" arg1 (fun ba ->
     bind "ba_data"
          (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
          (fun ba_data ->
-            check_bound unsafe size dbg (bigstring_length ba dbg)
+            let= length = "length", bigstring_length ba dbg in
+            check_bound unsafe size dbg length
               idx (unaligned_set size ba_data idx newval dbg))))))
 
 (* Symbols *)
