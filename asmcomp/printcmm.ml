@@ -290,7 +290,7 @@ let rec expr ppf = function
         print_handlers handlers
   | Cexit (i, el) ->
       fprintf ppf "@[<2>(exit %d" i;
-      List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
+      List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
       fprintf ppf ")@]"
   | Ctrywith(e1, id, e2, _dbg) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"

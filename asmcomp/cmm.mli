@@ -188,7 +188,7 @@ and expression =
         * (int * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list
+  | Cexit of int * pure_expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
   | Creturn_addr (** Return address saved in the current call frame *)

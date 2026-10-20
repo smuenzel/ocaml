@@ -185,7 +185,7 @@ type expression =
         * (int * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list
+  | Cexit of int * pure_expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
   | Creturn_addr
@@ -343,7 +343,7 @@ let map_shallow f = function
       let map_h (n, ids, handler, dbg) = (n, ids, f handler, dbg) in
       Ccatch (rf, List.map map_h hl, f body)
   | Cexit (n, el) ->
-      Cexit (n, List.map f el)
+      Cexit (n, el)
   | Ctrywith (e1, id, e2, dbg) ->
       Ctrywith (f e1, id, f e2, dbg)
   | Cvar_mut _
@@ -403,5 +403,7 @@ let rec map_all_pure_expressions f c =
       let e1' = map_all_pure_expressions f e1 in
       let e2' = map_all_pure_expressions f e2 in
       if e1 == e1' && e2 == e2' then c else Ctrywith(e1', id, e2', dbg)
-  | Cexit _ -> c
+  | Cexit (n, el) ->
+      let el' = List.map f el in
+      if List.for_all2 (fun x y -> x == y) el el' then c else Cexit(n, el')
 

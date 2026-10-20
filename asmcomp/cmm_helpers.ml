@@ -2783,21 +2783,26 @@ let entry_point namelist =
   let cconst_int i = Cconst_int (i, dbg ()) in
   let cconst_symbol sym = Cconst_symbol (sym, dbg ()) in
   let incr_global_inited () =
+    let= globals_inited =
+      "globals_inited",
+      Cop(mk_load_mut Word_int,
+          [cconst_symbol "caml_globals_inited"], dbg ()) in
     Cop(Cstore (Word_int, Assignment),
         [cconst_symbol "caml_globals_inited";
-         Cop(Caddi, [Cop(mk_load_mut Word_int,
-                       [cconst_symbol "caml_globals_inited"], dbg ());
+         Cpure_op(Caddi, [globals_inited;
                      cconst_int 1], dbg ())], dbg ()) in
   let table_symbol =
     Compilenv.make_symbol (Some "caml_globals_entry_functions") in
   let call i =
     (* address of caml_globals_entry_functions[i] *)
     let entry_slot =
-      Cop(Cadda, [cconst_symbol table_symbol;
-                  Cop(Clsl, [i; cconst_int (Misc.log2 Arch.size_addr)],
+      Cpure_op(Cadda, [cconst_symbol table_symbol;
+                  Cpure_op(Clsl, [i; cconst_int (Misc.log2 Arch.size_addr)],
                       dbg ())], dbg ()) in
+    let= entry_slot = "entry",
+                      Cop(mk_load_immut Word_int, [entry_slot], dbg ()) in
     Csequence(Cop(Capply typ_void,
-                  [Cop(mk_load_immut Word_int, [entry_slot], dbg ())], dbg ()),
+                  [entry_slot], dbg ()),
               incr_global_inited ()) in
   let data =
     List.map
@@ -2811,11 +2816,11 @@ let entry_point namelist =
   let high = cconst_int (List.length namelist) in
   let body =
     let next_iteration =
-      Cexit(raise_num, [Cop(Caddi, [var_id; cconst_int 1], dbg ())]) in
+      Cexit(raise_num, [Cpure_op(Caddi, [var_id; cconst_int 1], dbg ())]) in
     Ccatch(Recursive,
            [raise_num, [id, typ_int],
-            Cifthenelse(Cop(Ccmpi Ceq, [var_id; high], dbg ()),
-                        dbg (), Ctuple [],
+            Cifthenelse(Cpure_op(Ccmpi Ceq, [var_id; high], dbg ()),
+                        dbg (), Cpure (Ctuple []),
                         dbg (), Csequence(call var_id, next_iteration),
                         dbg ()),
             dbg ()],
@@ -2825,7 +2830,7 @@ let entry_point namelist =
   [ Cdata data;
     Cfunction {fun_name;
                fun_args = [];
-               fun_body = Csequence(body, cconst_int 1);
+               fun_body = Csequence(body, Cpure (cconst_int 1));
                fun_codegen_options = [Reduce_code_size];
                fun_poll = Default_poll;
                fun_dbg;
