@@ -18,7 +18,7 @@ open Cmm
 (** [bind name arg fn] is equivalent to [let name = arg in fn name],
     or simply [fn arg] if [arg] is simple enough *)
 val bind :
-  string -> expression -> (expression -> expression) -> expression
+  string -> expression -> (pure_expression -> expression) -> expression
 
 (** Same as [bind], but also treats loads from a variable as simple *)
 val bind_load :
@@ -30,7 +30,7 @@ val bind_load :
 val caml_black : nativeint
 
 (** A constant equal to the tag for float arrays *)
-val floatarray_tag : Debuginfo.t -> expression
+val floatarray_tag : Debuginfo.t -> pure_expression
 
 (** [block_header tag size] creates a header with tag [tag] for a
     block of size [size] *)
@@ -64,15 +64,15 @@ val boxedintnat_header : nativeint
 val closure_info : arity:int -> startenv:int -> nativeint
 
 (** Wrappers *)
-val alloc_float_header : Debuginfo.t -> expression
-val alloc_floatarray_header : int -> Debuginfo.t -> expression
-val alloc_closure_header : int -> Debuginfo.t -> expression
-val alloc_infix_header : int -> Debuginfo.t -> expression
+val alloc_float_header : Debuginfo.t -> pure_expression
+val alloc_floatarray_header : int -> Debuginfo.t -> pure_expression
+val alloc_closure_header : int -> Debuginfo.t -> pure_expression
+val alloc_infix_header : int -> Debuginfo.t -> pure_expression
 val alloc_closure_info :
-      arity:int -> startenv:int -> Debuginfo.t -> expression
-val alloc_boxedint32_header : Debuginfo.t -> expression
-val alloc_boxedint64_header : Debuginfo.t -> expression
-val alloc_boxedintnat_header : Debuginfo.t -> expression
+      arity:int -> startenv:int -> Debuginfo.t -> pure_expression
+val alloc_boxedint32_header : Debuginfo.t -> pure_expression
+val alloc_boxedint64_header : Debuginfo.t -> pure_expression
+val alloc_boxedintnat_header : Debuginfo.t -> pure_expression
 
 (** Integers *)
 
@@ -82,47 +82,47 @@ val max_repr_int : int
 val min_repr_int : int
 
 (** Make an integer constant from the given integer (tags the integer) *)
-val int_const : Debuginfo.t -> int -> expression
+val int_const : Debuginfo.t -> int -> pure_expression
 val cint_const : int -> data_item
 val targetint_const : int -> Targetint.t
 
 (** Make a Cmm constant holding the given nativeint value.
     Uses [Cconst_int] instead of [Cconst_nativeint] when possible
     to preserve peephole optimisations. *)
-val natint_const_untagged : Debuginfo.t -> Nativeint.t -> expression
+val natint_const_untagged : Debuginfo.t -> Nativeint.t -> pure_expression
 
 (** Add an integer to the given expression *)
-val add_const : expression -> int -> Debuginfo.t -> expression
+val add_const : pure_expression -> int -> Debuginfo.t -> pure_expression
 
 (** Increment/decrement of integers *)
-val incr_int : expression -> Debuginfo.t -> expression
-val decr_int : expression -> Debuginfo.t -> expression
+val incr_int : pure_expression -> Debuginfo.t -> pure_expression
+val decr_int : pure_expression -> Debuginfo.t -> pure_expression
 
 (** Simplify the given expression knowing its last bit will be
     irrelevant *)
-val ignore_low_bit_int : expression -> expression
+val ignore_low_bit_int : pure_expression -> pure_expression
 
 (** Simplify the given expression knowing its first bit will be
     irrelevant *)
-val ignore_high_bit_int : expression -> expression
+val ignore_high_bit_int : pure_expression -> pure_expression
 
 (** Arithmetical operations on integers *)
-val add_int : expression -> expression -> Debuginfo.t -> expression
-val sub_int : expression -> expression -> Debuginfo.t -> expression
-val lsl_int : expression -> expression -> Debuginfo.t -> expression
-val mul_int : expression -> expression -> Debuginfo.t -> expression
-val lsr_int : expression -> expression -> Debuginfo.t -> expression
-val asr_int : expression -> expression -> Debuginfo.t -> expression
+val add_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
+val sub_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
+val lsl_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
+val mul_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
+val lsr_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
+val asr_int : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
 val div_int :
-  expression -> expression -> Lambda.is_safe -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> Lambda.is_safe -> Debuginfo.t -> expression
 val mod_int :
-  expression -> expression -> Lambda.is_safe -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> Lambda.is_safe -> Debuginfo.t -> expression
 
 (** Integer tagging. [tag_int x = (x lsl 1) + 1] *)
-val tag_int : expression -> Debuginfo.t -> expression
+val tag_int : pure_expression -> Debuginfo.t -> pure_expression
 
 (** Integer untagging. [untag_int x = (x asr 1)] *)
-val untag_int : expression -> Debuginfo.t -> expression
+val untag_int : pure_expression -> Debuginfo.t -> pure_expression
 
 (** Specific division operations for boxed integers *)
 val safe_div_bi :
@@ -146,17 +146,17 @@ val safe_mod_bi :
     then branch [ifso], and [ifnot_dbg] to the else branch [ifnot] *)
 val mk_if_then_else :
   Debuginfo.t ->
-  expression ->
+  pure_expression ->
   Debuginfo.t -> expression ->
   Debuginfo.t -> expression ->
   expression
 
 (** Boolean negation *)
-val mk_not : Debuginfo.t -> expression -> expression
+val mk_not : Debuginfo.t -> pure_expression -> pure_expression
 
 (** Integer and float comparison that returns int not bool *)
-val mk_compare_ints : Debuginfo.t -> expression -> expression -> expression
-val mk_compare_floats : Debuginfo.t -> expression -> expression -> expression
+val mk_compare_ints : Debuginfo.t -> pure_expression -> pure_expression -> pure_expression
+val mk_compare_floats : Debuginfo.t -> pure_expression -> pure_expression -> pure_expression
 
 (** Loop construction (while true do expr done).
     Used to be represented as Cloop. *)
@@ -166,20 +166,20 @@ val create_loop : expression -> Debuginfo.t -> expression
 val raise_symbol : Debuginfo.t -> string -> expression
 
 (** Convert a tagged integer into a raw integer with boolean meaning *)
-val test_bool : Debuginfo.t -> expression -> expression
+val test_bool : Debuginfo.t -> pure_expression -> pure_expression
 
 (** Float boxing and unboxing *)
-val box_float : Debuginfo.t -> expression -> expression
+val box_float : Debuginfo.t -> pure_expression -> expression
 val unbox_float : Debuginfo.t -> expression -> expression
 
 (** Conversions for 16-bit floats *)
-val float_of_float16 : Debuginfo.t -> expression -> expression
-val float16_of_float : Debuginfo.t -> expression -> expression
+val float_of_float16 : Debuginfo.t -> pure_expression -> expression
+val float16_of_float : Debuginfo.t -> pure_expression -> expression
 
 (** Complex number creation and access *)
-val box_complex : Debuginfo.t -> expression -> expression -> expression
-val complex_re : expression -> Debuginfo.t -> expression
-val complex_im : expression -> Debuginfo.t -> expression
+val box_complex : Debuginfo.t -> pure_expression -> pure_expression -> expression
+val complex_re : pure_expression -> Debuginfo.t -> expression
+val complex_im : pure_expression -> Debuginfo.t -> expression
 
 (** Make the given expression return a unit value *)
 val return_unit : Debuginfo.t -> expression -> expression
@@ -197,37 +197,37 @@ val mk_load_atomic : memory_chunk -> operation
 
 (** [field_address ptr n dbg] returns an expression for the address of the
     [n]th field of the block pointed to by [ptr] *)
-val field_address : expression -> int -> Debuginfo.t -> expression
+val field_address : pure_expression -> int -> Debuginfo.t -> pure_expression
 
 (** [get_field_gen ?memory_chunk mut ptr n dbg] returns an expression for
     the access to the [n]th field of the block pointed to by [ptr]. *)
 val get_field_gen :
-  ?memory_chunk:memory_chunk -> Asttypes.mutable_flag -> expression -> int ->
+  ?memory_chunk:memory_chunk -> Asttypes.mutable_flag -> pure_expression -> int ->
   Debuginfo.t -> expression
 
 (** [set_field ptr n newval init dbg] returns an expression for setting the
     [n]th field of the block pointed to by [ptr] to [newval] *)
 val set_field :
-  expression -> int -> expression -> Lambda.initialization_or_assignment ->
+  pure_expression -> int -> pure_expression -> Lambda.initialization_or_assignment ->
   Debuginfo.t -> expression
 
 (** [field_address_computed ptr ofs dbg] returns an expression for the address
     at offset [ofs] (in machine words) of the block pointed to by [ptr].
     The resulting expression is a derived pointer of type [Addr]. *)
 val field_address_computed :
-  expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
 
 (** Load a block's header *)
-val get_header : expression -> Debuginfo.t -> expression
+val get_header : pure_expression -> Debuginfo.t -> expression
 
 (** Same as [get_header], but also clear all reserved bits of the result *)
-val get_header_masked : expression -> Debuginfo.t -> expression
+val get_header_masked : pure_expression -> Debuginfo.t -> expression
 
 (** Load a block's tag *)
-val get_tag : expression -> Debuginfo.t -> expression
+val get_tag : pure_expression -> Debuginfo.t -> expression
 
 (** Load a block's size *)
-val get_size : expression -> Debuginfo.t -> expression
+val get_size : pure_expression -> Debuginfo.t -> expression
 
 (** Arrays *)
 
@@ -236,16 +236,16 @@ val numfloat_shift : int
 
 (** Check whether the given array is an array of regular OCaml values
     (as opposed to unboxed floats), from its header or pointer *)
-val is_addr_array_hdr : expression -> Debuginfo.t -> expression
-val is_addr_array_ptr : expression -> Debuginfo.t -> expression
+val is_addr_array_hdr : pure_expression -> Debuginfo.t -> pure_expression
+val is_addr_array_ptr : pure_expression -> Debuginfo.t -> expression
 
 (** Get the length of an array from its header
     Shifts by one bit less than necessary, keeping one of the GC colour bits,
     to save an operation when returning the length as a caml integer or when
     comparing it to a caml integer.
     Assumes that the reserved bits are clear (see get_header_masked) *)
-val addr_array_length_shifted : expression -> Debuginfo.t -> expression
-val float_array_length_shifted : expression -> Debuginfo.t -> expression
+val addr_array_length_shifted : pure_expression -> Debuginfo.t -> pure_expression
+val float_array_length_shifted : pure_expression -> Debuginfo.t -> pure_expression
 
 (** For [array_indexing ?typ log2size ptr ofs dbg] :
     Produces a pointer to the element of the array [ptr] on the position [ofs]
@@ -256,30 +256,30 @@ val float_array_length_shifted : expression -> Debuginfo.t -> expression
     into the heap.  If we know the pointer is outside the heap
     (this is the case for bigarray indexing), we give type Int instead. *)
 val array_indexing :
-  ?typ:machtype_component -> int -> expression -> expression -> Debuginfo.t ->
-  expression
+  ?typ:machtype_component -> int -> pure_expression -> pure_expression -> Debuginfo.t ->
+  pure_expression
 
 (** Array loads and stores
     [unboxed_float_array_ref] and [float_array_ref] differ in the
     boxing of the result; [float_array_set] takes an unboxed float *)
-val addr_array_ref : expression -> expression -> Debuginfo.t -> expression
-val int_array_ref : expression -> expression -> Debuginfo.t -> expression
+val addr_array_ref : pure_expression -> pure_expression -> Debuginfo.t -> expression
+val int_array_ref : pure_expression -> pure_expression -> Debuginfo.t -> expression
 val unboxed_float_array_ref :
-  expression -> expression -> Debuginfo.t -> expression
-val float_array_ref : expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> Debuginfo.t -> expression
+val float_array_ref : pure_expression -> pure_expression -> Debuginfo.t -> expression
 val addr_array_set :
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 val addr_array_initialize :
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 val int_array_set :
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 val float_array_set :
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** Strings *)
 
-val string_length : expression -> Debuginfo.t -> expression
-val bigstring_length : expression -> Debuginfo.t -> expression
+val string_length : pure_expression -> Debuginfo.t -> expression
+val bigstring_length : pure_expression -> Debuginfo.t -> expression
 
 (** Objects *)
 
@@ -287,14 +287,14 @@ val bigstring_length : expression -> Debuginfo.t -> expression
     Arguments :
     - obj : the object from which to lookup
     - tag : the hash of the method name, as a tagged integer *)
-val lookup_tag : expression -> expression -> Debuginfo.t -> expression
+val lookup_tag : pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** Lookup a method by its offset in the method table
     Arguments :
     - obj : the object from which to lookup
     - lab : the position of the required method in the object's
     method array, as a tagged integer *)
-val lookup_label : expression -> expression -> Debuginfo.t -> expression
+val lookup_label : pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** Lookup and call a method using the method cache
     Arguments :
@@ -304,21 +304,21 @@ val lookup_label : expression -> expression -> Debuginfo.t -> expression
     - pos : the position of the cache entry in the cache array
     - args : the additional arguments to the method call *)
 val call_cached_method :
-  expression -> expression -> expression -> expression -> expression list ->
+  pure_expression -> pure_expression -> pure_expression -> pure_expression -> pure_expression list ->
   Debuginfo.t -> expression
 
 (** Allocations *)
 
 (** Allocate a block of regular values with the given tag *)
-val make_alloc : Debuginfo.t -> int -> expression list -> expression
+val make_alloc : Debuginfo.t -> int -> pure_expression list -> expression
 
 (** Allocate a block of unboxed floats with the given tag *)
-val make_float_alloc : Debuginfo.t -> int -> expression list -> expression
+val make_float_alloc : Debuginfo.t -> int -> pure_expression list -> expression
 
 (** Bounds checking *)
 
 (** Generate a [Ccheckbound] term *)
-val make_checkbound : Debuginfo.t -> expression list -> expression
+val make_checkbound : Debuginfo.t -> pure_expression list -> expression
 
 (** [check_bound safety access_size dbg length a2 k] prefixes expression [k]
     with a check that reading [access_size] bits starting at position [a2]
@@ -326,11 +326,11 @@ val make_checkbound : Debuginfo.t -> expression list -> expression
     [safety] is [Unsafe]. *)
 val check_bound :
   Lambda.is_safe -> Clambda_primitives.memory_access_size -> Debuginfo.t ->
-  expression -> expression -> expression ->
+  pure_expression -> pure_expression -> expression ->
   expression
 
 (** Sys.opaque_identity *)
-val opaque : expression -> Debuginfo.t -> expression
+val opaque : pure_expression -> Debuginfo.t -> expression
 
 (** Generic application functions *)
 
@@ -355,26 +355,26 @@ val curry_function_sym : int -> string
     - dbg : debugging information *)
 val bigarray_get :
   bool -> Lambda.bigarray_kind -> Lambda.bigarray_layout ->
-  expression -> expression list -> Debuginfo.t ->
+  pure_expression -> pure_expression list -> Debuginfo.t ->
   expression
 
 (** [bigarray_set unsafe kind layout b args newval dbg]
     Same as [bigarray_get], with [newval] the value being assigned *)
 val bigarray_set :
   bool -> Lambda.bigarray_kind -> Lambda.bigarray_layout ->
-  expression -> expression list -> expression -> Debuginfo.t ->
+  pure_expression -> pure_expression list -> pure_expression -> Debuginfo.t ->
   expression
 
 (** Operations on 32-bit integers *)
 
 (** [low_32 _ x] is a value which agrees with x on at least the low 32 bits *)
-val low_32 : Debuginfo.t -> expression -> expression
+val low_32 : Debuginfo.t -> pure_expression -> pure_expression
 
 (** Sign extend from 32 bits to the word size *)
-val sign_extend_32 : Debuginfo.t -> expression -> expression
+val sign_extend_32 : Debuginfo.t -> pure_expression -> pure_expression
 
 (** Zero extend from 32 bits to the word size *)
-val zero_extend_32 : Debuginfo.t -> expression -> expression
+val zero_extend_32 : Debuginfo.t -> pure_expression -> pure_expression
 
 (** Boxed numbers *)
 
@@ -385,7 +385,7 @@ val caml_int64_ops : string
 
 (** Box a given integer, without sharing of constants *)
 val box_int_gen :
-  Debuginfo.t -> Primitive.boxed_integer -> expression -> expression
+  Debuginfo.t -> Primitive.boxed_integer -> pure_expression -> expression
 
 (** Unbox a given boxed integer *)
 val unbox_int :
@@ -393,57 +393,58 @@ val unbox_int :
 
 (** Used to prepare 32-bit integers on 64-bit platforms for a lsr operation *)
 val make_unsigned_int :
-  Primitive.boxed_integer -> expression -> Debuginfo.t -> expression
+  Primitive.boxed_integer -> pure_expression -> Debuginfo.t -> pure_expression
 
-val unaligned_load_16 : expression -> expression -> Debuginfo.t -> expression
+val unaligned_load_16 : pure_expression -> pure_expression -> Debuginfo.t -> expression
 val unaligned_set_16 :
-  expression -> expression -> expression -> Debuginfo.t -> expression
-val unaligned_load_32 : expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
+val unaligned_load_32 : pure_expression -> pure_expression -> Debuginfo.t -> expression
 val unaligned_set_32 :
-  expression -> expression -> expression -> Debuginfo.t -> expression
-val unaligned_load_64 : expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
+val unaligned_load_64 : pure_expression -> pure_expression -> Debuginfo.t -> expression
 val unaligned_set_64 :
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** Raw memory accesses *)
 
 (** [unaligned_set size ptr idx newval dbg] *)
 val unaligned_set :
   Clambda_primitives.memory_access_size ->
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** [unaligned_load size ptr idx dbg] *)
 val unaligned_load :
   Clambda_primitives.memory_access_size ->
-  expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** [box_sized size dbg exp] *)
 val box_sized :
   Clambda_primitives.memory_access_size ->
-  Debuginfo.t -> expression -> expression
+  Debuginfo.t -> pure_expression -> expression
 
 (** Primitives *)
 
 val simplif_primitive :
   Clambda_primitives.primitive -> Clambda_primitives.primitive
 
-type unary_primitive = expression -> Debuginfo.t -> expression
+type unary_primitive = pure_expression -> Debuginfo.t -> expression
+type unary_pure_primitive = pure_expression -> Debuginfo.t -> pure_expression
 
 (** Return the n-th field of a float array (or float-only record), as an
     unboxed float *)
 val floatfield : int -> unary_primitive
 
 (** Int_as_pointer primitive *)
-val int_as_pointer : unary_primitive
+val int_as_pointer : unary_pure_primitive
 
 (** Raise primitive *)
 val raise_prim : Lambda.raise_kind -> unary_primitive
 
 (** Unary negation of an OCaml integer *)
-val negint : unary_primitive
+val negint : unary_pure_primitive
 
 (** Add a constant number to an OCaml integer *)
-val offsetint : int -> unary_primitive
+val offsetint : int -> unary_pure_primitive
 
 (** Add a constant number to an OCaml integer reference *)
 val offsetref : int -> unary_primitive
@@ -459,7 +460,8 @@ val bbswap : Primitive.boxed_integer -> unary_primitive
     Operates on Cmm integers (untagged integers) *)
 val bswap16 : unary_primitive
 
-type binary_primitive = expression -> expression -> Debuginfo.t -> expression
+type binary_primitive = pure_expression -> pure_expression -> Debuginfo.t -> expression
+type binary_pure_primitive = pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
 
 type assignment_kind = Caml_modify | Caml_initialize | Simple
 
@@ -474,18 +476,18 @@ val setfloatfield :
   int -> Lambda.initialization_or_assignment -> binary_primitive
 
 (** Operations on OCaml integers *)
-val add_int_caml : binary_primitive
-val sub_int_caml : binary_primitive
-val mul_int_caml : binary_primitive
+val add_int_caml : binary_pure_primitive
+val sub_int_caml : binary_pure_primitive
+val mul_int_caml : binary_pure_primitive
 val div_int_caml : Lambda.is_safe -> binary_primitive
 val mod_int_caml : Lambda.is_safe -> binary_primitive
-val and_int_caml : binary_primitive
-val or_int_caml : binary_primitive
-val xor_int_caml : binary_primitive
-val lsl_int_caml : binary_primitive
-val lsr_int_caml : binary_primitive
-val asr_int_caml : binary_primitive
-val int_comp_caml : Lambda.integer_comparison -> binary_primitive
+val and_int_caml : binary_pure_primitive
+val or_int_caml : binary_pure_primitive
+val xor_int_caml : binary_pure_primitive
+val lsl_int_caml : binary_pure_primitive
+val lsr_int_caml : binary_pure_primitive
+val asr_int_caml : binary_pure_primitive
+val int_comp_caml : Lambda.integer_comparison -> binary_pure_primitive
 
 (** Strings, Bytes and Bigstrings *)
 
@@ -506,7 +508,7 @@ val arrayref_unsafe : Lambda.array_kind -> binary_primitive
 val arrayref_safe : Lambda.array_kind -> binary_primitive
 
 type ternary_primitive =
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 (** Same as setfield, except the offset is one of the arguments.
     Args: pointer (structure/array/...), index, value *)
@@ -539,9 +541,9 @@ val bigstring_set :
 (** Switch *)
 
 (** [transl_isout h arg dbg] *)
-val transl_isout : expression -> expression -> Debuginfo.t -> expression
+val transl_isout : pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
 
-type switch_arg = Tagged of expression | Untagged of expression
+type switch_arg = Tagged of pure_expression | Untagged of pure_expression
 (** [make_switch arg cases actions dbg] : Generate a Cswitch construct,
     or optimize as a static table lookup when possible.
 *)
@@ -551,7 +553,7 @@ val make_switch :
 
 (** [transl_int_switch loc arg low high cases default] *)
 val transl_int_switch :
-  Debuginfo.t -> expression -> int -> int ->
+  Debuginfo.t -> pure_expression -> int -> int ->
   (int * expression) list -> expression -> expression
 
 (** [transl_switch_clambda loc arg index cases] *)
@@ -560,16 +562,16 @@ val transl_switch_clambda :
 
 (** [strmatch_compile dbg arg default cases] *)
 val strmatch_compile :
-  Debuginfo.t -> expression -> expression option ->
+  Debuginfo.t -> pure_expression -> expression option ->
   (string * expression) list -> expression
 
 (** Closures and function applications *)
 
 (** Adds a constant offset to a pointer (for infix access) *)
-val ptr_offset : expression -> int -> Debuginfo.t -> expression
+val ptr_offset : pure_expression -> int -> Debuginfo.t -> pure_expression
 
 (** Direct application of a function via a symbol *)
-val direct_apply : string -> expression list -> Debuginfo.t -> expression
+val direct_apply : string -> pure_expression list -> Debuginfo.t -> expression
 
 (** Generic application of a function to one or several arguments.
     The mutable_flag argument annotates the loading of the code pointer
@@ -578,7 +580,7 @@ val direct_apply : string -> expression list -> Debuginfo.t -> expression
     the currently defined closure. *)
 val generic_apply :
   Asttypes.mutable_flag ->
-  expression -> expression list -> Debuginfo.t -> expression
+  pure_expression -> pure_expression list -> Debuginfo.t -> expression
 
 (** Method call : [send kind met obj args dbg]
     - [met] is a method identifier, which can be a hashed variant or an index
@@ -588,7 +590,7 @@ val generic_apply :
     of any way for the frontend to generate any arguments other than the
     cache and cache position) *)
 val send :
-  Lambda.meth_kind -> expression -> expression -> expression list ->
+  Lambda.meth_kind -> pure_expression -> pure_expression -> pure_expression list ->
   Debuginfo.t -> expression
 
 (** Generic Cmm fragments *)

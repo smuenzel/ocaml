@@ -20,6 +20,7 @@ module VP = Backend_var.With_provenance
 open Cmm
 open Arch
 
+(*
 (* Post processing of bindings "un_anf" *)
 let post_process result arg var =
   match arg with
@@ -57,6 +58,7 @@ let post_process result arg var =
       | Exit -> result
       end
   | _ -> result
+   *)
 
 (* Local binding of complex expressions *)
 
@@ -93,7 +95,6 @@ let bind_list name args fn =
 
 let ( let= ) (name, arg) fn = bind name arg fn
 let ( let=$ ) (name, arg) fn = bind name arg (fun x -> Cpure (fn x))
-let ( let$=$ ) (name, arg) fn = bind_pure name arg fn
 
 let ( let<== ) (name, typ, arg) fn =
   let id = V.create_local name in
@@ -265,7 +266,7 @@ and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n, dbg)) dbg
 
 let rec mul_int c1 c2 dbg =
   match (c1, c2) with
-  | (c, Cconst_int (0, _)) | (Cconst_int (0, _), c) ->
+  | (_c, Cconst_int (0, _)) | (Cconst_int (0, _), _c) ->
       Cconst_int (0, dbg)
   | (c, Cconst_int (1, _)) | (Cconst_int (1, _), c) ->
       c
@@ -506,7 +507,7 @@ let raise_symbol dbg symb =
 
 let rec div_int c1 c2 is_safe dbg =
   match (c1, c2) with
-    (c1, Cconst_int (0, _)) ->
+    (_c1, Cconst_int (0, _)) ->
       raise_symbol dbg "caml_exn_Division_by_zero"
   | (c1, Cconst_int (1, _)) ->
       Cpure c1
@@ -569,9 +570,9 @@ let rec div_int c1 c2 is_safe dbg =
 
 let mod_int c1 c2 is_safe dbg =
   match (c1, c2) with
-    (c1, Cconst_int (0, _)) ->
+    (_c1, Cconst_int (0, _)) ->
       raise_symbol dbg "caml_exn_Division_by_zero"
-  | (c1, Cconst_int ((1 | (-1)), _)) ->
+  | (_c1, Cconst_int ((1 | (-1)), _)) ->
       Cpure(Cconst_int (0, dbg))
   | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
       Cpure (Cconst_int (n1 mod n2, dbg))
@@ -788,7 +789,7 @@ let is_addr_array_hdr hdr dbg =
 
 let is_addr_array_ptr ptr dbg =
   bind "tag" (get_tag ptr dbg) (fun tag ->
-      Cpure(Cpure_op(Ccmpi Cne, [tag; floatarray_tag dbg], dbg))
+      Cpure (Cpure_op(Ccmpi Cne, [tag; floatarray_tag dbg], dbg))
     )
 
 let addr_array_length_shifted hdr dbg =
@@ -1063,43 +1064,41 @@ let bigarray_word_kind : Lambda.bigarray_kind -> memory_chunk = function
   | Pbigarray_complex64 -> Double
 
 let bigarray_get unsafe elt_kind layout b args dbg =
-  bind "ba" b (fun b ->
-    match (elt_kind : Lambda.bigarray_kind) with
-      Pbigarray_complex32 | Pbigarray_complex64 ->
-        let kind = bigarray_word_kind elt_kind in
-        let sz = bigarray_elt_size elt_kind / 2 in
-        let= addr = "addr", bigarray_indexing unsafe elt_kind layout b args dbg in
-        let= reval = "reval", Cop(mk_load_mut kind, [addr], dbg) in
-        let= imval = "imval", Cop(mk_load_mut kind, [Cpure_op(Cadda, [addr; Cconst_int (sz, dbg)], dbg)], dbg) in
-        box_complex dbg reval imval
-    | _ ->
-        let= tmp = "tmp", bigarray_indexing unsafe elt_kind layout b args dbg in
-        Cop(mk_load_mut (bigarray_word_kind elt_kind),
-            [ tmp ],
-            dbg))
+  match (elt_kind : Lambda.bigarray_kind) with
+    Pbigarray_complex32 | Pbigarray_complex64 ->
+      let kind = bigarray_word_kind elt_kind in
+      let sz = bigarray_elt_size elt_kind / 2 in
+      let= addr = "addr", bigarray_indexing unsafe elt_kind layout b args dbg in
+      let= reval = "reval", Cop(mk_load_mut kind, [addr], dbg) in
+      let= imval = "imval", Cop(mk_load_mut kind, [Cpure_op(Cadda, [addr; Cconst_int (sz, dbg)], dbg)], dbg) in
+      box_complex dbg reval imval
+  | _ ->
+      let= tmp = "tmp", bigarray_indexing unsafe elt_kind layout b args dbg in
+      Cop(mk_load_mut (bigarray_word_kind elt_kind),
+          [ tmp ],
+          dbg)
 
 let bigarray_set unsafe elt_kind layout b args newval dbg =
-  bind "ba" b (fun b ->
-    match (elt_kind : Lambda.bigarray_kind) with
-      Pbigarray_complex32 | Pbigarray_complex64 ->
-        let kind = bigarray_word_kind elt_kind in
-        let sz = bigarray_elt_size elt_kind / 2 in
-        let= newv = "newv", Cpure newval in
-        let= addr = "addr", bigarray_indexing unsafe elt_kind layout b args dbg in
-        let= re = "re", complex_re newv dbg in
-        let= im = "im", complex_im newv dbg in
-        Csequence(
-          Cop(Cstore (kind, Assignment), [addr; re], dbg),
-          Cop(Cstore (kind, Assignment),
-              [Cpure_op(Cadda, [addr; Cconst_int (sz, dbg)], dbg);
-               im],
-              dbg))
-    | _ ->
-        let= indexing = "indexing", bigarray_indexing unsafe elt_kind layout b args dbg in
-        let= newval = "newval", Cpure newval in
-        Cop(Cstore (bigarray_word_kind elt_kind, Assignment),
-            [indexing; newval],
+  match (elt_kind : Lambda.bigarray_kind) with
+    Pbigarray_complex32 | Pbigarray_complex64 ->
+      let kind = bigarray_word_kind elt_kind in
+      let sz = bigarray_elt_size elt_kind / 2 in
+      let= newv = "newv", Cpure newval in
+      let= addr = "addr", bigarray_indexing unsafe elt_kind layout b args dbg in
+      let= re = "re", complex_re newv dbg in
+      let= im = "im", complex_im newv dbg in
+      Csequence(
+        Cop(Cstore (kind, Assignment), [addr; re], dbg),
+        Cop(Cstore (kind, Assignment),
+            [Cpure_op(Cadda, [addr; Cconst_int (sz, dbg)], dbg);
+             im],
             dbg))
+  | _ ->
+      let= indexing = "indexing", bigarray_indexing unsafe elt_kind layout b args dbg in
+      let= newval = "newval", Cpure newval in
+      Cop(Cstore (bigarray_word_kind elt_kind, Assignment),
+          [indexing; newval],
+          dbg)
 
 (* the three functions below assume 64-bit words *)
 let () = assert (size_int = 8)
@@ -1942,8 +1941,6 @@ CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
 let cache_public_method meths tag cache dbg =
   let raise_num = Lambda.next_raise_count () in
   let cconst_int i = Cconst_int (i, dbg) in
-  let li = V.create_local "*li*" and hi = V.create_local "*hi*"
-  and mi = V.create_local "*mi*" and tagged = V.create_local "*tagged*" in
   let<== li, li_v = "*li*", typ_int, cconst_int 3 in
   let= meths = "meths", Cop(mk_load_mut Word_int, [meths], dbg) in
   let<== hi, hi_v = "*hi*", typ_int, meths in
@@ -2062,7 +2059,6 @@ let send_function arity =
   let clos =
     let cache = Cvar cache and obj = Cvar obj and tag = Cvar tag in
     let meths = V.create_local "meths" and cached = V.create_local "cached" in
-    let real = V.create_local "real" in
     let cached_pos = Cvar cached in
     let tag_pos = Cpure_op(Cadda, [Cpure_op (Cadda, [cached_pos; Cvar meths], dbg ());
                               cconst_int(3*size_addr-1)], dbg ()) in
@@ -2337,7 +2333,8 @@ let generic_functions shared units =
 
 (* Primitives *)
 
-type unary_primitive = expression -> Debuginfo.t -> expression
+type unary_primitive = pure_expression -> Debuginfo.t -> expression
+type unary_pure_primitive = pure_expression -> Debuginfo.t -> pure_expression
 
 let floatfield n ptr dbg =
   Cop(mk_load_mut Double,
@@ -2362,14 +2359,14 @@ let negint arg dbg =
 
 let offsetref n arg dbg =
   return_unit dbg
-    (bind "ref" arg (fun arg ->
-         let= arg_contents = "arg_contents",
-                            Cop(mk_load_mut Word_int, [arg], dbg) in
-         Cop(Cstore (Word_int, Assignment),
-             [arg;
-              add_const arg_contents
-                (n lsl 1) dbg],
-             dbg)))
+    (
+      let= arg_contents = "arg_contents",
+                          Cop(mk_load_mut Word_int, [arg], dbg) in
+      Cop(Cstore (Word_int, Assignment),
+          [arg;
+           add_const arg_contents
+             (n lsl 1) dbg],
+          dbg))
 
 let arraylength kind arg dbg =
   let= hdr = "hdr", get_header_masked arg dbg in
@@ -2410,7 +2407,8 @@ let bswap16 arg dbg =
        [arg],
        dbg))
 
-type binary_primitive = expression -> expression -> Debuginfo.t -> expression
+type binary_primitive = pure_expression -> pure_expression -> Debuginfo.t -> expression
+type binary_pure_primitive = pure_expression -> pure_expression -> Debuginfo.t -> pure_expression
 
 (* let pfield_computed = addr_array_ref *)
 
@@ -2460,9 +2458,8 @@ let stringref_unsafe arg1 arg2 dbg =
   in
   Cpure (tag_int loaded dbg)
 
-let stringref_safe arg1 arg2 dbg =
+let stringref_safe str arg2 dbg =
   let= idx = "index", Cpure (untag_int arg2 dbg) in
-  let= str = "str", arg1 in
   let= result =
     "result",
     let= length = "length", string_length str dbg in
@@ -2499,9 +2496,7 @@ let bigstring_load size unsafe ba arg2 dbg =
   in
   box_sized size dbg result
 
-let arrayref_unsafe kind arg1 arg2 dbg =
-  let= idx = "index", arg2 in
-  let= arr = "arr", arg1 in
+let arrayref_unsafe kind arr idx dbg =
   match (kind : Lambda.array_kind) with
   | Pgenarray ->
       let= is_addr = "is_addr", is_addr_array_ptr arr dbg in
@@ -2519,9 +2514,7 @@ let arrayref_unsafe kind arg1 arg2 dbg =
   | Pfloatarray ->
       float_array_ref arr idx dbg
 
-let arrayref_safe kind arg1 arg2 dbg =
-  let= idx = "index", arg2 in
-  let= arr = "arr", arg1 in
+let arrayref_safe kind arr idx dbg =
   match (kind : Lambda.array_kind) with
   | Pgenarray ->
       let= hdr = "header", get_header_masked arr dbg in
@@ -2573,7 +2566,7 @@ let arrayref_safe kind arg1 arg2 dbg =
       box_float dbg unboxed
 
 type ternary_primitive =
-  expression -> expression -> expression -> Debuginfo.t -> expression
+  pure_expression -> pure_expression -> pure_expression -> Debuginfo.t -> expression
 
 let setfield_computed ptr init arg1 arg2 arg3 dbg =
   match assignment_kind ptr init with
@@ -2600,10 +2593,7 @@ let bytesset_safe str arg2 arg3 dbg =
             [offset_addr str idx dbg; newval],
             dbg)))
 
-let arrayset_unsafe kind arg1 arg2 arg3 dbg =
-  let= newval = "newval", arg3 in
-  let= index = "index", arg2 in
-  let= arr = "arr", arg1 in
+let arrayset_unsafe kind arr index newval dbg =
   return_unit dbg (match (kind: Lambda.array_kind) with
       | Pgenarray ->
           let= is_addr = "is_addr", is_addr_array_ptr arr dbg in
@@ -2623,12 +2613,9 @@ let arrayset_unsafe kind arg1 arg2 arg3 dbg =
           float_array_set arr index newval dbg
     )
 
-let arrayset_safe kind arg1 arg2 arg3 dbg =
+let arrayset_safe kind arr idx newval dbg =
   return_unit dbg (match (kind: Lambda.array_kind) with
   | Pgenarray ->
-      bind "newval" arg3 (fun newval ->
-      bind "index" arg2 (fun idx ->
-      bind "arr" arg1 (fun arr ->
       bind "header" (get_header_masked arr dbg) (fun hdr ->
         if wordsize_shift = numfloat_shift then
           Csequence(
@@ -2655,62 +2642,49 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
               (let= unboxed = "unboxed", unbox_float dbg (Cpure newval) in
               float_array_set arr idx
                 unboxed dbg)),
-            dbg)))))
+            dbg))
   | Paddrarray ->
-      bind "newval" arg3 (fun newval ->
-      bind "index" arg2 (fun idx ->
-      bind "arr" arg1 (fun arr ->
-                  let= header = "header", get_header_masked arr dbg in
-        Csequence(
-          make_checkbound dbg [
-            addr_array_length_shifted
-              header dbg;
-            idx],
-          addr_array_set arr idx newval dbg))))
+      let= header = "header", get_header_masked arr dbg in
+      Csequence(
+        make_checkbound dbg [
+          addr_array_length_shifted
+            header dbg;
+          idx],
+        addr_array_set arr idx newval dbg)
   | Pintarray ->
-      bind "newval" arg3 (fun newval ->
-      bind "index" arg2 (fun idx ->
-      bind "arr" arg1 (fun arr ->
-                  let= header = "header", get_header_masked arr dbg in
-        Csequence(
-          make_checkbound dbg [
-            addr_array_length_shifted
-              header dbg;
-            idx],
-          int_array_set arr idx newval dbg))))
+      let= header = "header", get_header_masked arr dbg in
+      Csequence(
+        make_checkbound dbg [
+          addr_array_length_shifted
+            header dbg;
+          idx],
+        int_array_set arr idx newval dbg)
   | Pfloatarray ->
-      bind "index" arg2 (fun idx ->
-      bind "arr" arg1 (fun arr ->
-                  let= header = "header", get_header_masked arr dbg in
-        Csequence(
-          make_checkbound dbg [
-            float_array_length_shifted
-              header dbg;
-            idx],
-          bind "newval" arg3 (fun newval ->
-          float_array_set arr idx newval dbg))))
+      let= header = "header", get_header_masked arr dbg in
+      Csequence(
+        make_checkbound dbg [
+          float_array_length_shifted
+            header dbg;
+          idx],
+        float_array_set arr idx newval dbg)
   )
 
-let bytes_set size unsafe arg1 arg2 arg3 dbg =
+let bytes_set size unsafe str arg2 newval dbg =
   return_unit dbg
-   (bind "newval" arg3 (fun newval ->
-    bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
-    bind "str" arg1 (fun str ->
-                let= length = "length", string_length str dbg in
-      check_bound unsafe size dbg length
-                  idx (unaligned_set size str idx newval dbg)))))
+    (bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
+         let= length = "length", string_length str dbg in
+         check_bound unsafe size dbg length
+           idx (unaligned_set size str idx newval dbg)))
 
-let bigstring_set size unsafe arg1 arg2 arg3 dbg =
+let bigstring_set size unsafe ba arg2 newval dbg =
   return_unit dbg
-   (bind "newval" arg3 (fun newval ->
-    bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
-    bind "ba" arg1 (fun ba ->
-    bind "ba_data"
-         (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
-         (fun ba_data ->
-            let= length = "length", bigstring_length ba dbg in
-            check_bound unsafe size dbg length
-              idx (unaligned_set size ba_data idx newval dbg))))))
+    (bind "index" (Cpure (untag_int arg2 dbg)) (fun idx ->
+         bind "ba_data"
+           (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
+           (fun ba_data ->
+              let= length = "length", bigstring_length ba dbg in
+              check_bound unsafe size dbg length
+                idx (unaligned_set size ba_data idx newval dbg))))
 
 (* Symbols *)
 
