@@ -2473,97 +2473,104 @@ let stringref_safe arg1 arg2 dbg =
   in
   Cpure(tag_int result dbg)
 
-let string_load size unsafe arg1 arg2 dbg =
-  box_sized size dbg
-    (bind "index" (untag_int arg2 dbg) (fun idx ->
-     bind "str" arg1 (fun str ->
-       check_bound unsafe size dbg
-          (string_length str dbg)
-          idx (unaligned_load size str idx dbg))))
+let string_load size unsafe str arg2 dbg =
+  let= idx = "index", Cpure (untag_int arg2 dbg) in
+  let= length = "length", string_length str dbg in
+  let= result =
+    "result",
+    check_bound unsafe size dbg
+      length
+      idx (unaligned_load size str idx dbg)
+  in
+  box_sized size dbg result
 
-let bigstring_load size unsafe arg1 arg2 dbg =
-  box_sized size dbg
-   (bind "index" (untag_int arg2 dbg) (fun idx ->
-    bind "ba" arg1 (fun ba ->
-    bind "ba_data"
-     (Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg))
-     (fun ba_data ->
-        check_bound unsafe size dbg
-          (bigstring_length ba dbg)
-          idx
-          (unaligned_load size ba_data idx dbg)))))
+let bigstring_load size unsafe ba arg2 dbg =
+  let= idx = "index", Cpure (untag_int arg2 dbg) in
+  let= ba_data = "ba_data",
+                 Cop(mk_load_mut Word_int, [field_address ba 1 dbg], dbg)
+  in
+  let= length = "length", bigstring_length ba dbg in
+  let= result =
+    "result",
+    check_bound unsafe size dbg
+      length
+      idx
+      (unaligned_load size ba_data idx dbg)
+  in
+  box_sized size dbg result
 
 let arrayref_unsafe kind arg1 arg2 dbg =
+  let= idx = "index", arg2 in
+  let= arr = "arr", arg1 in
   match (kind : Lambda.array_kind) with
   | Pgenarray ->
-      bind "index" arg2 (fun idx ->
-        bind "arr" arg1 (fun arr ->
-          Cifthenelse(is_addr_array_ptr arr dbg,
+      let= is_addr = "is_addr", is_addr_array_ptr arr dbg in
+      Cifthenelse(is_addr,
+                  dbg,
+                  addr_array_ref arr idx dbg,
+                  dbg,
+                  float_array_ref arr idx dbg,
+                  dbg)
+  | Paddrarray ->
+      addr_array_ref arr idx dbg
+  | Pintarray ->
+      (* CR mshinwell: for int/addr_array_ref move "dbg" to first arg *)
+      int_array_ref arr idx dbg
+  | Pfloatarray ->
+      float_array_ref arr idx dbg
+
+let arrayref_safe kind arg1 arg2 dbg =
+  let= idx = "index", arg2 in
+  let= arr = "arr", arg1 in
+  match (kind : Lambda.array_kind) with
+  | Pgenarray ->
+      let= hdr = "header", get_header_masked arr dbg in
+      if wordsize_shift = numfloat_shift then
+        Csequence(
+          make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
+          Cifthenelse(is_addr_array_hdr hdr dbg,
                       dbg,
                       addr_array_ref arr idx dbg,
                       dbg,
                       float_array_ref arr idx dbg,
-                      dbg)))
+                      dbg))
+      else
+        Cifthenelse(is_addr_array_hdr hdr dbg,
+                    dbg,
+                    Csequence(
+                      make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
+                      addr_array_ref arr idx dbg),
+                    dbg,
+                    Csequence(
+                      make_checkbound dbg [float_array_length_shifted hdr dbg; idx],
+                      float_array_ref arr idx dbg),
+                    dbg)
   | Paddrarray ->
-      addr_array_ref arg1 arg2 dbg
+      let= header = "header", get_header_masked arr dbg in
+      Csequence(
+        make_checkbound dbg [
+          addr_array_length_shifted
+            header dbg; idx],
+        addr_array_ref arr idx dbg)
   | Pintarray ->
-      (* CR mshinwell: for int/addr_array_ref move "dbg" to first arg *)
-      int_array_ref arg1 arg2 dbg
+      let= header = "header", get_header_masked arr dbg in
+      Csequence(
+        make_checkbound dbg [
+          addr_array_length_shifted
+            header dbg; idx],
+        int_array_ref arr idx dbg)
   | Pfloatarray ->
-      float_array_ref arg1 arg2 dbg
-
-let arrayref_safe kind arg1 arg2 dbg =
-  match (kind : Lambda.array_kind) with
-  | Pgenarray ->
-      bind "index" arg2 (fun idx ->
-      bind "arr" arg1 (fun arr ->
-      bind "header" (get_header_masked arr dbg) (fun hdr ->
-        if wordsize_shift = numfloat_shift then
-          Csequence(
-            make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
-            Cifthenelse(is_addr_array_hdr hdr dbg,
-                        dbg,
-                        addr_array_ref arr idx dbg,
-                        dbg,
-                        float_array_ref arr idx dbg,
-                        dbg))
-        else
-          Cifthenelse(is_addr_array_hdr hdr dbg,
-            dbg,
-            Csequence(
-              make_checkbound dbg [addr_array_length_shifted hdr dbg; idx],
-              addr_array_ref arr idx dbg),
-            dbg,
-            Csequence(
-              make_checkbound dbg [float_array_length_shifted hdr dbg; idx],
-              float_array_ref arr idx dbg),
-            dbg))))
-      | Paddrarray ->
-          bind "index" arg2 (fun idx ->
-          bind "arr" arg1 (fun arr ->
-            Csequence(
-              make_checkbound dbg [
-                addr_array_length_shifted
-                  (get_header_masked arr dbg) dbg; idx],
-              addr_array_ref arr idx dbg)))
-      | Pintarray ->
-          bind "index" arg2 (fun idx ->
-          bind "arr" arg1 (fun arr ->
-            Csequence(
-              make_checkbound dbg [
-                addr_array_length_shifted
-                  (get_header_masked arr dbg) dbg; idx],
-              int_array_ref arr idx dbg)))
-      | Pfloatarray ->
-          box_float dbg (
-            bind "index" arg2 (fun idx ->
-            bind "arr" arg1 (fun arr ->
-              Csequence(
-                make_checkbound dbg [
-                  float_array_length_shifted
-                    (get_header_masked arr dbg) dbg;
-                  idx],
-                unboxed_float_array_ref arr idx dbg))))
+      let= header = "header", get_header_masked arr dbg in
+      let= unboxed =
+        "unboxed",
+        Csequence(
+          make_checkbound dbg [
+            float_array_length_shifted
+              header dbg;
+            idx],
+          unboxed_float_array_ref arr idx dbg)
+      in
+      box_float dbg unboxed
 
 type ternary_primitive =
   expression -> expression -> expression -> Debuginfo.t -> expression
@@ -2582,37 +2589,39 @@ let bytesset_unsafe arg1 arg2 arg3 dbg =
                       [offset_addr arg1 (untag_int arg2 dbg) dbg;
                        ignore_high_bit_int (untag_int arg3 dbg)], dbg))
 
-let bytesset_safe arg1 arg2 arg3 dbg =
+let bytesset_safe str arg2 arg3 dbg =
+  let= newval = "newval", Cpure (ignore_high_bit_int (untag_int arg3 dbg)) in
+  let= idx = "index", Cpure (untag_int arg2 dbg) in
+  let= length = "length", string_length str dbg in
   return_unit dbg
-    (bind "newval" (ignore_high_bit_int (untag_int arg3 dbg)) (fun newval ->
-      bind "index" (untag_int arg2 dbg) (fun idx ->
-       bind "str" arg1 (fun str ->
-        Csequence(
-          make_checkbound dbg [string_length str dbg; idx],
-          Cop(Cstore (Byte_unsigned, Assignment),
-              [offset_addr str idx dbg; newval],
-              dbg))))))
+    (Csequence(
+        make_checkbound dbg [length; idx],
+        Cop(Cstore (Byte_unsigned, Assignment),
+            [offset_addr str idx dbg; newval],
+            dbg)))
 
 let arrayset_unsafe kind arg1 arg2 arg3 dbg =
+  let= newval = "newval", arg3 in
+  let= index = "index", arg2 in
+  let= arr = "arr", arg1 in
   return_unit dbg (match (kind: Lambda.array_kind) with
-  | Pgenarray ->
-      bind "newval" arg3 (fun newval ->
-        bind "index" arg2 (fun index ->
-          bind "arr" arg1 (fun arr ->
-            Cifthenelse(is_addr_array_ptr arr dbg,
-                        dbg,
-                        addr_array_set arr index newval dbg,
-                        dbg,
-                        float_array_set arr index (unbox_float dbg newval)
-                          dbg,
-                        dbg))))
-  | Paddrarray ->
-      addr_array_set arg1 arg2 arg3 dbg
-  | Pintarray ->
-      int_array_set arg1 arg2 arg3 dbg
-  | Pfloatarray ->
-      float_array_set arg1 arg2 arg3 dbg
-  )
+      | Pgenarray ->
+          let= is_addr = "is_addr", is_addr_array_ptr arr dbg in
+          Cifthenelse(is_addr,
+                      dbg,
+                      addr_array_set arr index newval dbg,
+                      dbg,
+                      (let= unboxed = "unboxed", unbox_float dbg (Cpure newval) in
+                       float_array_set arr index unboxed
+                         dbg),
+                      dbg)
+      | Paddrarray ->
+          addr_array_set arr index newval dbg
+      | Pintarray ->
+          int_array_set arr index newval dbg
+      | Pfloatarray ->
+          float_array_set arr index newval dbg
+    )
 
 let arrayset_safe kind arg1 arg2 arg3 dbg =
   return_unit dbg (match (kind: Lambda.array_kind) with
@@ -2628,9 +2637,10 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
                         dbg,
                         addr_array_set arr idx newval dbg,
                         dbg,
+                        (let= unboxed = "unboxed", unbox_float dbg (Cpure newval) in
                         float_array_set arr idx
-                          (unbox_float dbg newval)
-                          dbg,
+                          unboxed
+                          dbg),
                         dbg))
         else
           Cifthenelse(
@@ -2642,37 +2652,41 @@ let arrayset_safe kind arg1 arg2 arg3 dbg =
             dbg,
             Csequence(
               make_checkbound dbg [float_array_length_shifted hdr dbg; idx],
+              (let= unboxed = "unboxed", unbox_float dbg (Cpure newval) in
               float_array_set arr idx
-                (unbox_float dbg newval) dbg),
+                unboxed dbg)),
             dbg)))))
   | Paddrarray ->
       bind "newval" arg3 (fun newval ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
+                  let= header = "header", get_header_masked arr dbg in
         Csequence(
           make_checkbound dbg [
             addr_array_length_shifted
-              (get_header_masked arr dbg) dbg;
+              header dbg;
             idx],
           addr_array_set arr idx newval dbg))))
   | Pintarray ->
       bind "newval" arg3 (fun newval ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
+                  let= header = "header", get_header_masked arr dbg in
         Csequence(
           make_checkbound dbg [
             addr_array_length_shifted
-              (get_header_masked arr dbg) dbg;
+              header dbg;
             idx],
           int_array_set arr idx newval dbg))))
   | Pfloatarray ->
       bind_load "newval" arg3 (fun newval ->
       bind "index" arg2 (fun idx ->
       bind "arr" arg1 (fun arr ->
+                  let= header = "header", get_header_masked arr dbg in
         Csequence(
           make_checkbound dbg [
             float_array_length_shifted
-              (get_header_masked arr dbg) dbg;
+              header dbg;
             idx],
           float_array_set arr idx newval dbg))))
   )
