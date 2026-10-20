@@ -2058,11 +2058,6 @@ let send_function arity =
   and tag = V.create_local "tag" in
   let clos =
     let cache = Cvar cache and obj = Cvar obj and tag = Cvar tag in
-    let meths = V.create_local "meths" and cached = V.create_local "cached" in
-    let cached_pos = Cvar cached in
-    let tag_pos = Cpure_op(Cadda, [Cpure_op (Cadda, [cached_pos; Cvar meths], dbg ());
-                              cconst_int(3*size_addr-1)], dbg ()) in
-    let= tag' = "tag'", Cop(mk_load_mut Word_int, [tag_pos], dbg ()) in
     let= meths = "meths",
                  Cop(mk_load_mut Word_val, [obj], dbg ())
     in
@@ -2070,10 +2065,13 @@ let send_function arity =
                  Cop(mk_load_mut Word_val, [cache], dbg ())
     in
     let= mask = "mask", get_field_gen Asttypes.Mutable meths 1 (dbg ()) in
-    let= cached = "cached",
+    let= cached_pos = "cached",
       Cpure (Cpure_op(Cand, [cache_load; mask],
                dbg ()))
     in
+    let tag_pos = Cpure_op(Cadda, [Cpure_op (Cadda, [cached_pos; meths], dbg ());
+                              cconst_int(3*size_addr-1)], dbg ()) in
+    let= tag' = "tag'", Cop(mk_load_mut Word_int, [tag_pos], dbg ()) in
     let= real = "real",
                 Cifthenelse(Cpure_op(Ccmpa Cne, [tag'; tag], dbg ()),
                             dbg (),
