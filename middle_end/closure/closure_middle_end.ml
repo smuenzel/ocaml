@@ -33,6 +33,7 @@ let lambda_to_clambda ~backend ~prefixname:_ ~ppf_dump
       (lambda : Lambda.program) =
   let clambda =
     Closure.intro ~backend ~size:lambda.main_module_block_size lambda.code
+    |> Un_anf.substitute_movable_lets
   in
   let provenance : Clambda.usymbol_provenance =
     { original_idents = [];

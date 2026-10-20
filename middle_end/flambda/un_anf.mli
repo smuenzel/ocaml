@@ -21,3 +21,7 @@ val apply
   -> ppf_dump:Format.formatter
   -> Clambda.ulambda
   -> Clambda.ulambda
+
+(** Eliminate, through substitution, [let]-bindings of linear variables with
+    moveable defining expressions. Does not require input to be in ANF. *)
+val substitute_movable_lets : Clambda.ulambda -> Clambda.ulambda

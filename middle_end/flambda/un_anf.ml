@@ -802,6 +802,10 @@ and un_anf_list var_info env clams : Clambda.ulambda list =
 and un_anf_array var_info env clams : Clambda.ulambda array =
   Array.map (un_anf var_info env) clams
 
+let substitute_movable_lets clam =
+  let var_info = make_var_info clam in
+  un_anf var_info V.Map.empty clam
+
 let apply ~what ~ppf_dump clam =
   let var_info = make_var_info clam in
   let let_bound_vars_that_can_be_moved =
@@ -811,8 +815,7 @@ let apply ~what ~ppf_dump clam =
     substitute_let_moveable let_bound_vars_that_can_be_moved
       V.Map.empty clam
   in
-  let var_info = make_var_info clam in
-  let clam = un_anf var_info V.Map.empty clam in
+  let clam = substitute_movable_lets clam in
   if !Clflags.dump_clambda then begin
     Format.fprintf ppf_dump
       "@.un-anf (%a):@ %a@."
@@ -820,3 +823,4 @@ let apply ~what ~ppf_dump clam =
         Printclambda.clambda clam
   end;
   clam
+
