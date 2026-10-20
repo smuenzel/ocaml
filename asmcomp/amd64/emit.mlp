@@ -507,7 +507,7 @@ let emit_instr env fallthrough i =
           I.xor (res32 i 0) (res32 i 0)
         | _ ->
           I.mov (int 0) (res i 0)
-      end else if n > 0n && n <= 0xFFFF_FFFFn then begin
+      end else if (n > 0n) && (n <= 0xFFFF_FFFFn) then begin
         match i.res.(0).loc with
         | Reg _ ->
           (* Similarly, setting only the bottom half clears the top half. *)
@@ -686,6 +686,16 @@ let emit_instr env fallthrough i =
       let lbl = bound_error_label env i.dbg in
       I.cmp (int n) (arg i 0);
       I.jbe (label lbl)
+  | Lop(Iintop_imm (Iand, n)) when n >= 0 && n < 0x01_0000_0000 ->
+    begin match i.res.(0).loc with
+    | Reg _ -> I.and_ (int n) (res32 i 0)
+    | _     -> I.and_ (int n) (res i 0)
+    end
+  | Lop(Iintop Ixor) when i.arg.(1).loc = i.res.(0).loc ->
+    begin match i.res.(0).loc with
+    | Reg _ -> I.xor (res32 i 0) (res32 i 0)
+    | _     -> I.xor (arg i 1) (res i 0)
+    end
   | Lop(Iintop(Idiv | Imod)) ->
       I.cqo ();
       I.idiv (arg i 1)
@@ -699,9 +709,11 @@ let emit_instr env fallthrough i =
       instr_for_intop op (arg i 1) (res i 0)
   | Lop(Iintop_imm(Iadd, n)) when i.arg.(0).loc <> i.res.(0).loc ->
       I.lea (mem64 NONE n (arg64 i 0)) (res i 0)
-  | Lop(Iintop_imm(Iadd, 1) | Iintop_imm(Isub, -1)) ->
+(* Page 3-21 of the Intel optimization manual says not to use inc/dec,
+   but there is a speed/size trade-off. *)
+  | Lop(Iintop_imm(Iadd, 1) | Iintop_imm(Isub, -1)) when not !fastcode_flag ->
       I.inc (res i 0)
-  | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) ->
+  | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) when not !fastcode_flag ->
       I.dec (res i 0)
   | Lop(Iintop_imm(op, n)) ->
       (* We have i.arg.(0) = i.res.(0) *)
