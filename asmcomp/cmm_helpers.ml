@@ -633,8 +633,8 @@ let complex_im c dbg =
 let return_unit dbg c = Csequence(c, Cpure (Cconst_int (1, dbg)))
 
 let rec remove_unit = function
-    Cconst_int (1, _) -> Ctuple []
-  | Csequence(c, Cconst_int (1, _)) -> c
+    Cpure (Cconst_int (1, _)) -> Cpure (Ctuple [])
+  | Csequence(c, Cpure (Cconst_int (1, _))) -> c
   | Csequence(c1, c2) ->
       Csequence(c1, remove_unit c2)
   | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
@@ -658,13 +658,13 @@ let rec remove_unit = function
   | Cop(Cextcall(proc, _ty_res, ty_args, alloc), args, dbg) ->
       Cop(Cextcall(proc, typ_void, ty_args, alloc), args, dbg)
   | Cexit (_,_) as c -> c
-  | Ctuple [] as c -> c
-  | c -> Csequence(c, Ctuple [])
+  | Cpure (Ctuple []) as c -> c
+  | c -> Csequence(c, Cpure (Ctuple []))
 
 let field_address ptr n dbg =
   if n = 0
   then ptr
-  else Cop(Cadda, [ptr; Cconst_int(n * size_addr, dbg)], dbg)
+  else Cpure_op(Cadda, [ptr; Cconst_int(n * size_addr, dbg)], dbg)
 
 let get_field_gen ?(memory_chunk=Word_val) mutability ptr n dbg =
   Cop(Cload {memory_chunk; mutability; is_atomic=false},
@@ -685,12 +685,15 @@ let get_header ptr dbg =
      ThreadSanitizer instrumentation by avoiding to instrument header loads. *)
   Cop(
     mk_load_immut Word_int,
-    [Cop(Cadda, [ptr; Cconst_int(-size_int, dbg)], dbg)], dbg)
+    [Cpure_op(Cadda, [ptr; Cconst_int(-size_int, dbg)], dbg)], dbg)
 
 let get_header_masked ptr dbg =
   if Config.reserved_header_bits > 0 then
     let header_mask = (1 lsl (64 - Config.reserved_header_bits)) - 1
-    in Cop(Cand, [get_header ptr dbg; Cconst_int (header_mask, dbg)], dbg)
+    in
+    bind "header" (get_header ptr dbg) (fun header ->
+        Cpure (Cpure_op(Cand, [header; Cconst_int (header_mask, dbg)], dbg))
+      )
   else
     get_header ptr dbg
 
@@ -701,10 +704,12 @@ let get_tag ptr dbg =
   (* Same comment as [get_header] above *)
   Cop(
     mk_load_immut Byte_unsigned,
-    [Cop(Cadda, [ptr; Cconst_int(tag_offset, dbg)], dbg)], dbg)
+    [Cpure_op(Cadda, [ptr; Cconst_int(tag_offset, dbg)], dbg)], dbg)
 
 let get_size ptr dbg =
-  Cop(Clsr, [get_header_masked ptr dbg; Cconst_int (10, dbg)], dbg)
+  bind "header" (get_header_masked ptr dbg) (fun hdr ->
+      Cpure (Cpure_op(Clsr, [hdr; Cconst_int (10, dbg)], dbg))
+    )
 
 (* Array indexing *)
 
@@ -715,21 +720,23 @@ let wordsize_shift = 9
 let numfloat_shift = 9 + log2_size_float - log2_size_addr
 
 let is_addr_array_hdr hdr dbg =
-  Cop(Ccmpi Cne,
-    [Cop(Cand, [hdr; Cconst_int (255, dbg)], dbg); floatarray_tag dbg],
+  Cpure_op(Ccmpi Cne,
+    [Cpure_op(Cand, [hdr; Cconst_int (255, dbg)], dbg); floatarray_tag dbg],
     dbg)
 
 let is_addr_array_ptr ptr dbg =
-  Cop(Ccmpi Cne, [get_tag ptr dbg; floatarray_tag dbg], dbg)
+  bind "tag" (get_tag ptr dbg) (fun tag ->
+      Cpure(Cpure_op(Ccmpi Cne, [tag; floatarray_tag dbg], dbg))
+    )
 
 let addr_array_length_shifted hdr dbg =
-  Cop(Clsr, [hdr; Cconst_int (wordsize_shift, dbg)], dbg)
+  Cpure_op(Clsr, [hdr; Cconst_int (wordsize_shift, dbg)], dbg)
 let float_array_length_shifted hdr dbg =
-  Cop(Clsr, [hdr; Cconst_int (numfloat_shift, dbg)], dbg)
+  Cpure_op(Clsr, [hdr; Cconst_int (numfloat_shift, dbg)], dbg)
 
 let lsl_const c n dbg =
   if n = 0 then c
-  else Cop(Clsl, [c; Cconst_int (n, dbg)], dbg)
+  else Cpure_op(Clsl, [c; Cconst_int (n, dbg)], dbg)
 
 (* Produces a pointer to the element of the array [ptr] on the position [ofs]
    with the given element [log2size] log2 element size. [ofs] is given as a
@@ -749,21 +756,21 @@ let array_indexing ?typ log2size ptr ofs dbg =
   | Cconst_int (n, _) ->
       let i = n asr 1 in
       if i = 0 then ptr
-      else Cop(add, [ptr; Cconst_int(i lsl log2size, dbg)], dbg)
-  | Cop(Caddi,
-        [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
-      Cop(add, [ptr; lsl_const c log2size dbg], dbg')
-  | Cop(Caddi, [c; Cconst_int (n, _)], dbg') when log2size = 0 ->
-      Cop(add,
-        [Cop(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1, dbg)],
+      else Cpure_op(add, [ptr; Cconst_int(i lsl log2size, dbg)], dbg)
+  | Cpure_op(Caddi,
+        [Cpure_op(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
+      Cpure_op(add, [ptr; lsl_const c log2size dbg], dbg')
+  | Cpure_op(Caddi, [c; Cconst_int (n, _)], dbg') when log2size = 0 ->
+      Cpure_op(add,
+        [Cpure_op(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1, dbg)],
         dbg')
-  | Cop(Caddi, [c; Cconst_int (n, _)], _) ->
-      Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
+  | Cpure_op(Caddi, [c; Cconst_int (n, _)], _) ->
+      Cpure_op(add, [Cpure_op(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
                     Cconst_int((n-1) lsl (log2size - 1), dbg)], dbg)
   | _ when log2size = 0 ->
-      Cop(add, [ptr; untag_int ofs dbg], dbg)
+      Cpure_op(add, [ptr; untag_int ofs dbg], dbg)
   | _ ->
-      Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg);
+      Cpure_op(add, [Cpure_op(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg);
                     Cconst_int((-1) lsl (log2size - 1), dbg)], dbg)
 
 let field_address_computed ptr ofs dbg =
@@ -779,7 +786,9 @@ let unboxed_float_array_ref arr ofs dbg =
   Cop(mk_load_mut Double,
     [array_indexing log2_size_float arr ofs dbg], dbg)
 let float_array_ref arr ofs dbg =
-  box_float dbg (unboxed_float_array_ref arr ofs dbg)
+  bind "unboxed_array_ref"
+    (unboxed_float_array_ref arr ofs dbg)
+    (fun unboxed_ref -> box_float dbg unboxed_ref)
 
 let addr_array_set arr ofs newval dbg =
   Cop(Cextcall("caml_modify", typ_void, [], false),
@@ -800,19 +809,22 @@ let float_array_set arr ofs newval dbg =
 
 let string_length exp dbg =
   bind "str" exp (fun str ->
-    let tmp_var = V.create_local "tmp" in
-    Clet(VP.create tmp_var,
-         Cop(Csubi,
-             [Cop(Clsl,
-                   [get_size str dbg;
-                     Cconst_int (log2_size_addr, dbg)],
-                   dbg);
-              Cconst_int (1, dbg)],
-             dbg),
-         Cop(Csubi,
-             [Cvar tmp_var;
-               Cop(mk_load_mut Byte_unsigned,
-                     [Cop(Cadda, [str; Cvar tmp_var], dbg)], dbg)], dbg)))
+      bind "size" (get_size str dbg) (fun size ->
+          bind "tmp"
+            (Cpure (Cpure_op(Csubi,
+                             [Cpure_op(Clsl,
+                                       [ size;
+                                         Cconst_int (log2_size_addr, dbg)],
+                                       dbg);
+                              Cconst_int (1, dbg)],
+                             dbg)))
+            (fun tmp ->
+               bind "load_result"
+                 (Cop(mk_load_mut Byte_unsigned,
+                      [Cpure_op(Cadda, [str; tmp], dbg)], dbg))
+                 (fun load_result ->
+                    Cpure (Cpure_op(Csubi,[tmp; load_result], dbg))
+                 ))))
 
 let bigstring_length ba dbg =
   Cop(mk_load_mut Word_int, [field_address ba 5 dbg], dbg)
@@ -827,8 +839,10 @@ let lookup_tag obj tag dbg =
 
 let lookup_label obj lab dbg =
   bind "lab" lab (fun lab ->
-    let table = Cop (mk_load_mut Word_val, [obj], dbg) in
-    addr_array_ref table lab dbg)
+      bind "table"
+        (Cop (mk_load_mut Word_val, [obj], dbg))
+        (fun table ->
+           addr_array_ref table lab dbg))
 
 let call_cached_method obj tag cache pos args dbg =
   let arity = List.length args in
