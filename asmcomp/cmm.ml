@@ -176,11 +176,6 @@ and operation =
   | Cpoll
 
 type expression =
-    Cconst_int of int * Debuginfo.t
-  | Cconst_natint of nativeint * Debuginfo.t
-  | Cconst_float of float * Debuginfo.t
-  | Cconst_symbol of string * Debuginfo.t
-  | Cvar of Backend_var.t
   | Cvar_mut of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
   | Clet_mut of Backend_var.With_provenance.t * machtype
@@ -188,7 +183,6 @@ type expression =
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
   | Cassign of Backend_var.t * expression
-  | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of expression * Debuginfo.t * expression
@@ -204,6 +198,27 @@ type expression =
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
   | Creturn_addr
+
+and pure_expression =
+    Cconst_int of int * Debuginfo.t
+  | Cconst_natint of nativeint * Debuginfo.t
+  | Cconst_float of float * Debuginfo.t
+  | Cconst_symbol of string * Debuginfo.t
+  | Cvar of Backend_var.t
+  | Ctuple of pure_expression list
+  | Cpure_op of pure_operation * pure_expression list
+
+and pure_operation =
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
+  | Cand | Cor | Cxor | Clsl | Clsr | Casr
+  | Ccmpi of integer_comparison
+  | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
+  | Cadda (* pointer addition that produces a [Addr] (derived heap pointer) *)
+  | Ccmpa of integer_comparison
+  | Cnegf | Cabsf
+  | Caddf | Csubf | Cmulf | Cdivf
+  | Cfloatofint | Cintoffloat
+  | Ccmpf of float_comparison
 
 type codegen_option =
   | Reduce_code_size

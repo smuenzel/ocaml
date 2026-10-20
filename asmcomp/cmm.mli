@@ -152,16 +152,6 @@ and operation =
       ; is_atomic: bool }
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
-  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
-  | Cand | Cor | Cxor | Clsl | Clsr | Casr
-  | Ccmpi of integer_comparison
-  | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
-  | Cadda (* pointer addition that produces a [Addr] (derived heap pointer) *)
-  | Ccmpa of integer_comparison
-  | Cnegf | Cabsf
-  | Caddf | Csubf | Cmulf | Cdivf
-  | Cfloatofint | Cintoffloat
-  | Ccmpf of float_comparison
   | Craise of Lambda.raise_kind
   | Ccheckbound (* Takes two arguments : first the bound to check against,
                    then the index.
@@ -179,11 +169,6 @@ and operation =
 (** Every basic block should have a corresponding [Debuginfo.t] for its
     beginning. *)
 and expression =
-    Cconst_int of int * Debuginfo.t
-  | Cconst_natint of nativeint * Debuginfo.t
-  | Cconst_float of float * Debuginfo.t
-  | Cconst_symbol of string * Debuginfo.t
-  | Cvar of Backend_var.t
   | Cvar_mut of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
   | Clet_mut of Backend_var.With_provenance.t * machtype
@@ -192,7 +177,6 @@ and expression =
       * phantom_defining_expr option * expression
   (* Cassign must refer to a variable bound by Clet_mut *)
   | Cassign of Backend_var.t * expression
-  | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of expression * Debuginfo.t * expression
@@ -208,6 +192,28 @@ and expression =
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
   | Creturn_addr (** Return address saved in the current call frame *)
+  | Cpure of pure_expression
+
+and pure_expression =
+    Cconst_int of int * Debuginfo.t
+  | Cconst_natint of nativeint * Debuginfo.t
+  | Cconst_float of float * Debuginfo.t
+  | Cconst_symbol of string * Debuginfo.t
+  | Cvar of Backend_var.t
+  | Ctuple of pure_expression list
+  | Cpure_op of pure_operation * pure_expression list
+
+and pure_operation =
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
+  | Cand | Cor | Cxor | Clsl | Clsr | Casr
+  | Ccmpi of integer_comparison
+  | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
+  | Cadda (* pointer addition that produces a [Addr] (derived heap pointer) *)
+  | Ccmpa of integer_comparison
+  | Cnegf | Cabsf
+  | Caddf | Csubf | Cmulf | Cdivf
+  | Cfloatofint | Cintoffloat
+  | Ccmpf of float_comparison
 
 type codegen_option =
   | Reduce_code_size
