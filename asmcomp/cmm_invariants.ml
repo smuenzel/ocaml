@@ -180,7 +180,8 @@ end
 
 let rec check env (expr : Cmm.expression) =
   match expr with
-  | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
+  | Cpure (Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _) ->
+      ()
   | Creturn_addr ->
     ()
   | Cvar id ->

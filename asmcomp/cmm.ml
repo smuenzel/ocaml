@@ -157,15 +157,6 @@ and operation =
       ; is_atomic: bool }
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
-  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
-  | Cand | Cor | Cxor | Clsl | Clsr | Casr
-  | Ccmpi of integer_comparison
-  | Caddv | Cadda
-  | Ccmpa of integer_comparison
-  | Cnegf | Cabsf
-  | Caddf | Csubf | Cmulf | Cdivf
-  | Cfloatofint | Cintoffloat
-  | Ccmpf of float_comparison
   | Craise of Lambda.raise_kind
   | Ccheckbound
   | Copaque
@@ -198,6 +189,7 @@ type expression =
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
   | Creturn_addr
+  | Cpure of pure_expression
 
 and pure_expression =
     Cconst_int of int * Debuginfo.t
@@ -281,16 +273,12 @@ let iter_shallow_tail f = function
       true
   | Cexit _ | Cop (Craise _, _, _) ->
       true
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
-  | Cvar_mut _
   | Cassign _
-  | Ctuple _
+  | Cvar_mut _
   | Cop _
   | Creturn_addr ->
+      false
+  | Cpure _ ->
       false
 
 let rec map_tail f = function
@@ -319,16 +307,12 @@ let rec map_tail f = function
       Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
   | Cexit _ | Cop (Craise _, _, _) as cmm ->
       cmm
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
   | Cvar_mut _
   | Cassign _
-  | Ctuple _
   | Creturn_addr
   | Cop _ as c ->
+      f c
+  | Cpure _ as c ->
       f c
 
 let map_shallow f = function
@@ -340,8 +324,6 @@ let map_shallow f = function
       Cphantom_let (id, de, f e)
   | Cassign (id, e) ->
       Cassign (id, f e)
-  | Ctuple el ->
-      Ctuple (List.map f el)
   | Cop (op, el, dbg) ->
       Cop (op, List.map f el, dbg)
   | Csequence (e1, e2) ->
@@ -357,12 +339,8 @@ let map_shallow f = function
       Cexit (n, List.map f el)
   | Ctrywith (e1, id, e2, dbg) ->
       Ctrywith (f e1, id, f e2, dbg)
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
   | Cvar_mut _
   | Creturn_addr
+  | Cpure _
     as c ->
       c
