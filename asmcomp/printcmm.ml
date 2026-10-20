@@ -196,6 +196,8 @@ let rec pure_expr ppf = function
      fprintf ppf
       "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
       VP.print id pure_expr def pure_expr body
+  | Cpure_ifthenelse(e1, e2, e3) ->
+      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" pure_expr e1 pure_expr e2 pure_expr e3
 
 let rec expr ppf = function
   | Cpure e -> pure_expr ppf e

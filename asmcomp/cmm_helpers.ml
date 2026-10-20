@@ -45,6 +45,12 @@ let post_process result arg var =
                 let e1' = subst e1 in
                 let e2' = subst e2 in
                 if e1 == e1' && e2 == e2' then pe else Cpure_let(id, e1', e2')
+            | Cpure_ifthenelse (cond,ifso,ifnot) ->
+                let cond' = subst cond in
+                let ifso' = subst ifso in
+                let ifnot' = subst ifnot in
+                if cond == cond' && ifso == ifso' && ifnot == ifnot' then pe
+                else Cpure_ifthenelse(cond', ifso', ifnot')
         in
         subst result
       with
@@ -863,24 +869,23 @@ let float_array_set arr ofs newval dbg =
 
 (* Length of string block *)
 
-let string_length exp dbg =
-  bind "str" exp (fun str ->
-      bind "size" (get_size str dbg) (fun size ->
-          bind "tmp"
-            (Cpure (Cpure_op(Csubi,
-                             [Cpure_op(Clsl,
-                                       [ size;
-                                         Cconst_int (log2_size_addr, dbg)],
-                                       dbg);
-                              Cconst_int (1, dbg)],
-                             dbg)))
-            (fun tmp ->
-               bind "load_result"
-                 (Cop(mk_load_mut Byte_unsigned,
-                      [Cpure_op(Cadda, [str; tmp], dbg)], dbg))
-                 (fun load_result ->
-                    Cpure (Cpure_op(Csubi,[tmp; load_result], dbg))
-                 ))))
+let string_length str dbg =
+  bind "size" (get_size str dbg) (fun size ->
+      bind "tmp"
+        (Cpure (Cpure_op(Csubi,
+                         [Cpure_op(Clsl,
+                                   [ size;
+                                     Cconst_int (log2_size_addr, dbg)],
+                                   dbg);
+                          Cconst_int (1, dbg)],
+                         dbg)))
+        (fun tmp ->
+           bind "load_result"
+             (Cop(mk_load_mut Byte_unsigned,
+                  [Cpure_op(Cadda, [str; tmp], dbg)], dbg))
+             (fun load_result ->
+                Cpure (Cpure_op(Csubi,[tmp; load_result], dbg))
+             )))
 
 let bigstring_length ba dbg =
   Cop(mk_load_mut Word_int, [field_address ba 5 dbg], dbg)
@@ -2182,28 +2187,32 @@ let final_curry_function arity =
   let last_clos = V.create_local "clos" in
   let rec curry_fun args clos n =
     if n = 0 then
+      let= codeptr = "codeptr", get_field_codepointer Asttypes.Mutable clos 2 (dbg ()) in
       Cop(Capply typ_val,
-          get_field_codepointer Asttypes.Mutable (Cvar clos) 2 (dbg ()) ::
-            args @ [Cvar last_arg; Cvar clos],
+          codeptr ::
+          args @ [Cvar last_arg; clos],
           dbg ())
     else
-      if n = arity - 1 || arity > max_arity_optimized then
-        begin
-      let newclos = V.create_local "clos" in
-      Clet(VP.create newclos,
-           get_field_gen Asttypes.Mutable (Cvar clos) 3 (dbg ()),
-           curry_fun (get_field_gen Asttypes.Mutable (Cvar clos) 2 (dbg ())
-                      :: args)
-             newclos (n-1))
-        end else
-        begin
-          let newclos = V.create_local "clos" in
-          Clet(VP.create newclos,
-               get_field_gen Asttypes.Mutable (Cvar clos) 4 (dbg ()),
-               curry_fun
-                 (get_field_gen Asttypes.Mutable (Cvar clos) 3 (dbg ()) :: args)
-                 newclos (n-1))
-    end in
+    if n = arity - 1 || arity > max_arity_optimized then
+      begin
+        let= newclos =
+          "clos",
+          get_field_gen Asttypes.Mutable clos 3 (dbg ())
+        in
+        let= codeptr = "codeptr", get_field_gen Asttypes.Mutable clos 2 (dbg ()) in
+        curry_fun (codeptr
+                   :: args)
+          newclos (n-1)
+      end else
+      begin
+        let= newclos = "clos",
+                       get_field_gen Asttypes.Mutable clos 4 (dbg ())
+        in
+        let= codeptr = "codeptr", get_field_gen Asttypes.Mutable clos 3 (dbg ()) in
+        curry_fun
+          (codeptr :: args)
+          newclos (n-1)
+      end in
   let fun_name =
     "caml_curry" ^ Int.to_string arity ^ "_" ^ Int.to_string (arity-1)
   in
@@ -2211,7 +2220,7 @@ let final_curry_function arity =
   Cfunction
    {fun_name;
     fun_args = [VP.create last_arg, typ_val; VP.create last_clos, typ_val];
-    fun_body = curry_fun [] last_clos (arity-1);
+    fun_body = curry_fun [] (Cvar last_clos) (arity-1);
     fun_codegen_options = [];
     fun_poll = Default_poll;
     fun_dbg;
@@ -2262,19 +2271,20 @@ let rec intermediate_curry_functions arity num =
           let direct_args = iter (num+2) in
           let rec iter i args clos =
             if i = 0 then
+              let= codeptr = "codeptr", get_field_codepointer Asttypes.Mutable clos 2 (dbg ()) in
               Cop(Capply typ_val,
-                  (get_field_codepointer
-                     Asttypes.Mutable (Cvar clos) 2 (dbg ()))
-                  :: args @ [Cvar clos],
+                  codeptr
+                  :: args @ [clos],
                   dbg ())
             else
-              let newclos = V.create_local "clos" in
-              Clet(VP.create newclos,
-                   get_field_gen Asttypes.Mutable (Cvar clos) 4 (dbg ()),
-                   iter (i-1)
-                     (get_field_gen Asttypes.Mutable (Cvar clos) 3 (dbg ())
-                      :: args)
-                     newclos)
+              let= newclos = "clos",
+                             get_field_gen Asttypes.Mutable clos 4 (dbg ())
+              in
+              let= codeptr = "codeptr", get_field_gen Asttypes.Mutable clos 3 (dbg ()) in
+              iter (i-1)
+                (codeptr
+                 :: args)
+                newclos
           in
           let fun_args =
             List.map (fun (arg, ty) -> VP.create arg, ty)
@@ -2287,7 +2297,7 @@ let rec intermediate_curry_functions arity num =
               {fun_name;
                fun_args;
                fun_body = iter (num+1)
-                  (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
+                  (List.map (fun (arg,_) -> Cvar arg) direct_args) (Cvar clos);
                fun_codegen_options = [];
                fun_poll = Default_poll;
                fun_dbg;
@@ -2332,11 +2342,11 @@ type unary_primitive = expression -> Debuginfo.t -> expression
 let floatfield n ptr dbg =
   Cop(mk_load_mut Double,
       [if n = 0 then ptr
-       else Cop(Cadda, [ptr; Cconst_int(n * size_float, dbg)], dbg)],
+       else Cpure_op(Cadda, [ptr; Cconst_int(n * size_float, dbg)], dbg)],
       dbg)
 
 let int_as_pointer arg dbg =
-  Cop(Caddi, [arg; Cconst_int (-1, dbg)], dbg)
+  Cpure_op(Caddi, [arg; Cconst_int (-1, dbg)], dbg)
   (* always a pointer outside the heap *)
 
 let raise_prim raise_kind arg dbg =
@@ -2346,42 +2356,43 @@ let raise_prim raise_kind arg dbg =
     Cop (Craise Lambda.Raise_notrace, [arg], dbg)
 
 let negint arg dbg =
-  Cop(Csubi, [Cconst_int (2, dbg); arg], dbg)
+  Cpure_op(Csubi, [Cconst_int (2, dbg); arg], dbg)
 
 (* [offsetint] moved down to reuse add_int_caml *)
 
 let offsetref n arg dbg =
   return_unit dbg
     (bind "ref" arg (fun arg ->
+         let= arg_contents = "arg_contents",
+                            Cop(mk_load_mut Word_int, [arg], dbg) in
          Cop(Cstore (Word_int, Assignment),
              [arg;
-              add_const (Cop(mk_load_mut Word_int, [arg], dbg))
+              add_const arg_contents
                 (n lsl 1) dbg],
              dbg)))
 
 let arraylength kind arg dbg =
-  let hdr = get_header_masked arg dbg in
-  match (kind : Lambda.array_kind) with
-    Pgenarray ->
-      let len =
-        if wordsize_shift = numfloat_shift then
-          Cop(Clsr, [hdr; Cconst_int (wordsize_shift, dbg)], dbg)
-        else
-          bind "header" hdr (fun hdr ->
-              Cifthenelse(is_addr_array_hdr hdr dbg,
-                          dbg,
-                          Cop(Clsr,
-                            [hdr; Cconst_int (wordsize_shift, dbg)], dbg),
-                          dbg,
-                          Cop(Clsr,
-                            [hdr; Cconst_int (numfloat_shift, dbg)], dbg),
-                          dbg))
-      in
-      Cop(Cor, [len; Cconst_int (1, dbg)], dbg)
-  | Paddrarray | Pintarray ->
-      Cop(Cor, [addr_array_length_shifted hdr dbg; Cconst_int (1, dbg)], dbg)
-  | Pfloatarray ->
-      Cop(Cor, [float_array_length_shifted hdr dbg; Cconst_int (1, dbg)], dbg)
+  let= hdr = "hdr", get_header_masked arg dbg in
+  let result =
+    match (kind : Lambda.array_kind) with
+      Pgenarray ->
+        let len =
+          if wordsize_shift = numfloat_shift then
+            Cpure_op(Clsr, [hdr; Cconst_int (wordsize_shift, dbg)], dbg)
+          else
+            Cpure_ifthenelse(is_addr_array_hdr hdr dbg,
+                             Cpure_op(Clsr,
+                                      [hdr; Cconst_int (wordsize_shift, dbg)], dbg),
+                             Cpure_op(Clsr,
+                                      [hdr; Cconst_int (numfloat_shift, dbg)], dbg))
+        in
+        Cpure_op(Cor, [len; Cconst_int (1, dbg)], dbg)
+    | Paddrarray | Pintarray ->
+        Cpure_op(Cor, [addr_array_length_shifted hdr dbg; Cconst_int (1, dbg)], dbg)
+    | Pfloatarray ->
+        Cpure_op(Cor, [float_array_length_shifted hdr dbg; Cconst_int (1, dbg)], dbg)
+  in
+  Cpure result
 
 let bbswap bi arg dbg =
   let prim, tyarg = match (bi : Primitive.boxed_integer) with
@@ -2437,22 +2448,30 @@ let setfloatfield n init arg1 arg2 dbg =
   return_unit dbg (
     Cop(Cstore (Double, init),
         [if n = 0 then arg1
-         else Cop(Cadda, [arg1; Cconst_int(n * size_float, dbg)], dbg);
+         else Cpure_op(Cadda, [arg1; Cconst_int(n * size_float, dbg)], dbg);
          arg2], dbg))
 
 let stringref_unsafe arg1 arg2 dbg =
-  tag_int(Cop(mk_load_mut Byte_unsigned,
-              [offset_addr arg1 (untag_int arg2 dbg) dbg],
-              dbg)) dbg
+  let= loaded =
+    "loaded",
+    Cop(mk_load_mut Byte_unsigned,
+        [offset_addr arg1 (untag_int arg2 dbg) dbg],
+        dbg)
+  in
+  Cpure (tag_int loaded dbg)
 
 let stringref_safe arg1 arg2 dbg =
-  tag_int
-    (bind "index" (untag_int arg2 dbg) (fun idx ->
-      bind "str" arg1 (fun str ->
-        Csequence(
-          make_checkbound dbg [string_length str dbg; idx],
-          Cop(mk_load_mut Byte_unsigned,
-            [offset_addr str idx dbg], dbg))))) dbg
+  let= idx = "index", Cpure (untag_int arg2 dbg) in
+  let= str = "str", arg1 in
+  let= result =
+    "result",
+    let= length = "length", string_length str dbg in
+    Csequence(
+      make_checkbound dbg [length; idx],
+      Cop(mk_load_mut Byte_unsigned,
+          [offset_addr str idx dbg], dbg))
+  in
+  Cpure(tag_int result dbg)
 
 let string_load size unsafe arg1 arg2 dbg =
   box_sized size dbg

@@ -201,6 +201,7 @@ and pure_expression =
   | Cpure_op of pure_operation * pure_expression list * Debuginfo.t
   | Cpure_let of
       Backend_var.With_provenance.t * pure_expression * pure_expression
+  | Cpure_ifthenelse of pure_expression * pure_expression * pure_expression
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
