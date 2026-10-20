@@ -861,7 +861,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
   else begin
     let id = V.create_local "*alloc*" in
     let rec fill_fields idx = function
-      [] -> Cvar id
+      [] -> Cpure (Cvar id)
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int (idx, dbg)) e1 dbg,
                           fill_fields (idx + 2) el) in
     Clet(VP.create id,
@@ -884,7 +884,7 @@ let make_float_alloc dbg tag args =
 (* Bounds checking *)
 
 let make_checkbound dbg = function
-  | [Cop(Clsr, [a1; Cconst_int (n, _)], _); Cconst_int (m, _)]
+  | [Cpure_op(Clsr, [a1; Cconst_int (n, _)], _); Cconst_int (m, _)]
     when (m lsl n) > n ->
       Cop(Ccheckbound, [a1; Cconst_int(m lsl n + 1 lsl n - 1, dbg)], dbg)
   | args ->
@@ -930,35 +930,37 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
   let rec ba_indexing dim_ofs delta_ofs = function
     [] -> assert false
   | [arg] ->
-      if unsafe then arg
+      if unsafe then Cpure arg
       else
-        bind "idx" arg (fun idx ->
-          (* Load the untagged int bound for the given dimension *)
-          let bound =
-            Cop(mk_load_mut Word_int,
-                [field_address b dim_ofs dbg], dbg)
-          in
-          let idxn = untag_int idx dbg in
-          check_ba_bound bound idxn idx)
+        bind "idx" (Cpure arg) (fun idx ->
+            (* Load the untagged int bound for the given dimension *)
+            bind "bound"
+              (Cop(mk_load_mut Word_int,
+                   [field_address b dim_ofs dbg], dbg))
+              (fun bound ->
+                 let idxn = untag_int idx dbg in
+                 (* CR smuenzel: why Cpure in a sequence? *)
+                 check_ba_bound bound idxn (Cpure idx)))
   | arg1 :: argl ->
       (* The remainder of the list is transformed into a one dimensional offset
          *)
-      let rem = ba_indexing (dim_ofs + delta_ofs) delta_ofs argl in
-      (* Load the untagged int bound for the given dimension *)
-      let bound =
-        Cop(mk_load_mut Word_int,
-            [field_address b dim_ofs dbg], dbg)
-      in
-      if unsafe then add_int (mul_int (decr_int rem dbg) bound dbg) arg1 dbg
-      else
-        bind "idx" arg1 (fun idx ->
-          bind "bound" bound (fun bound ->
-            let idxn = untag_int idx dbg in
-            (* [offset = rem * (tag_int bound) + idx] *)
-            let offset =
-              add_int (mul_int (decr_int rem dbg) bound dbg) idx dbg
-            in
-            check_ba_bound bound idxn offset)) in
+      bind "rem"
+        (ba_indexing (dim_ofs + delta_ofs) delta_ofs argl)
+        (fun rem ->
+           (* Load the untagged int bound for the given dimension *)
+           bind "bound"
+             (Cop(mk_load_mut Word_int,
+                  [field_address b dim_ofs dbg], dbg))
+             (fun bound ->
+                if unsafe then Cpure (add_int (mul_int (decr_int rem dbg) bound dbg) arg1 dbg)
+                else
+                  bind "idx" (Cpure arg1) (fun idx ->
+                      let idxn = untag_int idx dbg in
+                      (* [offset = rem * (tag_int bound) + idx] *)
+                      let offset =
+                        add_int (mul_int (decr_int rem dbg) bound dbg) idx dbg
+                      in
+                      check_ba_bound bound idxn (Cpure offset)))) in
   (* The offset as an expression evaluating to int *)
   let offset =
     match (layout : Lambda.bigarray_layout) with
@@ -971,10 +973,17 @@ let bigarray_indexing unsafe elt_kind layout b args dbg =
           (List.map (fun idx -> sub_int idx (Cconst_int (2, dbg)) dbg) args)
   and elt_size =
     bigarray_elt_size elt_kind in
-  (* [array_indexing] can simplify the given expressions *)
-  array_indexing ~typ:Addr (Misc.log2 elt_size)
-                 (Cop(mk_load_mut Word_int,
-                    [field_address b 1 dbg], dbg)) offset dbg
+  bind "ptr"
+    (Cop(mk_load_mut Word_int,
+         [field_address b 1 dbg], dbg))
+    (fun ptr ->
+       bind "offset" offset (fun offset ->
+           (* [array_indexing] can simplify the given expressions *)
+           Cpure
+             (array_indexing ~typ:Addr (Misc.log2 elt_size)
+                ptr
+                offset dbg)
+         ))
 
 let bigarray_word_kind : Lambda.bigarray_kind -> memory_chunk = function
     Pbigarray_unknown -> assert false
