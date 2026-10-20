@@ -24,6 +24,12 @@ val bind :
 val bind_load :
   string -> expression -> (expression -> expression) -> expression
 
+
+module Syntax : sig
+  val ( let= ) : (string * expression) -> (pure_expression -> expression) -> expression
+  val ( let=$ ) : (string * expression) -> (pure_expression -> pure_expression) -> expression
+end
+
 (** Headers *)
 
 (** A null header with GC bits set to black *)

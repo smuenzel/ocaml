@@ -93,8 +93,11 @@ let bind_list name args fn =
     (fun f acc -> f acc)
     lets (fn vars)
 
-let ( let= ) (name, arg) fn = bind name arg fn
-let ( let=$ ) (name, arg) fn = bind name arg (fun x -> Cpure (fn x))
+module Syntax = struct
+  let ( let= ) (name, arg) fn = bind name arg fn
+  let ( let=$ ) (name, arg) fn = bind name arg (fun x -> Cpure (fn x))
+end
+open Syntax
 
 let ( let<== ) (name, typ, arg) fn =
   let id = V.create_local name in
