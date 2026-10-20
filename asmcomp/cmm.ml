@@ -174,9 +174,9 @@ type expression =
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
   | Cassign of Backend_var.t * expression
-  | Cop of operation * expression list * Debuginfo.t
+  | Cop of operation * pure_expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of expression * Debuginfo.t * expression
+  | Cifthenelse of pure_expression * Debuginfo.t * expression
       * Debuginfo.t * expression * Debuginfo.t
   | Cswitch of expression * int array * (expression * Debuginfo.t) array
       * Debuginfo.t
@@ -199,6 +199,8 @@ and pure_expression =
   | Cvar of Backend_var.t
   | Ctuple of pure_expression list
   | Cpure_op of pure_operation * pure_expression list * Debuginfo.t
+  | Cpure_let of
+      Backend_var.With_provenance.t * pure_expression * pure_expression
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
@@ -325,11 +327,15 @@ let map_shallow f = function
   | Cassign (id, e) ->
       Cassign (id, f e)
   | Cop (op, el, dbg) ->
+      Cop (op, el, dbg)
+        (*
       Cop (op, List.map f el, dbg)
+           *)
   | Csequence (e1, e2) ->
       Csequence (f e1, f e2)
   | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
-      Cifthenelse(f cond, ifso_dbg, f ifso, ifnot_dbg, f ifnot, dbg)
+      (* CR smuenzel: map cond?*)
+      Cifthenelse(cond, ifso_dbg, f ifso, ifnot_dbg, f ifnot, dbg)
   | Cswitch (e, ia, ea, dbg) ->
       Cswitch (e, ia, Array.map (fun (e, dbg) -> f e, dbg) ea, dbg)
   | Ccatch (rf, hl, body) ->

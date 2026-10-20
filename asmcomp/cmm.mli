@@ -177,9 +177,9 @@ and expression =
       * phantom_defining_expr option * expression
   (* Cassign must refer to a variable bound by Clet_mut *)
   | Cassign of Backend_var.t * expression
-  | Cop of operation * expression list * Debuginfo.t
+  | Cop of operation * pure_expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of expression * Debuginfo.t * expression
+  | Cifthenelse of pure_expression * Debuginfo.t * expression
       * Debuginfo.t * expression * Debuginfo.t
   | Cswitch of expression * int array * (expression * Debuginfo.t) array
       * Debuginfo.t
@@ -202,6 +202,8 @@ and pure_expression =
   | Cvar of Backend_var.t
   | Ctuple of pure_expression list
   | Cpure_op of pure_operation * pure_expression list * Debuginfo.t
+  | Cpure_let of
+      Backend_var.With_provenance.t * pure_expression * pure_expression
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi

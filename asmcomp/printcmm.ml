@@ -192,6 +192,10 @@ let rec pure_expr ppf = function
       fprintf ppf "@[<2>(%s" (pure_operation op);
       List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
       fprintf ppf ")@]"
+  | Cpure_let(id, def, body) ->
+     fprintf ppf
+      "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
+      VP.print id pure_expr def pure_expr body
 
 let rec expr ppf = function
   | Cpure e -> pure_expr ppf e
@@ -240,7 +244,7 @@ let rec expr ppf = function
       fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" V.print id expr exp
   | Cop(op, el, dbg) ->
       fprintf ppf "@[<2>(%s" (operation dbg op);
-      List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
+      List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
       begin match op with
       | Capply mty -> fprintf ppf "@ %a" machtype mty
       | Cextcall(_, ty_res, ty_args, _) ->
@@ -251,7 +255,7 @@ let rec expr ppf = function
   | Csequence(e1, e2) ->
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" sequence e1 sequence e2
   | Cifthenelse(e1, _e2_dbg, e2, _e3_dbg, e3, _dbg) ->
-      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" expr e1 expr e2 expr e3
+      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" pure_expr e1 expr e2 expr e3
   | Cswitch(e1, index, cases, _dbg) ->
       let print_case i ppf =
         for j = 0 to Array.length index - 1 do

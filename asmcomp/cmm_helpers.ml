@@ -22,15 +22,20 @@ open Arch
 
 (* Local binding of complex expressions *)
 
-let bind name arg fn =
+let bind_pure name arg fn =
   match arg with
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _ -> fn arg
+  | _ -> let id = V.create_local name in Cpure_let(VP.create id, arg, fn (Cvar id))
+
+let bind name arg fn =
+  match arg with
+    Cpure (Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _ as arg) -> fn arg
   | _ -> let id = V.create_local name in Clet(VP.create id, arg, fn (Cvar id))
 
 let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _], _) -> fn arg
-  | _ -> bind name arg fn
+  | _ -> bind name arg (fun x -> fn (Cpure x))
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
     (* cf. runtime/caml/gc.h *)
@@ -130,23 +135,23 @@ let targetint_const n =
 
 let add_no_overflow n x c dbg =
   let d = n + x in
-  if d = 0 then c else Cop(Caddi, [c; Cconst_int (d, dbg)], dbg)
+  if d = 0 then c else Cpure_op(Caddi, [c; Cconst_int (d, dbg)], dbg)
 
 let rec add_const c n dbg =
   if n = 0 then c
   else match c with
   | Cconst_int (x, _) when Misc.no_overflow_add x n -> Cconst_int (x + n, dbg)
-  | Cop(Caddi, [Cconst_int (x, _); c], _)
+  | Cpure_op(Caddi, [Cconst_int (x, _); c], _)
     when Misc.no_overflow_add n x ->
       add_no_overflow n x c dbg
-  | Cop(Caddi, [c; Cconst_int (x, _)], _)
+  | Cpure_op(Caddi, [c; Cconst_int (x, _)], _)
     when Misc.no_overflow_add n x ->
       add_no_overflow n x c dbg
-  | Cop(Csubi, [Cconst_int (x, _); c], _) when Misc.no_overflow_add n x ->
-      Cop(Csubi, [Cconst_int (n + x, dbg); c], dbg)
-  | Cop(Csubi, [c; Cconst_int (x, _)], _) when Misc.no_overflow_sub n x ->
+  | Cpure_op(Csubi, [Cconst_int (x, _); c], _) when Misc.no_overflow_add n x ->
+      Cpure_op(Csubi, [Cconst_int (n + x, dbg); c], dbg)
+  | Cpure_op(Csubi, [c; Cconst_int (x, _)], _) when Misc.no_overflow_sub n x ->
       add_const c (n - x) dbg
-  | c -> Cop(Caddi, [c; Cconst_int (n, dbg)], dbg)
+  | c -> Cpure_op(Caddi, [c; Cconst_int (n, dbg)], dbg)
 
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
@@ -155,42 +160,42 @@ let offset_addr c1 c2 dbg =
   match c1, c2 with
   | c, Cconst_int (0, _) -> c
   | c, Cconst_natint (0n, _) -> c
-  | Cop(Cadda, [c; Cconst_int(n1, _)], _), _ ->
-      Cop(Cadda, [c; add_const c2 n1 dbg], dbg)
-  | _, _ -> Cop (Cadda, [c1; c2], dbg)
+  | Cpure_op(Cadda, [c; Cconst_int(n1, _)], _), _ ->
+      Cpure_op(Cadda, [c; add_const c2 n1 dbg], dbg)
+  | _, _ -> Cpure_op (Cadda, [c1; c2], dbg)
 
 let rec add_int c1 c2 dbg =
   match (c1, c2) with
   | (Cconst_int (n, _), c) | (c, Cconst_int (n, _)) ->
       add_const c n dbg
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
+  | (Cpure_op(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
       add_const (add_int c1 c2 dbg) n1 dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) ->
+  | (c1, Cpure_op(Caddi, [c2; Cconst_int (n2, _)], _)) ->
       add_const (add_int c1 c2 dbg) n2 dbg
   | (_, _) ->
-      Cop(Caddi, [c1; c2], dbg)
+      Cpure_op(Caddi, [c1; c2], dbg)
 
 let rec sub_int c1 c2 dbg =
   match (c1, c2) with
   | (c1, Cconst_int (n2, _)) when n2 <> min_int ->
       add_const c1 (-n2) dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int (n2, _)], _)) when n2 <> min_int ->
+  | (c1, Cpure_op(Caddi, [c2; Cconst_int (n2, _)], _)) when n2 <> min_int ->
       add_const (sub_int c1 c2 dbg) (-n2) dbg
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
+  | (Cpure_op(Caddi, [c1; Cconst_int (n1, _)], _), c2) ->
       add_const (sub_int c1 c2 dbg) n1 dbg
   | (c1, c2) ->
-      Cop(Csubi, [c1; c2], dbg)
+      Cpure_op(Csubi, [c1; c2], dbg)
 
 let rec lsl_int c1 c2 dbg =
   match (c1, c2) with
-  | (Cop(Clsl, [c; Cconst_int (n1, _)], _), Cconst_int (n2, _))
+  | (Cpure_op(Clsl, [c; Cconst_int (n1, _)], _), Cconst_int (n2, _))
     when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
-      Cop(Clsl, [c; Cconst_int (n1 + n2, dbg)], dbg)
-  | (Cop(Caddi, [c1; Cconst_int (n1, _)], _), Cconst_int (n2, _))
+      Cpure_op(Clsl, [c; Cconst_int (n1 + n2, dbg)], dbg)
+  | (Cpure_op(Caddi, [c1; Cconst_int (n1, _)], _), Cconst_int (n2, _))
     when Misc.no_overflow_lsl n1 n2 ->
       add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
   | (_, _) ->
-      Cop(Clsl, [c1; c2], dbg)
+      Cpure_op(Clsl, [c1; c2], dbg)
 
 let is_power2 n = n = 1 lsl Misc.log2 n
 
@@ -199,33 +204,33 @@ and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n, dbg)) dbg
 let rec mul_int c1 c2 dbg =
   match (c1, c2) with
   | (c, Cconst_int (0, _)) | (Cconst_int (0, _), c) ->
-      Csequence (c, Cconst_int (0, dbg))
+      Cconst_int (0, dbg)
   | (c, Cconst_int (1, _)) | (Cconst_int (1, _), c) ->
       c
   | (c, Cconst_int(-1, _)) | (Cconst_int(-1, _), c) ->
       sub_int (Cconst_int (0, dbg)) c dbg
   | (c, Cconst_int (n, _)) when is_power2 n -> mult_power2 c n dbg
   | (Cconst_int (n, _), c) when is_power2 n -> mult_power2 c n dbg
-  | (Cop(Caddi, [c; Cconst_int (n, _)], _), Cconst_int (k, _)) |
-    (Cconst_int (k, _), Cop(Caddi, [c; Cconst_int (n, _)], _))
+  | (Cpure_op(Caddi, [c; Cconst_int (n, _)], _), Cconst_int (k, _)) |
+    (Cconst_int (k, _), Cpure_op(Caddi, [c; Cconst_int (n, _)], _))
     when Misc.no_overflow_mul n k ->
       add_const (mul_int c (Cconst_int (k, dbg)) dbg) (n * k) dbg
   | (c1, c2) ->
-      Cop(Cmuli, [c1; c2], dbg)
+      Cpure_op(Cmuli, [c1; c2], dbg)
 
 
 let ignore_low_bit_int = function
-    Cop(Caddi,
-        [(Cop(Clsl, [_; Cconst_int (n, _)], _) as c); Cconst_int (1, _)], _)
+    Cpure_op(Caddi,
+        [(Cpure_op(Clsl, [_; Cconst_int (n, _)], _) as c); Cconst_int (1, _)], _)
       when n > 0
       -> c
-  | Cop(Cor, [c; Cconst_int (1, _)], _) -> c
+  | Cpure_op(Cor, [c; Cconst_int (1, _)], _) -> c
   | c -> c
 
 (* removes the 1-bit sign-extension left by untag_int (tag_int c) *)
 let ignore_high_bit_int = function
-    Cop(Casr,
-        [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) -> c
+    Cpure_op(Casr,
+        [Cpure_op(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], _) -> c
   | c -> c
 
 let lsr_int c1 c2 dbg =
@@ -233,25 +238,25 @@ let lsr_int c1 c2 dbg =
     Cconst_int (0, _) ->
       c1
   | Cconst_int (n, _) when n > 0 ->
-      Cop(Clsr, [ignore_low_bit_int c1; c2], dbg)
+      Cpure_op(Clsr, [ignore_low_bit_int c1; c2], dbg)
   | _ ->
-      Cop(Clsr, [c1; c2], dbg)
+      Cpure_op(Clsr, [c1; c2], dbg)
 
 let asr_int c1 c2 dbg =
   match c2 with
     Cconst_int (0, _) ->
       c1
   | Cconst_int (n, _) when n > 0 ->
-      Cop(Casr, [ignore_low_bit_int c1; c2], dbg)
+      Cpure_op(Casr, [ignore_low_bit_int c1; c2], dbg)
   | _ ->
-      Cop(Casr, [c1; c2], dbg)
+      Cpure_op(Casr, [c1; c2], dbg)
 
 let tag_int i dbg =
   match i with
     Cconst_int (n, _) ->
       int_const dbg n
-  | Cop(Casr, [c; Cconst_int (n, _)], _) when n > 0 ->
-      Cop(Cor,
+  | Cpure_op(Casr, [c; Cconst_int (n, _)], _) when n > 0 ->
+      Cpure_op(Cor,
         [asr_int c (Cconst_int (n - 1, dbg)) dbg; Cconst_int (1, dbg)],
         dbg)
   | c ->
@@ -260,12 +265,12 @@ let tag_int i dbg =
 let untag_int i dbg =
   match i with
     Cconst_int (n, _) -> Cconst_int(n asr 1, dbg)
-  | Cop(Cor, [Cop(Casr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
+  | Cpure_op(Cor, [Cpure_op(Casr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
     when n > 0 && n < size_int * 8 ->
-      Cop(Casr, [c; Cconst_int (n+1, dbg)], dbg)
-  | Cop(Cor, [Cop(Clsr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
+      Cpure_op(Casr, [c; Cconst_int (n+1, dbg)], dbg)
+  | Cpure_op(Cor, [Cpure_op(Clsr, [c; Cconst_int (n, _)], _); Cconst_int (1, _)], _)
     when n > 0 && n < size_int * 8 ->
-      Cop(Clsr, [c; Cconst_int (n+1, dbg)], dbg)
+      Cpure_op(Clsr, [c; Cconst_int (n+1, dbg)], dbg)
   | c -> asr_int c (Cconst_int (1, dbg)) dbg
 
 let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
@@ -277,30 +282,30 @@ let mk_if_then_else dbg cond ifso_dbg ifso ifnot_dbg ifnot =
 
 let mk_not dbg cmm =
   match cmm with
-  | Cop(Caddi,
-        [Cop(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
+  | Cpure_op(Caddi,
+        [Cpure_op(Clsl, [c; Cconst_int (1, _)], _); Cconst_int (1, _)], dbg') ->
     begin
       match c with
-      | Cop(Ccmpi cmp, [c1; c2], dbg'') ->
+      | Cpure_op(Ccmpi cmp, [c1; c2], dbg'') ->
           tag_int
-            (Cop(Ccmpi (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
-      | Cop(Ccmpa cmp, [c1; c2], dbg'') ->
+            (Cpure_op(Ccmpi (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
+      | Cpure_op(Ccmpa cmp, [c1; c2], dbg'') ->
           tag_int
-            (Cop(Ccmpa (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
-      | Cop(Ccmpf cmp, [c1; c2], dbg'') ->
+            (Cpure_op(Ccmpa (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
+      | Cpure_op(Ccmpf cmp, [c1; c2], dbg'') ->
           tag_int
-            (Cop(Ccmpf (negate_float_comparison cmp), [c1; c2], dbg'')) dbg'
+            (Cpure_op(Ccmpf (negate_float_comparison cmp), [c1; c2], dbg'')) dbg'
       | _ ->
         (* 0 -> 3, 1 -> 1 *)
-        Cop(Csubi,
-            [Cconst_int (3, dbg); Cop(Clsl, [c; Cconst_int (1, dbg)], dbg)],
+        Cpure_op(Csubi,
+            [Cconst_int (3, dbg); Cpure_op(Clsl, [c; Cconst_int (1, dbg)], dbg)],
             dbg)
     end
   | Cconst_int (3, _) -> Cconst_int (1, dbg)
   | Cconst_int (1, _) -> Cconst_int (3, dbg)
   | c ->
       (* 1 -> 3, 3 -> 1 *)
-      Cop(Csubi, [Cconst_int (4, dbg); c], dbg)
+      Cpure_op(Csubi, [Cconst_int (4, dbg); c], dbg)
 
 let mk_compare_ints dbg a1 a2 =
   match (a1,a2) with
@@ -313,20 +318,20 @@ let mk_compare_ints dbg a1 a2 =
   | Cconst_natint (c1, _), Cconst_int (c2, _) ->
      int_const dbg Nativeint.(compare c1 (of_int c2))
   | a1, a2 -> begin
-      bind "int_cmp" a2 (fun a2 ->
-        bind "int_cmp" a1 (fun a1 ->
-          let op1 = Cop(Ccmpi(Cgt), [a1; a2], dbg) in
-          let op2 = Cop(Ccmpi(Clt), [a1; a2], dbg) in
+      bind_pure "int_cmp" a2 (fun a2 ->
+        bind_pure "int_cmp" a1 (fun a1 ->
+          let op1 = Cpure_op(Ccmpi(Cgt), [a1; a2], dbg) in
+          let op2 = Cpure_op(Ccmpi(Clt), [a1; a2], dbg) in
           tag_int(sub_int op1 op2 dbg) dbg))
     end
 
 let mk_compare_floats dbg a1 a2 =
-  bind "float_cmp" a2 (fun a2 ->
-    bind "float_cmp" a1 (fun a1 ->
-      let op1 = Cop(Ccmpf(CFgt), [a1; a2], dbg) in
-      let op2 = Cop(Ccmpf(CFlt), [a1; a2], dbg) in
-      let op3 = Cop(Ccmpf(CFeq), [a1; a1], dbg) in
-      let op4 = Cop(Ccmpf(CFeq), [a2; a2], dbg) in
+  bind_pure "float_cmp" a2 (fun a2 ->
+    bind_pure "float_cmp" a1 (fun a1 ->
+      let op1 = Cpure_op(Ccmpf(CFgt), [a1; a2], dbg) in
+      let op2 = Cpure_op(Ccmpf(CFlt), [a1; a2], dbg) in
+      let op3 = Cpure_op(Ccmpf(CFeq), [a1; a1], dbg) in
+      let op4 = Cpure_op(Ccmpf(CFeq), [a2; a2], dbg) in
       (* If both operands a1 and a2 are not NaN, then op3 = op4 = 1,
          and the result is op1 - op2.
          If at least one of the operands is NaN,
@@ -440,11 +445,11 @@ let raise_symbol dbg symb =
 let rec div_int c1 c2 is_safe dbg =
   match (c1, c2) with
     (c1, Cconst_int (0, _)) ->
-      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
+      raise_symbol dbg "caml_exn_Division_by_zero"
   | (c1, Cconst_int (1, _)) ->
-      c1
+      Cpure c1
   | (Cconst_int (n1, _), Cconst_int (n2, _)) ->
-      Cconst_int (n1 / n2, dbg)
+      Cpure (Cconst_int (n1 / n2, dbg))
   | (c1, Cconst_int (n, _)) when n <> min_int ->
       let l = Misc.log2 n in
       if n = 1 lsl l then
@@ -454,17 +459,22 @@ let rec div_int c1 c2 is_safe dbg =
               t = c1 + t
               res = shift-right-signed(c1 + t, l)
         *)
-        Cop(Casr, [bind "dividend" c1 (fun c1 ->
-                     let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
-                     let t =
-                       lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg
-                     in
-                     add_int c1 t dbg);
-                   Cconst_int (l, dbg)], dbg)
+        Cpure (Cpure_op(Casr, [bind_pure "dividend" c1 (fun c1 ->
+            let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
+            let t =
+              lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg
+            in
+            add_int c1 t dbg);
+           Cconst_int (l, dbg)], dbg))
       else if n < 0 then
-        sub_int (Cconst_int (0, dbg))
+        bind "pos"
           (div_int c1 (Cconst_int (-n, dbg)) is_safe dbg)
-          dbg
+          (fun pos ->
+             Cpure
+               (sub_int (Cconst_int (0, dbg))
+                  pos
+                  dbg)
+          )
       else begin
         let (m, p) = divimm_parameters (Nativeint.of_int n) in
         (* Algorithm:
@@ -473,22 +483,24 @@ let rec div_int c1 c2 is_safe dbg =
               if p > 0, t = shift-right-signed(t, p)
               res = t + sign-bit(c1)
         *)
-        bind "dividend" c1 (fun c1 ->
-          let t = Cop(Cmulhi, [c1; natint_const_untagged dbg m], dbg) in
-          let t = if m < 0n then Cop(Caddi, [t; c1], dbg) else t in
-          let t =
-            if p > 0 then Cop(Casr, [t; Cconst_int (p, dbg)], dbg) else t
-          in
-          add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1, dbg)) dbg) dbg)
+        Cpure
+          (bind_pure "dividend" c1 (fun c1 ->
+               let t = Cpure_op(Cmulhi, [c1; natint_const_untagged dbg m], dbg) in
+               let t = if m < 0n then Cpure_op(Caddi, [t; c1], dbg) else t in
+               let t =
+                 if p > 0 then Cpure_op(Casr, [t; Cconst_int (p, dbg)], dbg) else t
+               in
+               add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1, dbg)) dbg) dbg)
+          )
       end
   | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
-      Cop(Cdivi, [c1; c2], dbg)
+      Cpure(Cpure_op(Cdivi, [c1; c2], dbg))
   | (c1, c2) ->
-      bind "divisor" c2 (fun c2 ->
-        bind "dividend" c1 (fun c1 ->
+      bind "divisor" (Cpure c2) (fun c2 ->
+        bind "dividend" (Cpure c1) (fun c1 ->
           Cifthenelse(c2,
                       dbg,
-                      Cop(Cdivi, [c1; c2], dbg),
+                      Cpure(Cpure_op(Cdivi, [c1; c2], dbg)),
                       dbg,
                       raise_symbol dbg "caml_exn_Division_by_zero",
                       dbg)))
