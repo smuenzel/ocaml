@@ -971,29 +971,42 @@ and transl_prim_1 env p arg dbg =
       let= unboxed = "unboxed", transl_unbox_int dbg env bi arg in
       Cpure (tag_int unboxed dbg)
   | Pbintoffloat bi ->
-      box_int dbg bi (Cop(Cintoffloat, [transl_unbox_float dbg env arg], dbg))
+      let= unboxed = "unboxed", transl_unbox_float dbg env arg in
+      box_int dbg bi (Cpure_op(Cintoffloat, [unboxed], dbg))
   | Pfloatofbint bi ->
-      box_float dbg (Cop(Cfloatofint, [transl_unbox_int dbg env bi arg], dbg))
+      let= unboxed = "unboxed", transl_unbox_int dbg env bi arg in
+      box_float dbg (Cpure_op(Cfloatofint, [unboxed], dbg))
   | Pcvtbint(bi1, bi2) ->
-      box_int dbg bi2 (transl_unbox_int dbg env bi1 arg)
+      let= unboxed = "unboxed", transl_unbox_int dbg env bi1 arg in
+      box_int dbg bi2 unboxed
   | Pnegbint bi ->
+      let=unboxed = "unboxed", transl_unbox_int dbg env bi arg in
       box_int dbg bi
-        (Cop(Csubi, [Cconst_int (0, dbg); transl_unbox_int dbg env bi arg],
+        (Cpure_op(Csubi, [Cconst_int (0, dbg); unboxed],
           dbg))
   | Pbbswap bi ->
-      box_int dbg bi (bbswap bi (transl_unbox_int dbg env bi arg) dbg)
+      let= unboxed = "unboxed", transl_unbox_int dbg env bi arg in
+      let= swapped = "swapped", bbswap bi unboxed dbg in
+      box_int dbg bi swapped
   | Pbswap16 ->
-      tag_int (bswap16 (ignore_high_bit_int (untag_int
-        (transl env arg) dbg)) dbg) dbg
+      let= arg = "arg", transl env arg in
+      let= swapped =
+        "swapped",
+        bswap16 (ignore_high_bit_int (untag_int arg dbg)) dbg
+      in
+      Cpure (tag_int swapped dbg)
   | Pperform ->
-      let cont =
+      let= cont =
+        "cont",
         make_alloc dbg Obj.cont_tag [int_const dbg 0]
       in
+      let= arg = "arg", transl env arg in
       Cop(Capply typ_val,
-       [Cconst_symbol ("caml_perform", dbg); transl env arg; cont],
+       [Cconst_symbol ("caml_perform", dbg); arg; cont],
        dbg)
   | Pdls_get ->
-      Cop(Cdls_get, [transl env arg], dbg)
+      let= arg = "arg", transl env arg in
+      Cop(Cdls_get, [arg], dbg)
   | Ppoll ->
     (Csequence (remove_unit (transl env arg),
                 return_unit dbg (Cop(Cpoll, [], dbg))))
@@ -1026,17 +1039,21 @@ and transl_prim_2 env p arg1 arg2 dbg =
   match p with
   (* Heap operations *)
   | Pfield_computed ->
-      addr_array_ref (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      addr_array_ref arg1 arg2 dbg
   | Psetfield(n, ptr, init) ->
-      setfield n ptr init (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      setfield n ptr init arg1 arg2 dbg
   | Psetfloatfield (n, init) ->
-      let ptr = transl env arg1 in
-      let float_val = transl_unbox_float dbg env arg2 in
+      let= ptr = "ptr", transl env arg1 in
+      let= float_val = "float_val", transl_unbox_float dbg env arg2 in
       setfloatfield n init ptr float_val dbg
 
   | Patomic_load ->
-      let ptr = transl env arg1 in
-      let ofs = transl env arg2 in
+      let= ptr = "ptr", transl env arg1 in
+      let= ofs = "ofs", transl env arg2 in
       Cop(mk_load_atomic Word_val,
           [field_address_computed ptr ofs dbg], dbg)
 
@@ -1060,86 +1077,123 @@ and transl_prim_2 env p arg1 arg2 dbg =
         dbg' (Cconst_int (1, dbg))
   (* Integer operations *)
   | Paddint ->
-      add_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(add_int_caml arg1 arg2 dbg)
   | Psubint ->
-      sub_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(sub_int_caml arg1 arg2 dbg)
   | Pmulint ->
-      mul_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(mul_int_caml arg1 arg2 dbg)
   | Pdivint is_safe ->
-      div_int_caml is_safe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      div_int_caml is_safe arg1 arg2 dbg
   | Pmodint is_safe ->
-      mod_int_caml is_safe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      mod_int_caml is_safe arg1 arg2 dbg
   | Pandint ->
-      and_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(and_int_caml arg1 arg2 dbg)
   | Porint ->
-      or_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(or_int_caml arg1 arg2 dbg)
   | Pxorint ->
-      xor_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(xor_int_caml arg1 arg2 dbg)
   | Plslint ->
-      lsl_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(lsl_int_caml arg1 arg2 dbg)
   | Plsrint ->
-      lsr_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(lsr_int_caml arg1 arg2 dbg)
   | Pasrint ->
-      asr_int_caml (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(asr_int_caml arg1 arg2 dbg)
   | Pintcomp cmp ->
-      int_comp_caml cmp (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(int_comp_caml cmp arg1 arg2 dbg)
   | Pcompare_ints ->
       (* Compare directly on tagged ints *)
-      mk_compare_ints dbg (transl env arg1) (transl env arg2)
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(mk_compare_ints dbg arg1 arg2)
   | Pcompare_bints bi ->
-      let a1 = transl_unbox_int dbg env bi arg1 in
-      let a2 = transl_unbox_int dbg env bi arg2 in
-      mk_compare_ints dbg a1 a2
+      let= a1 = "a1", transl_unbox_int dbg env bi arg1 in
+      let= a2 = "a2", transl_unbox_int dbg env bi arg2 in
+      Cpure (mk_compare_ints dbg a1 a2)
   | Pcompare_floats ->
-      let a1 = transl_unbox_float dbg env arg1 in
-      let a2 = transl_unbox_float dbg env arg2 in
-      mk_compare_floats dbg a1 a2
+      let= a1 = "a1", transl_unbox_float dbg env arg1 in
+      let= a2 = "a2", transl_unbox_float dbg env arg2 in
+      Cpure (mk_compare_floats dbg a1 a2)
   | Pisout ->
-      transl_isout (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      Cpure(transl_isout arg1 arg2 dbg)
   (* Float operations *)
   | Paddfloat ->
-      box_float dbg (Cop(Caddf,
-                    [transl_unbox_float dbg env arg1;
-                     transl_unbox_float dbg env arg2],
-                    dbg))
+      let= arg1 = "arg1", transl_unbox_float dbg env arg1 in
+      let= arg2 = "arg2", transl_unbox_float dbg env arg2 in
+      box_float dbg (Cpure_op(Caddf, [arg1; arg2], dbg))
   | Psubfloat ->
-      box_float dbg (Cop(Csubf,
-                    [transl_unbox_float dbg env arg1;
-                     transl_unbox_float dbg env arg2],
-                    dbg))
+      let= arg1 = "arg1", transl_unbox_float dbg env arg1 in
+      let= arg2 = "arg2", transl_unbox_float dbg env arg2 in
+      box_float dbg (Cpure_op(Csubf, [arg1; arg2], dbg))
   | Pmulfloat ->
-      box_float dbg (Cop(Cmulf,
-                    [transl_unbox_float dbg env arg1;
-                     transl_unbox_float dbg env arg2],
-                    dbg))
+      let= arg1 = "arg1", transl_unbox_float dbg env arg1 in
+      let= arg2 = "arg2", transl_unbox_float dbg env arg2 in
+      box_float dbg (Cpure_op(Cmulf, [arg1; arg2], dbg))
   | Pdivfloat ->
-      box_float dbg (Cop(Cdivf,
-                    [transl_unbox_float dbg env arg1;
-                     transl_unbox_float dbg env arg2],
-                    dbg))
+      let= arg1 = "arg1", transl_unbox_float dbg env arg1 in
+      let= arg2 = "arg2", transl_unbox_float dbg env arg2 in
+      box_float dbg (Cpure_op(Cdivf, [arg1; arg2], dbg))
   | Pfloatcomp cmp ->
-      tag_int(Cop(Ccmpf cmp,
-                  [transl_unbox_float dbg env arg1;
-                   transl_unbox_float dbg env arg2],
-                  dbg)) dbg
+      let= arg1 = "arg1", transl_unbox_float dbg env arg1 in
+      let= arg2 = "arg2", transl_unbox_float dbg env arg2 in
+      Cpure (tag_int(Cpure_op(Ccmpf cmp, [arg1; arg2], dbg)) dbg)
 
   (* String operations *)
   | Pstringrefu | Pbytesrefu ->
-      stringref_unsafe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      stringref_unsafe arg1 arg2 dbg
   | Pstringrefs | Pbytesrefs ->
-      stringref_safe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      stringref_safe arg1 arg2 dbg
   | Pstring_load(size, unsafe) | Pbytes_load(size, unsafe) ->
-      string_load size unsafe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      string_load size unsafe arg1 arg2 dbg
   | Pbigstring_load(size, unsafe) ->
-      bigstring_load size unsafe (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      bigstring_load size unsafe arg1 arg2 dbg
 
   (* Array operations *)
   | Parrayrefu kind ->
-      arrayref_unsafe kind (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      arrayref_unsafe kind arg1 arg2 dbg
   | Parrayrefs kind ->
-      arrayref_safe kind (transl env arg1) (transl env arg2) dbg
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      arrayref_safe kind arg1 arg2 dbg
   | Pcheckbound ->
-      make_checkbound dbg [transl env arg1; transl env arg2]
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
+      make_checkbound dbg [arg1; arg2]
 
   (* Boxed integers *)
   | Paddbint bi ->
@@ -1155,49 +1209,63 @@ and transl_prim_2 env p arg1 arg2 dbg =
                         (transl_unbox_int_low dbg env bi arg1)
                         (transl_unbox_int_low dbg env bi arg2) dbg)
   | Pdivbint { size = bi; is_safe } ->
-      box_int dbg bi (safe_div_bi is_safe
-                      (transl_unbox_int dbg env bi arg1)
-                      (transl_unbox_int dbg env bi arg2)
-                      bi dbg)
+      let= res =
+        "res",
+        safe_div_bi is_safe
+          (transl_unbox_int dbg env bi arg1)
+          (transl_unbox_int dbg env bi arg2)
+          bi dbg
+      in
+      box_int dbg bi res
   | Pmodbint { size = bi; is_safe } ->
-      box_int dbg bi (safe_mod_bi is_safe
-                      (transl_unbox_int dbg env bi arg1)
-                      (transl_unbox_int dbg env bi arg2)
-                      bi dbg)
+      let= res =
+        "res", safe_mod_bi is_safe
+          (transl_unbox_int dbg env bi arg1)
+          (transl_unbox_int dbg env bi arg2)
+          bi dbg
+      in
+      box_int dbg bi res
   | Pandbint bi ->
-      box_int dbg bi (Cop(Cand,
+      box_int dbg bi (Cpure_op(Cand,
                      [transl_unbox_int_low dbg env bi arg1;
                       transl_unbox_int_low dbg env bi arg2], dbg))
   | Porbint bi ->
-      box_int dbg bi (Cop(Cor,
+      box_int dbg bi (Cpure_op(Cor,
                      [transl_unbox_int_low dbg env bi arg1;
                       transl_unbox_int_low dbg env bi arg2], dbg))
   | Pxorbint bi ->
-      box_int dbg bi (Cop(Cxor,
+      box_int dbg bi (Cpure_op(Cxor,
                      [transl_unbox_int_low dbg env bi arg1;
                       transl_unbox_int_low dbg env bi arg2], dbg))
   | Plslbint bi ->
+      let= arg2 = "arg2", transl env arg2 in
       box_int dbg bi (lsl_int
                         (transl_unbox_int_low dbg env bi arg1)
-                        (untag_int(transl env arg2) dbg) dbg)
+                        (untag_int arg2 dbg) dbg)
   | Plsrbint bi ->
+      let= arg1 = "arg1", transl_unbox_int dbg env bi arg1 in
+      let= arg2 = "arg2", transl env arg2 in
       box_int dbg bi (lsr_int
-                        (make_unsigned_int bi (transl_unbox_int dbg env bi arg1)
+                        (make_unsigned_int bi arg1
                                         dbg)
-                        (untag_int(transl env arg2) dbg) dbg)
+                        (untag_int arg2 dbg) dbg)
   | Pasrbint bi ->
+      let= arg1 = "arg1", transl_unbox_int dbg env bi arg1 in
+      let= arg2 = "arg2", transl env arg2 in
       box_int dbg bi (asr_int
-                        (transl_unbox_int dbg env bi arg1)
-                        (untag_int(transl env arg2) dbg) dbg)
+                       arg1
+                        (untag_int arg2 dbg) dbg)
   | Pbintcomp(bi, cmp) ->
-      tag_int (Cop(Ccmpi cmp,
-                     [transl_unbox_int dbg env bi arg1;
-                      transl_unbox_int dbg env bi arg2], dbg)) dbg
+      let= arg1 = "arg1", transl_unbox_int dbg env bi arg1 in
+      let= arg2 = "arg2", transl_unbox_int dbg env bi arg2 in
+      Cpure (tag_int (Cpure_op(Ccmpi cmp, [arg1; arg2], dbg)) dbg)
 
   | Preperform ->
+      let= arg1 = "arg1", transl env arg1 in
+      let= arg2 = "arg2", transl env arg2 in
       Cop (Capply typ_val,
            [Cconst_symbol ("caml_reperform", dbg);
-           transl env arg1; transl env arg2], dbg)
+           arg1; arg2], dbg)
 
   | Prunstack | Pperform | Presume | Pdls_get
   | Pnot | Pnegint | Pintoffloat | Pfloatofint | Pnegfloat

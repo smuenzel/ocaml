@@ -2615,6 +2615,7 @@ let bbswap bi arg dbg =
     | Pint32 -> "int32", XInt32
     | Pint64 -> "int64", XInt64
   in
+  (* CR smuenzel: probably want to have a "pure" extcall??? *)
   Cop(Cextcall(Printf.sprintf "caml_%s_direct_bswap" prim,
                typ_int, [tyarg], false),
       [arg],
