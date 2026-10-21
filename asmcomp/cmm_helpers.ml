@@ -2086,6 +2086,8 @@ let transl_switch_clambda loc arg index cases =
   match !inters with
   | [_] -> cases.(0)
   | inters ->
+      (* CR smuenzel: is it good to bind this here? *)
+      let= arg = "switcher", Cpure arg in
       SwitcherBlocks.zyva
         loc
         (0,n_index-1)

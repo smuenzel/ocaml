@@ -180,38 +180,32 @@ end
 
 let rec check env (expr : Cmm.expression) =
   match expr with
-  | Cpure (Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _) ->
-      ()
-  | Creturn_addr ->
-    ()
-  | Cvar id ->
-    Env.use_var env id Immutable
+  | Cpure pure ->
+      check_pure env pure;
   | Cvar_mut id ->
     Env.use_var env id Mutable
   | Clet (id, expr, body) ->
     check env expr;
     check (Env.bind_var env (VP.var id) Immutable) body
   | Clet_mut (id, _, expr, body) ->
-    check env expr;
+    check_pure env expr;
     check (Env.bind_var env (VP.var id) Mutable) body
   | Cphantom_let (_, _, expr) ->
     check env expr
   | Cassign (id, expr) ->
     Env.use_var env id Mutable;
-    check env expr
-  | Ctuple exprs ->
-    List.iter (check env) exprs
+    check_pure env expr
   | Cop (_, args, _) ->
-    List.iter (check env) args;
+    List.iter (check_pure env) args;
   | Csequence (expr1, expr2) ->
     check env expr1;
     check env expr2
   | Cifthenelse (test, _, ifso, _, ifnot, _) ->
-    check env test;
+    check_pure env test;
     check env ifso;
     check env ifnot
   | Cswitch (body, _, branches, _) ->
-    check env body;
+    check_pure env body;
     Array.iter (fun (expr, _) -> check env expr) branches
   | Ccatch (rec_flag, handlers, body) ->
     let env_extended =
@@ -240,6 +234,25 @@ let rec check env (expr : Cmm.expression) =
        not reported as an error. *)
     check env body;
     check (Env.bind_var env (VP.var id) Immutable) handler
+and check_pure env (expr : Cmm.pure_expression) =
+  match expr with
+  | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _ ->
+      ()
+  | Creturn_addr ->
+    ()
+  | Cvar id ->
+    Env.use_var env id Immutable
+  | Ctuple exprs ->
+    List.iter (check_pure env) exprs
+  | Cpure_op (_, args, _) ->
+    List.iter (check_pure env) args;
+  | Cpure_let (id, expr, body) ->
+    check_pure env expr;
+    check_pure (Env.bind_var env (VP.var id) Immutable) body
+  | Cpure_ifthenelse (test, ifso, ifnot) ->
+    check_pure env test;
+    check_pure env ifso;
+    check_pure env ifnot
 
 let run ppf (fundecl : Cmm.fundecl) =
   let env = Env.bind_params (Env.init ()) fundecl.fun_args in
