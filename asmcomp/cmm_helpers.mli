@@ -24,10 +24,14 @@ val bind :
 val bind_load :
   string -> expression -> (expression -> expression) -> expression
 
+val bind_list
+  : string -> expression list -> (pure_expression list -> expression) -> expression
+
 
 module Syntax : sig
   val ( let= ) : (string * expression) -> (pure_expression -> expression) -> expression
   val ( let=$ ) : (string * expression) -> (pure_expression -> pure_expression) -> expression
+  val ( let<=> ) : (string * expression list) -> (pure_expression list -> expression) -> expression
 end
 
 (** Headers *)

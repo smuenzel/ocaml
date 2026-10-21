@@ -100,6 +100,7 @@ module Syntax = struct
   let ( let=$ ) (name, arg) fn =
     let= x = (name, arg) in
     Cpure (fn x)
+  let ( let<=> ) (name, args) fn = bind_list name args fn
 end
 open Syntax
 

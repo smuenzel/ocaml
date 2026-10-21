@@ -30,6 +30,7 @@ module IntMap = Map.Make(Int)
 module V = Backend_var
 module VP = Backend_var.With_provenance
 open Cmm_helpers
+open Cmm_helpers.Syntax
 
 (* Environments used for translation to Cmm. *)
 
@@ -200,12 +201,12 @@ let box_int dbg bi arg =
       let sym = Compilenv.new_const_symbol () in
       let data_items = box_int_constant sym bi (Nativeint.of_int n) in
       Cmmgen_state.add_data_items data_items;
-      Cconst_symbol (sym, dbg)
+      Cpure (Cconst_symbol (sym, dbg))
   | Cconst_natint (n, _) ->
       let sym = Compilenv.new_const_symbol () in
       let data_items = box_int_constant sym bi n in
       Cmmgen_state.add_data_items data_items;
-      Cconst_symbol (sym, dbg)
+      Cpure (Cconst_symbol (sym, dbg))
   | _ ->
       box_int_gen dbg bi arg
 
@@ -239,11 +240,12 @@ let box_number bn arg =
 let unbox_number dbg bn arg =
   match bn with
   | Boxed_float dbg ->
-    unbox_float dbg arg
+      unbox_float dbg arg
   | Boxed_integer (Pint32, _) ->
-    low_32 dbg (unbox_int dbg Pint32 arg)
+      let= unboxed = "unboxed", unbox_int dbg Pint32 arg in
+      Cpure (low_32 dbg unboxed)
   | Boxed_integer (bi, _) ->
-    unbox_int dbg bi arg
+      unbox_int dbg bi arg
 
 (* Auxiliary functions for optimizing "let" of boxed numbers (floats and
    boxed integers *)
@@ -329,7 +331,7 @@ let is_unboxed_number_cmm ~strict ~kind cmm =
           notify (Boxed (Boxed_integer (Pint64, dbg), false))
         else
           notify No_unboxing
-    | Cconst_symbol (s, _) ->
+    | Cpure (Cconst_symbol (s, _)) ->
         begin match Cmmgen_state.structured_constant_of_sym s with
         | Some (Uconst_float _) ->
             notify (Boxed (Boxed_float Debuginfo.none, true))
@@ -370,17 +372,18 @@ let rec transl env e =
       | None ->
           if is_mutable_id id env
           then Cvar_mut id
-          else Cvar id
+          else Cpure (Cvar id)
       | Some (unboxed_id, bn) ->
-          let var =
+          let= var =
+            "var",
             if is_mutable_id unboxed_id env
             then Cvar_mut unboxed_id
-            else Cvar unboxed_id
+            else Cpure (Cvar unboxed_id)
           in
           box_number bn var
       end
   | Uconst sc ->
-      transl_constant Debuginfo.none sc
+      Cpure (transl_constant Debuginfo.none sc)
   | Uclosure(fundecls, []) ->
       let sym = Compilenv.new_const_symbol() in
       Cmmgen_state.add_constant sym (Const_closure (Local, fundecls, []));
@@ -390,61 +393,65 @@ let rec transl env e =
         | [] -> Debuginfo.none
         | fundecl::_ -> fundecl.dbg
       in
-      Cconst_symbol (sym, dbg)
+      Cpure (Cconst_symbol (sym, dbg))
   | Uclosure(fundecls, clos_vars) ->
-      let startenv = fundecls_size fundecls in
-      let rec transl_fundecls pos = function
-          [] ->
-            List.map (transl env) clos_vars
-        | f :: rem ->
-            Cmmgen_state.add_function f;
-            let dbg = f.dbg in
-            let without_header =
-              if f.arity = 1 || f.arity = 0 then
-                Cconst_symbol (f.label, dbg) ::
-                alloc_closure_info ~arity:f.arity
-                                   ~startenv:(startenv - pos) dbg ::
-                transl_fundecls (pos + 3) rem
-              else
-                Cconst_symbol (curry_function_sym f.arity, dbg) ::
-                alloc_closure_info ~arity:f.arity
-                                   ~startenv:(startenv - pos) dbg ::
-                Cconst_symbol (f.label, dbg) ::
-                transl_fundecls (pos + 4) rem
-            in
-            if pos = 0
-            then without_header
-            else alloc_infix_header pos f.dbg :: without_header
-      in
-      let dbg =
-        match fundecls with
-        | [] -> Debuginfo.none
-        | fundecl::_ -> fundecl.dbg
-      in
-      (* #11482, #12481: the 'clos_vars' may be arbitrary expressions
-         and may invoke the GC, which would be able to observe the
-         partially-filled block. This is safe because 'make_alloc'
-         evaluates and fills fields from left to right, and does not
-         call a GC between the allocation and filling fields. So the
-         closure metadata, which comes before the closure variables,
-         will always have been written before a GC can happen. *)
-      make_alloc dbg Obj.closure_tag (transl_fundecls 0 fundecls)
+      bind_list "clos_vars" (List.map (transl env) clos_vars)
+        (fun clos_vars ->
+           let startenv = fundecls_size fundecls in
+           let rec transl_fundecls pos = function
+               [] ->
+                 clos_vars
+             | f :: rem ->
+                 Cmmgen_state.add_function f;
+                 let dbg = f.dbg in
+                 let without_header =
+                   if f.arity = 1 || f.arity = 0 then
+                     Cconst_symbol (f.label, dbg) ::
+                     alloc_closure_info ~arity:f.arity
+                       ~startenv:(startenv - pos) dbg ::
+                     transl_fundecls (pos + 3) rem
+                   else
+                     Cconst_symbol (curry_function_sym f.arity, dbg) ::
+                     alloc_closure_info ~arity:f.arity
+                       ~startenv:(startenv - pos) dbg ::
+                     Cconst_symbol (f.label, dbg) ::
+                     transl_fundecls (pos + 4) rem
+                 in
+                 if pos = 0
+                 then without_header
+                 else alloc_infix_header pos f.dbg :: without_header
+           in
+           let dbg =
+             match fundecls with
+             | [] -> Debuginfo.none
+             | fundecl::_ -> fundecl.dbg
+           in
+           (* CR smuenzel: No longer true *)
+           (* #11482, #12481: the 'clos_vars' may be arbitrary expressions
+              and may invoke the GC, which would be able to observe the
+              partially-filled block. This is safe because 'make_alloc'
+              evaluates and fills fields from left to right, and does not
+              call a GC between the allocation and filling fields. So the
+              closure metadata, which comes before the closure variables,
+              will always have been written before a GC can happen. *)
+           make_alloc dbg Obj.closure_tag (transl_fundecls 0 fundecls)
+        )
   | Uoffset(arg, offset) ->
       (* produces a valid Caml value, pointing just after an infix header *)
-      let ptr = transl env arg in
+      let= ptr = "ptr", transl env arg in
       let dbg = Debuginfo.none in
-      ptr_offset ptr offset dbg
+      Cpure (ptr_offset ptr offset dbg)
   | Udirect_apply(lbl, args, dbg) ->
-      let args = List.map (transl env) args in
+      let<=> args = "args", List.map (transl env) args in
       direct_apply lbl args dbg
   | Ugeneric_apply(clos, args, dbg) ->
-      let clos = transl env clos in
-      let args = List.map (transl env) args in
+      let= clos = "clos", transl env clos in
+      let<=> args = "args", List.map (transl env) args in
       generic_apply (mut_from_env env clos) clos args dbg
   | Usend(kind, met, obj, args, dbg) ->
-      let met = transl env met in
-      let obj = transl env obj in
-      let args = List.map (transl env) args in
+      let= met = "met", transl env met in
+      let= obj = "obj", transl env obj in
+      let<=> args = "args", List.map (transl env) args in
       send kind met obj args dbg
   | Ulet(str, kind, id, exp, body) ->
       transl_let env str kind id exp (fun env -> transl env body)
@@ -477,11 +484,12 @@ let rec transl env e =
   | Uprim(prim, args, dbg) ->
       begin match (simplif_primitive prim, args) with
       | (Pread_symbol sym, []) ->
-          Cconst_symbol (sym, dbg)
+          Cpure (Cconst_symbol (sym, dbg))
       | (Pmakeblock _, []) ->
           assert false
       | (Pmakeblock(tag, _mut, _kind), args) ->
-          make_alloc dbg tag (List.map (transl env) args)
+          let<=> args = "args", List.map (transl env) args in
+          make_alloc dbg tag args
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg
       | (Patomic_cas, [ptr; ofs; oldval; newval]) when native_atomics ->
@@ -491,18 +499,25 @@ let rec transl env e =
              that value tested against the expected one. Immediates compare as
              plain words, so this is the same equality the boolean would have
              been built from, only spelled once. *)
-          bind "expected" (transl env oldval) (fun expected ->
-            tag_int
-              (Cop(Ccmpi Ceq,
-                   [Cop(Catomic_compare_exchange,
-                        [field_address_computed
-                           (transl env ptr) (transl env ofs) dbg;
-                         expected; transl env newval], dbg);
-                    expected], dbg))
-              dbg)
+          let= expected = "expected", transl env oldval in
+          let= ptr = "ptr", transl env ptr in
+          let= ofs = "ofs", transl env ofs in
+          let= newval = "newval", transl env newval in
+          let= atomic_result =
+            "atomic_result",
+            Cop(Catomic_compare_exchange,
+                [field_address_computed ptr ofs dbg;
+                 expected; newval], dbg)
+          in
+          Cpure
+            (tag_int
+               (Cpure_op(Ccmpi Ceq,
+                         [ atomic_result; expected], dbg))
+               dbg)
       | (Patomic_cas, args) ->
+          let<=> args = "args", List.map (transl env) args in
           Cop(Cextcall("caml_atomic_cas_field", typ_val, [], false),
-              List.map (transl env) args, dbg)
+              args, dbg)
       | (Pduparray (kind, _), [Uprim (Pmakearray (kind', _), args, _dbg)]) ->
           (* We arrive here in two cases:
              1. When using Closure, all the time.
@@ -525,19 +540,23 @@ let rec transl env e =
           Misc.fatal_error "Pmakearray is not allowed for an empty array"
       | (Pmakearray (kind, _), args) -> transl_make_array dbg env kind args
       | (Pbigarrayref(unsafe, _num_dims, elt_kind, layout), arg1 :: argl) ->
-          let elt =
-            bigarray_get unsafe elt_kind layout
-              (transl env arg1) (List.map (transl env) argl) dbg in
+          let= arg1 = "arg1", transl env arg1 in
+          let<=> argl = "argl", List.map (transl env) argl in
+          let= elt =
+            "elt",
+            bigarray_get unsafe elt_kind layout arg1 argl dbg in
           begin match elt_kind with
-          | Pbigarray_float16 -> box_float dbg (float_of_float16 dbg elt)
+          | Pbigarray_float16 ->
+              let= float = "float", float_of_float16 dbg elt in
+              box_float dbg float
           | Pbigarray_float32 | Pbigarray_float64 -> box_float dbg elt
-          | Pbigarray_complex32 | Pbigarray_complex64 -> elt
+          | Pbigarray_complex32 | Pbigarray_complex64 -> Cpure elt
           | Pbigarray_int32 -> box_int dbg Pint32 elt
           | Pbigarray_int64 -> box_int dbg Pint64 elt
           | Pbigarray_native_int -> box_int dbg Pnativeint elt
-          | Pbigarray_caml_int -> tag_int elt dbg
+          | Pbigarray_caml_int -> Cpure (tag_int elt dbg)
           | Pbigarray_sint8 | Pbigarray_uint8
-          | Pbigarray_sint16 | Pbigarray_uint16 -> tag_int elt dbg
+          | Pbigarray_sint16 | Pbigarray_uint16 -> Cpure (tag_int elt dbg)
           | Pbigarray_unknown -> assert false
           end
       | (Pbigarrayset(unsafe, _num_dims, elt_kind, layout), arg1 :: argl) ->
