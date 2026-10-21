@@ -99,16 +99,26 @@ module Cleanup_cmm = struct
   let rec subst (tbl : usages) (defs: Cmm.pure_expression V.Map.t) cmm =
     match cmm with
     | Cvar_mut _ -> cmm
-    | Clet (id, Cpure (defn), body) when
-        match V.Tbl.find_opt tbl (VP.var id) with
-        | Some Exactly_once -> true
-        | _ -> false
-      ->
-        let defn' = subst_pure tbl defs defn in
-        let defs = V.Map.add (VP.var id) defn' defs in
-        let res = subst tbl defs body in
-        if defn == defn' && res == body then cmm
-        else Clet (id, Cpure defn', res)
+    | Clet (id, Cpure (defn), body) ->
+        begin match V.Tbl.find_opt tbl (VP.var id) with
+        | Some Exactly_once ->
+            let defn' = subst_pure tbl defs defn in
+            let defs = V.Map.add (VP.var id) defn' defs in
+            let res = subst tbl defs body in
+            res
+        | Some Unused ->
+            let res = subst tbl defs body in
+            res
+        | _ ->
+            let defn' = subst_pure tbl defs defn in
+            let res = subst tbl defs body in
+            match res with
+            | Cpure e ->
+                Cpure (Cpure_let(id, defn', e))
+            | _ ->
+                if defn == defn' && res == body then cmm
+                else Clet (id, Cpure (defn'), res)
+        end
     | Clet (id, defn, body) ->
         let defn' = subst tbl defs defn in
         let res = subst tbl defs body in
