@@ -764,12 +764,13 @@ let rec transl env e =
                  dbg))))
   | Uassign(id, exp) ->
       let dbg = Debuginfo.none in
-      let cexp = transl env exp in
+      let= cexp = "cexp", transl env exp in
       begin match is_unboxed_id id env with
       | None ->
           return_unit dbg (Cassign(id, cexp))
       | Some (unboxed_id, bn) ->
-          return_unit dbg (Cassign(unboxed_id, unbox_number dbg bn cexp))
+          let= unboxed = "unboxed", unbox_number dbg bn (Cpure cexp) in
+          return_unit dbg (Cassign(unboxed_id, unboxed))
       end
   | Uunreachable ->
       let dbg = Debuginfo.none in
@@ -810,9 +811,13 @@ and transl_catch env nfail ids body handler dbg =
       )
       ids (env, [], [])
   in
+  (* CR smuenzel: needs fixing *)
+  (*
   if env == new_env then
+     *)
     (* No unboxing *)
     ccatch (nfail, ids, body, transl env handler, dbg)
+      (*
   else
     (* allocate new "nfail" to catch errors more easily *)
     let new_nfail = next_raise_count () in
@@ -827,17 +832,22 @@ and transl_catch env nfail ids body handler dbg =
       aux body
     in
     ccatch (new_nfail, ids, body, transl new_env handler, dbg)
+         *)
 
 and transl_make_array dbg env kind args =
   match kind with
   | Pgenarray ->
+      let<=> args = "args", List.map (transl env) args in
+      let= alloc = "alloc", make_alloc dbg 0 args in
       Cop(Cextcall("caml_array_of_uniform_array", typ_val, [], true),
-          [make_alloc dbg 0 (List.map (transl env) args)], dbg)
+          [alloc], dbg)
   | Paddrarray | Pintarray ->
-      make_alloc dbg 0 (List.map (transl env) args)
+      let<=> args = "args", List.map (transl env) args in
+      make_alloc dbg 0 args
   | Pfloatarray ->
+      let<=> args = "args", List.map (transl_unbox_float dbg env) args in
       make_float_alloc dbg Obj.double_array_tag
-                      (List.map (transl_unbox_float dbg env) args)
+        args
 
 and transl_ccall env prim args dbg =
   let transl_arg native_repr arg =
@@ -854,7 +864,7 @@ and transl_ccall env prim args dbg =
           | Pint64 -> XInt64 in
         (xty, transl_unbox_int dbg env bi arg)
     | Untagged_immediate ->
-        (XInt, untag_int (transl env arg) dbg)
+        (XInt, let= arg = "arg", transl env arg in Cpure (untag_int arg dbg))
   in
   let rec transl_args native_repr_args args =
     match native_repr_args, args with
@@ -871,41 +881,56 @@ and transl_ccall env prim args dbg =
   in
   let typ_res, wrap_result =
     match prim.prim_native_repr_res with
-    | Same_as_ocaml_repr -> (typ_val, fun x -> x)
+    | Same_as_ocaml_repr -> (typ_val, fun x -> Cpure x)
     | Unboxed_float -> (typ_float, box_float dbg)
     | Unboxed_integer bi -> (typ_int, box_int dbg bi)
-    | Untagged_immediate -> (typ_int, (fun i -> tag_int i dbg))
+    | Untagged_immediate -> (typ_int, (fun i -> Cpure (tag_int i dbg)))
   in
   let typ_args, args = transl_args prim.prim_native_repr_args args in
-  wrap_result
+  let<=> args = "args", args in
+  let= res =
+    "res",
     (Cop(Cextcall(Primitive.native_name prim,
                   typ_res, typ_args, prim.prim_alloc), args, dbg))
+  in
+  wrap_result res
 
 and transl_prim_1 env p arg dbg =
   match p with
   (* Generic operations *)
     Popaque ->
-      opaque (transl env arg) dbg
+      (* CR smuenzel: should we treat opaque differently? Accept an
+         impure argument? *)
+      let= arg = "arg", transl env arg in
+      opaque arg dbg
   (* Heap operations *)
   | Pmakelazyblock tag ->
-      make_alloc dbg (Lambda.tag_of_lazy_tag tag) [transl env arg]
+      let= arg = "arg", transl env arg in
+      make_alloc dbg (Lambda.tag_of_lazy_tag tag) [arg]
   | Pfield(n, imm_or_pointer, mut) ->
-      get_field env imm_or_pointer mut (transl env arg) n dbg
+      let= arg = "arg", transl env arg in
+      get_field env imm_or_pointer mut arg n dbg
   | Pfloatfield n ->
-      let ptr = transl env arg in
-      box_float dbg (floatfield n ptr dbg)
+      let= ptr = "ptr", transl env arg in
+      let= float = "float", floatfield n ptr dbg in
+      box_float dbg float
   | Pint_as_pointer ->
-      int_as_pointer (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      Cpure (int_as_pointer arg dbg)
   (* Exceptions *)
   | Praise rkind ->
-      raise_prim rkind (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      raise_prim rkind arg dbg
   (* Integer operations *)
   | Pnegint ->
-      negint (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      Cpure (negint arg dbg)
   | Poffsetint n ->
-      offsetint n (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      Cpure (offsetint n arg dbg)
   | Poffsetref n ->
-      offsetref n (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      offsetref n arg dbg
   (* Floating-point operations *)
   | Pfloatofint ->
       box_float dbg (Cop(Cfloatofint, [untag_int(transl env arg) dbg], dbg))
