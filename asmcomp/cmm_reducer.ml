@@ -223,5 +223,24 @@ let cleanup_cmm cmm =
   Cleanup_cmm.find_usages ~ccatch_depth:0 tbl cmm;
   Cleanup_cmm.subst tbl V.Map.empty cmm
 
+module Cmm_path = struct
+  type t =
+    | This
+    | Pure_op of pure_operation * select_list
+  and select_list =
+    { prefix_rev : pure_expression list;
+      suffix : pure_expression list;
+      next : t
+    }
+
+  let rec walk = function
+    | Cpure_op (op, lst, _) ->
+        List.fold_left
+          (fun prefix_rev e ->
+
+
+
+end
+
 
 let reduce x = cleanup_cmm x
