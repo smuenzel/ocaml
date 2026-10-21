@@ -331,7 +331,7 @@ method is_simple_expr = function
       self#is_simple_expr body
   | Cphantom_let(_var, _defining_expr, body) -> self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
-  | Cop(op, args, _) ->
+  | Cop(op, _args, _) ->
       begin match op with
         (* The following may have side effects *)
       | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ | Copaque
@@ -371,7 +371,7 @@ method effects_of exp =
     EC.join (self#effects_of e1) (self#effects_of e2)
   | Cifthenelse (_cond, _ifso_dbg, ifso, _ifnot_dbg, ifnot, _dbg) ->
       EC.join (self#effects_of ifso) (self#effects_of ifnot)
-  | Cop (op, args, _) ->
+  | Cop (op, _args, _) ->
     let from_op =
       match op with
       | Capply _ | Cextcall _ | Copaque | Catomic_fetch_add
@@ -630,6 +630,33 @@ method emit_pure_expr (env:environment) exp =
       | Some(simple_list, ext_env) ->
           Some(self#emit_tuple ext_env simple_list)
       end
+  | Cpure_op (op, args, dbg) ->
+      begin match self#emit_pure_parts_list env args with
+        None -> None
+      | Some(simple_args, env) ->
+          let ty = pure_oper_result_type op in
+          let (new_op, new_args) = self#select_pure_operation op simple_args dbg in
+          let r1 = self#emit_tuple env new_args in
+          let rd = self#regs_for ty in
+          Some (self#insert_op_debug env new_op dbg r1 rd)
+      end
+  | Cpure_let (v, e1, e2) ->
+      begin match self#emit_pure_expr env e1 with
+        None -> None
+      | Some r1 -> self#emit_pure_expr (self#bind_let env v r1) e2
+      end
+  | Cpure_ifthenelse(econd, eif, eelse) ->
+      let (cond, earg) = self#select_condition econd in
+      begin match self#emit_pure_expr env earg with
+        None -> None
+      | Some rarg ->
+          let (rif, sif) = self#emit_pure_sequence env eif in
+          let (relse, selse) = self#emit_pure_sequence env eelse in
+          let r = join env rif sif relse selse in
+          self#insert env (Iifthenelse(cond, sif#extract, selse#extract))
+            rarg [||];
+          r
+      end
 
 method emit_expr (env:environment) exp =
   match exp with
@@ -839,6 +866,11 @@ method private emit_sequence (env:environment) exp =
   let r = s#emit_expr env exp in
   (r, s)
 
+method private emit_pure_sequence (env:environment) exp =
+  let s = {< instr_seq = dummy_instr >} in
+  let r = s#emit_pure_expr env exp in
+  (r, s)
+
 method private bind_let (env:environment) v r1 =
   if all_regs_anonymous r1 then begin
     name_regs v r1;
@@ -898,6 +930,7 @@ method private emit_parts (env:environment) ~effects_after exp =
         | Effect.Arbitrary | Effect.Raise -> false
       end
   in
+  ignore may_defer_evaluation;
   (* Even though some expressions may look like they can be deferred from
      the (co)effect analysis, it may be forbidden to move them. *)
   (*
