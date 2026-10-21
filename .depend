@@ -3152,6 +3152,16 @@ asmcomp/cmm_invariants.cmx : \
     asmcomp/cmm_invariants.cmi
 asmcomp/cmm_invariants.cmi : \
     asmcomp/cmm.cmi
+asmcomp/cmm_reducer.cmo : \
+    asmcomp/cmm.cmi \
+    middle_end/backend_var.cmi \
+    asmcomp/cmm_reducer.cmi
+asmcomp/cmm_reducer.cmx : \
+    asmcomp/cmm.cmx \
+    middle_end/backend_var.cmx \
+    asmcomp/cmm_reducer.cmi
+asmcomp/cmm_reducer.cmi : \
+    asmcomp/cmm.cmi
 asmcomp/cmmgen.cmo : \
     asmcomp/thread_sanitizer.cmi \
     middle_end/printclambda_primitives.cmi \
@@ -3162,6 +3172,7 @@ asmcomp/cmmgen.cmo : \
     utils/config.cmi \
     middle_end/compilenv.cmi \
     asmcomp/cmmgen_state.cmi \
+    asmcomp/cmm_reducer.cmi \
     asmcomp/cmm_helpers.cmi \
     asmcomp/cmm.cmi \
     utils/clflags.cmi \
@@ -3181,6 +3192,7 @@ asmcomp/cmmgen.cmx : \
     utils/config.cmx \
     middle_end/compilenv.cmx \
     asmcomp/cmmgen_state.cmx \
+    asmcomp/cmm_reducer.cmx \
     asmcomp/cmm_helpers.cmx \
     asmcomp/cmm.cmx \
     utils/clflags.cmx \

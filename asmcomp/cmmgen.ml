@@ -1655,7 +1655,7 @@ let transl_function f =
       Afl_instrument.instrument_function (transl env body) f.dbg
     else
       transl env body in
-  let cmm_body = cleanup_cmm cmm_body in
+  let cmm_body = Cmm_reducer.reduce cmm_body in
   let cmm_body =
     if Config.tsan then Thread_sanitizer.instrument cmm_body else cmm_body
   in
