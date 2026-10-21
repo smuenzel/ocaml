@@ -933,33 +933,43 @@ and transl_prim_1 env p arg dbg =
       offsetref n arg dbg
   (* Floating-point operations *)
   | Pfloatofint ->
-      box_float dbg (Cop(Cfloatofint, [untag_int(transl env arg) dbg], dbg))
+      let= arg = "arg", transl env arg in
+      box_float dbg (Cpure_op(Cfloatofint, [untag_int arg dbg], dbg))
   | Pintoffloat ->
-     tag_int(Cop(Cintoffloat, [transl_unbox_float dbg env arg], dbg)) dbg
+      let= unboxed = "unboxed", transl_unbox_float dbg env arg in
+      Cpure (tag_int(Cpure_op(Cintoffloat, [unboxed], dbg)) dbg)
   | Pnegfloat ->
-      box_float dbg (Cop(Cnegf, [transl_unbox_float dbg env arg], dbg))
+      let= unboxed = "unboxed", transl_unbox_float dbg env arg in
+      box_float dbg (Cpure_op(Cnegf, [unboxed], dbg))
   | Pabsfloat ->
-      box_float dbg (Cop(Cabsf, [transl_unbox_float dbg env arg], dbg))
+      let= unboxed = "unboxed", transl_unbox_float dbg env arg in
+      box_float dbg (Cpure_op(Cabsf, [unboxed], dbg))
   (* String operations *)
   | Pstringlength | Pbyteslength ->
-      tag_int(string_length (transl env arg) dbg) dbg
+      let= arg = "arg", transl env arg in
+      let= length = "length", string_length arg dbg in
+      Cpure (tag_int(length) dbg)
   (* Array operations *)
   | Parraylength kind ->
-      arraylength kind (transl env arg) dbg
+      let= arg = "arg", transl env arg in
+      arraylength kind arg dbg
   (* Boolean operations *)
   | Pnot ->
       transl_if env Then_false_else_true
         dbg arg
-        dbg (Cconst_int (1, dbg))
-        dbg (Cconst_int (3, dbg))
+        dbg (Cpure (Cconst_int (1, dbg)))
+        dbg (Cpure (Cconst_int (3, dbg)))
   (* Test integer/block *)
   | Pisint ->
-      tag_int(Cop(Cand, [transl env arg; Cconst_int (1, dbg)], dbg)) dbg
+      let= arg = "arg", transl env arg in
+      Cpure (tag_int(Cpure_op(Cand, [arg; Cconst_int (1, dbg)], dbg)) dbg)
   (* Boxed integers *)
   | Pbintofint bi ->
-      box_int dbg bi (untag_int (transl env arg) dbg)
+      let= arg = "arg", transl env arg in
+      box_int dbg bi (untag_int arg dbg)
   | Pintofbint bi ->
-      tag_int (transl_unbox_int dbg env bi arg) dbg
+      let= unboxed = "unboxed", transl_unbox_int dbg env bi arg in
+      Cpure (tag_int unboxed dbg)
   | Pbintoffloat bi ->
       box_int dbg bi (Cop(Cintoffloat, [transl_unbox_float dbg env arg], dbg))
   | Pfloatofbint bi ->
