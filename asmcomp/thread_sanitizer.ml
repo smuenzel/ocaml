@@ -23,6 +23,8 @@ open Cmm
 module V = Backend_var
 module VP = Backend_var.With_provenance
 
+open Cmm_helpers.Syntax
+
 type read_or_write =
   | Read
   | Write
@@ -198,26 +200,19 @@ let instrument body =
            evaluated right before that call, as it might not be a valid OCaml
            value (e.g. a pointer into an array), in which case it must not be
            live across a function call or allocation point. *)
-        let loc_id = VP.create (V.create_local "loc") in
-        let loc_exp = Cvar (VP.var loc_id) in
-        let v_id = VP.create (V.create_local "newval") in
-        let v_exp = Cvar (VP.var v_id) in
-        let args = [loc_exp; v_exp] in
-        Clet
-          ( v_id,
-            aux (Cpure v),
-                Csequence
-                  ( Cmm_helpers.return_unit dbg_none
-                      (Cop
-                         ( Cextcall
-                             ( select_function Write memory_chunk,
-                               typ_void,
-                               [],
-                               false ),
-                           [loc],
-                           dbg_none )),
-                    Cop (Cstore (memory_chunk, init_or_assn), args, dbginfo) )
-              )
+        let= v = "v", aux (Cpure v) in
+        let args = [loc; v] in
+        Csequence
+          ( Cmm_helpers.return_unit dbg_none
+              (Cop
+                 ( Cextcall
+                     ( select_function Write memory_chunk,
+                       typ_void,
+                       [],
+                       false ),
+                   [loc],
+                   dbg_none )),
+            Cop (Cstore (memory_chunk, init_or_assn), args, dbginfo) )
       | Heap_initialization | Root_initialization ->
         (* Initializing writes need not be instrumented as they are always
            domain-safe *)

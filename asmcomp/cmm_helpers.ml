@@ -27,73 +27,86 @@ module Cleanup_cmm = struct
     | Exactly_once
     | Many
 
+  type var_def =
+    { depth : int
+    ; mutable usage : var_usage
+    }
 
-  type usages = var_usage V.Tbl.t
+  type usages = var_def V.Tbl.t
 
-  let register_one_use tbl var =
+  let register_one_use ~ccatch_depth tbl var =
     match V.Tbl.find_opt tbl var with
-    | Some Unused -> V.Tbl.replace tbl var Exactly_once
-    | Some Exactly_once -> V.Tbl.replace tbl var Many
-    | None | Some Many -> ()
+    | None -> ()
+    | Some var_def ->
+        if var_def.depth < ccatch_depth then var_def.usage <- Many
+        else
+          match var_def.usage with
+          | Unused -> var_def.usage <- Exactly_once
+          | Exactly_once -> var_def.usage <- Many
+          | Many -> ()
 
-  let rec find_usages (tbl : usages) = function
+  let rec find_usages ~ccatch_depth (tbl : usages) = function
     | Cvar_mut _ ->
         (* We don't care about mutable variables *)
         ()
     | Clet (id, Cpure (defn), body) ->
-        V.Tbl.add tbl (VP.var id) Unused;
-        find_pure_usages tbl defn;
-        find_usages tbl body
+        V.Tbl.add tbl (VP.var id) { depth = ccatch_depth; usage = Unused };
+        find_pure_usages ~ccatch_depth tbl defn;
+        find_usages ~ccatch_depth tbl body
     | Clet (_id, defn, body) ->
-        find_usages tbl defn;
-        find_usages tbl body
+        find_usages ~ccatch_depth tbl defn;
+        find_usages ~ccatch_depth tbl body
     | Clet_mut (_id, _, defn, body) ->
-        find_pure_usages tbl defn;
-        find_usages tbl body
+        find_pure_usages ~ccatch_depth tbl defn;
+        find_usages ~ccatch_depth tbl body
     | Cphantom_let (_id, _defn, body) ->
-        find_usages tbl body
+        find_usages ~ccatch_depth tbl body
     | Cifthenelse (cond, _ifso_dbg, ifso, _ifnot_dbg, ifnot, _dbg) ->
-        find_pure_usages tbl cond;
-        find_usages tbl ifso;
-        find_usages tbl ifnot
+        find_pure_usages ~ccatch_depth tbl cond;
+        find_usages ~ccatch_depth tbl ifso;
+        find_usages ~ccatch_depth tbl ifnot
     | Csequence (e1, e2) ->
-        find_usages tbl e1;
-        find_usages tbl e2
+        find_usages ~ccatch_depth tbl e1;
+        find_usages ~ccatch_depth tbl e2
     | Cswitch (e, _tbl, el, _dbg') ->
-        find_pure_usages tbl e;
-        Array.iter (fun (e, _dbg) -> find_usages tbl e) el
-    | Ccatch (_rec_flag, handlers, body) ->
-        List.iter (fun (_n, _ids, handler, _dbg) -> find_usages tbl handler) handlers;
-        find_usages tbl body
+        find_pure_usages ~ccatch_depth tbl e;
+        Array.iter (fun (e, _dbg) -> find_usages ~ccatch_depth tbl e) el
+    | Ccatch (rec_flag, handlers, body) ->
+        List.iter (fun (_n, _ids, handler, _dbg) ->
+            find_usages
+              ~ccatch_depth:(ccatch_depth + match rec_flag with Recursive -> 1 | Nonrecursive -> 0)
+              tbl handler) handlers;
+        find_usages ~ccatch_depth tbl body
     | Ctrywith (e1, _id, e2, _dbg) ->
-        find_usages tbl e1;
-        find_usages tbl e2
+        find_usages ~ccatch_depth tbl e1;
+        find_usages ~ccatch_depth tbl e2
     | Cassign (_id, e) ->
-        find_pure_usages tbl e
+        find_pure_usages ~ccatch_depth tbl e
     | Cop (_op, el, _dbg) ->
-        List.iter (find_pure_usages tbl) el
+        List.iter (find_pure_usages ~ccatch_depth tbl) el
     | Cexit (_n, el) ->
-        List.iter (find_pure_usages tbl) el
+        List.iter (find_pure_usages ~ccatch_depth tbl) el
     | Cpure e ->
-        find_pure_usages tbl e
-  and find_pure_usages tbl = function
+        find_pure_usages ~ccatch_depth tbl e
+  and find_pure_usages ~ccatch_depth tbl = function
     | Cconst_int _
     | Cconst_natint _
     | Cconst_float _
     | Cconst_symbol _ -> ()
-    | Cvar id -> register_one_use tbl id
+    | Cvar id ->
+        register_one_use ~ccatch_depth tbl id
     | Ctuple lst ->
-        List.iter (find_pure_usages tbl) lst
+        List.iter (find_pure_usages ~ccatch_depth tbl) lst
     | Cpure_op (_, lst, _) ->
-        List.iter (find_pure_usages tbl) lst
+        List.iter (find_pure_usages ~ccatch_depth tbl) lst
     | Cpure_let (id, defn, body) ->
-        V.Tbl.add tbl (VP.var id) Unused;
-        find_pure_usages tbl defn;
-        find_pure_usages tbl body
+        V.Tbl.add tbl (VP.var id) { depth = ccatch_depth; usage = Unused };
+        find_pure_usages ~ccatch_depth tbl defn;
+        find_pure_usages ~ccatch_depth tbl body
     | Cpure_ifthenelse (cond, ifso, ifnot) ->
-        find_pure_usages tbl cond;
-        find_pure_usages tbl ifso;
-        find_pure_usages tbl ifnot
+        find_pure_usages ~ccatch_depth tbl cond;
+        find_pure_usages ~ccatch_depth tbl ifso;
+        find_pure_usages ~ccatch_depth tbl ifnot
     | Creturn_addr -> ()
 
   let rec subst (tbl : usages) (defs: Cmm.pure_expression V.Map.t) cmm =
@@ -101,12 +114,12 @@ module Cleanup_cmm = struct
     | Cvar_mut _ -> cmm
     | Clet (id, Cpure (defn), body) ->
         begin match V.Tbl.find_opt tbl (VP.var id) with
-        | Some Exactly_once ->
+        | Some { usage = Exactly_once } ->
             let defn' = subst_pure tbl defs defn in
             let defs = V.Map.add (VP.var id) defn' defs in
             let res = subst tbl defs body in
             res
-        | Some Unused ->
+        | Some { usage = Unused } ->
             let res = subst tbl defs body in
             res
         | _ ->
@@ -151,6 +164,8 @@ module Cleanup_cmm = struct
         if e == e' && el == el' then cmm
         else Cswitch (e', swtbl, el', dbg')
     | Ccatch (rec_flag, handlers, body) ->
+        (* CR smuenzel: do we want to move variables into the loop?
+           Could lead to duplicate evaluation inside the loop *)
         let map_h ((n, ids, handler, dbg) as h) =
           let handler' = subst tbl defs handler in
           if handler == handler' then h
@@ -195,11 +210,21 @@ module Cleanup_cmm = struct
     | Cpure_op (op, lst, dbg) ->
         Cpure_op(op, List.map (subst_pure tbl defs) lst, dbg)
     | Cpure_let (id, defn, body) ->
-        let defn' = subst_pure tbl defs defn in
-        let defs = V.Map.add (VP.var id) defn' defs in
-        let body' = subst_pure tbl defs body in
-        if defn == defn' && body == body' then cmm
-        else Cpure_let(id, defn', body')
+        begin match V.Tbl.find_opt tbl (VP.var id) with
+        | Some { usage = Exactly_once } ->
+            let defn' = subst_pure tbl defs defn in
+            let defs = V.Map.add (VP.var id) defn' defs in
+            let body' = subst_pure tbl defs body in
+            body'
+        | Some { usage = Unused } ->
+            let body' = subst_pure tbl defs body in
+            body'
+        | _ ->
+            let defn' = subst_pure tbl defs defn in
+            let body' = subst_pure tbl defs body in
+            if defn == defn' && body == body' then cmm
+            else Cpure_let(id, defn', body')
+        end
     | Cpure_ifthenelse (cond, ifso, ifnot) ->
         let cond' = subst_pure tbl defs cond in
         let ifso' = subst_pure tbl defs ifso in
@@ -212,7 +237,7 @@ end
 
 let cleanup_cmm cmm =
   let tbl = V.Tbl.create 11 in
-  Cleanup_cmm.find_usages tbl cmm;
+  Cleanup_cmm.find_usages ~ccatch_depth:0 tbl cmm;
   Cleanup_cmm.subst tbl V.Map.empty cmm
 
 (*
