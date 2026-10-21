@@ -561,12 +561,14 @@ let rec transl env e =
           end
       | (Pbigarrayset(unsafe, _num_dims, elt_kind, layout), arg1 :: argl) ->
           let (argidx, argnewval) = split_last argl in
-          return_unit dbg (bigarray_set unsafe elt_kind layout
-            (transl env arg1)
-            (List.map (transl env) argidx)
+          let=arg1 = "arg1", transl env arg1 in
+          let<=> argidx = "argidx", List.map (transl env) argidx in
+          let= argnewval =
+            "argnewval",
             (match elt_kind with
             | Pbigarray_float16 ->
-                float16_of_float dbg (transl_unbox_float dbg env argnewval)
+                let= unboxed = "unboxed", transl_unbox_float dbg env argnewval in
+                float16_of_float dbg unboxed
             | Pbigarray_float32 | Pbigarray_float64 ->
                 transl_unbox_float dbg env argnewval
             | Pbigarray_complex32 | Pbigarray_complex64 -> transl env argnewval
@@ -575,17 +577,25 @@ let rec transl env e =
             | Pbigarray_native_int ->
                 transl_unbox_int dbg env Pnativeint argnewval
             | Pbigarray_caml_int ->
-                untag_int (transl env argnewval) dbg
+                let= argnewval = "argnewval", transl env argnewval in
+                Cpure (untag_int argnewval dbg)
             | Pbigarray_sint8 | Pbigarray_uint8
             | Pbigarray_sint16 | Pbigarray_uint16 ->
-                ignore_high_bit_int (untag_int (transl env argnewval) dbg)
+                let= argnewval = "argnewval", transl env argnewval in
+                Cpure (ignore_high_bit_int (untag_int argnewval dbg))
             | Pbigarray_unknown -> assert false)
+          in
+          return_unit dbg (bigarray_set unsafe elt_kind layout
+                             arg1
+                             argidx
+                             argnewval
             dbg)
       | (Pbigarraydim(n), [b]) ->
           let dim_ofs = 4 + n in
-          tag_int (Cop(mk_load_mut Word_int,
-            [field_address (transl env b) dim_ofs dbg],
-            dbg)) dbg
+          let= b = "b", transl env b in
+          let= b = "b", Cop(mk_load_mut Word_int,
+                            [field_address b dim_ofs dbg], dbg) in
+          Cpure (tag_int b dbg)
       | (Pintcomp _ as comp,
          [Uprim(Pcompare_ints, [arg1; arg2], _);
           Uconst(Uconst_int 0)]) ->
@@ -640,27 +650,28 @@ let rec transl env e =
   | Uswitch(arg, s, dbg) ->
       (* As in the bytecode interpreter, only matching against constants
          can be checked *)
+      let= arg = "switch", transl env arg in
       if Array.length s.us_index_blocks = 0 then
         make_switch
-          (Tagged (transl env arg))
+          (Tagged arg)
           s.us_index_consts
           (Array.map (fun expr -> transl env expr, dbg) s.us_actions_consts)
           dbg
       else if Array.length s.us_index_consts = 0 then
-        bind "switch" (transl env arg) (fun arg ->
-          transl_switch dbg env (get_tag arg dbg)
-            s.us_index_blocks s.us_actions_blocks)
+        let= tag = "tag", get_tag arg dbg in
+        transl_switch dbg env tag
+          s.us_index_blocks s.us_actions_blocks
       else
-        bind "switch" (transl env arg) (fun arg ->
           Cifthenelse(
-          Cop(Cand, [arg; Cconst_int (1, dbg)], dbg),
+          Cpure_op(Cand, [arg; Cconst_int (1, dbg)], dbg),
           dbg,
           transl_switch dbg env
             (untag_int arg dbg) s.us_index_consts s.us_actions_consts,
           dbg,
+          (let= tag = "tag", get_tag arg dbg in
           transl_switch dbg env
-            (get_tag arg dbg) s.us_index_blocks s.us_actions_blocks,
-          dbg))
+            tag s.us_index_blocks s.us_actions_blocks),
+          dbg)
   | Ustringswitch(arg,sw,d) ->
       let dbg = Debuginfo.none in
       bind "switch" (transl env arg)
@@ -669,7 +680,9 @@ let rec transl env e =
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
       let cargs = List.map (transl env) args in
+      (* CR smuenzel: does this notify_catch still work? *)
       notify_catch nfail env cargs;
+      let<=> cargs = "cargs", cargs in
       Cexit (nfail, cargs)
   | Ucatch(nfail, [], body, handler) ->
       let dbg = Debuginfo.none in
@@ -688,8 +701,8 @@ let rec transl env e =
       let ifnot = transl env ifnot in
       let approx =
         match ifso, ifnot with
-        | Cconst_int (1, _), Cconst_int (3, _) -> Then_false_else_true
-        | Cconst_int (3, _), Cconst_int (1, _) -> Then_true_else_false
+        | Cpure (Cconst_int (1, _)), Cpure (Cconst_int (3, _)) -> Then_false_else_true
+        | Cpure (Cconst_int (3, _)), Cpure (Cconst_int (1, _)) -> Then_true_else_false
         | _, _ -> Unknown
       in
       transl_if env approx dbg cond
@@ -706,7 +719,7 @@ let rec transl env e =
                     dbg (remove_unit(transl env body))
                     dbg (Cexit (raise_num,[])))
               dbg,
-            Ctuple [],
+            Cpure (Ctuple []),
             dbg))
   | Ufor(id, low, high, dir, body) ->
       let dbg = Debuginfo.none in
@@ -715,14 +728,16 @@ let rec transl env e =
       let raise_num = next_raise_count () in
       let id_prev = VP.create (V.create_local "*id_prev*") in
       let env = add_mutable_id (VP.var id) env in
+      let= low = "low", transl env low in
       return_unit dbg
         (Clet_mut
-           (id, typ_int, transl env low,
+           (id, typ_int, low,
             bind "bound" (transl env high) (fun high ->
               ccatch
                 (raise_num, [],
+                 (let= id' = "id", Cvar_mut (VP.var id) in
                  Cifthenelse
-                   (Cop(Ccmpi tst, [Cvar_mut (VP.var id); high], dbg),
+                   (Cpure_op(Ccmpi tst, [id'; high], dbg),
                     dbg,
                     Cexit (raise_num, []),
                     dbg,
@@ -731,19 +746,20 @@ let rec transl env e =
                          (remove_unit(transl env body),
                          Clet(id_prev, Cvar_mut (VP.var id),
                           Csequence
-                            (Cassign(VP.var id,
-                               Cop(inc, [Cvar_mut (VP.var id);
+                            ((let= id_current = "id_current", Cvar_mut (VP.var id) in
+                              Cassign(VP.var id,
+                               Cpure_op(inc, [id_current;
                                          Cconst_int (2, dbg)],
-                                 dbg)),
+                                 dbg))),
                              Cifthenelse
-                               (Cop(Ccmpi Ceq, [Cvar (VP.var id_prev); high],
+                               (Cpure_op(Ccmpi Ceq, [Cvar (VP.var id_prev); high],
                                   dbg),
                                 dbg, Cexit (raise_num,[]),
-                                dbg, Ctuple [],
+                                dbg, Cpure (Ctuple []),
                                 dbg)))))
                       dbg,
-                   dbg),
-                 Ctuple [],
+                   dbg)),
+                 Cpure (Ctuple []),
                  dbg))))
   | Uassign(id, exp) ->
       let dbg = Debuginfo.none in
@@ -1478,12 +1494,13 @@ and transl_sequor env (approx : then_else)
     then_
 
 (* This assumes that [arg] can be safely discarded if it is not used. *)
-and transl_switch dbg env arg index cases = match Array.length cases with
-| 0 -> fatal_error "Cmmgen.transl_switch"
-| 1 -> transl env cases.(0)
-| _ ->
-    let cases = Array.map (transl env) cases in
-    transl_switch_clambda dbg arg index cases
+and transl_switch dbg env (arg : pure_expression) index cases =
+  match Array.length cases with
+  | 0 -> fatal_error "Cmmgen.transl_switch"
+  | 1 -> transl env cases.(0)
+  | _ ->
+      let cases = Array.map (transl env) cases in
+      transl_switch_clambda dbg arg index cases
 
 (* Translate a function definition *)
 
