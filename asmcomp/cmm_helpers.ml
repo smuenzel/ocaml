@@ -2086,13 +2086,11 @@ let transl_switch_clambda loc arg index cases =
   match !inters with
   | [_] -> cases.(0)
   | inters ->
-      bind "switcher" arg
-        (fun a ->
-           SwitcherBlocks.zyva
-             loc
-             (0,n_index-1)
-             a
-             (Array.of_list inters) store)
+      SwitcherBlocks.zyva
+        loc
+        (0,n_index-1)
+        arg
+        (Array.of_list inters) store
 
 let strmatch_compile =
   let module S =

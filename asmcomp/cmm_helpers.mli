@@ -570,7 +570,7 @@ val transl_int_switch :
 
 (** [transl_switch_clambda loc arg index cases] *)
 val transl_switch_clambda :
-  Debuginfo.t -> expression -> int array -> expression array -> expression
+  Debuginfo.t -> pure_expression -> int array -> expression array -> expression
 
 (** [strmatch_compile dbg arg default cases] *)
 val strmatch_compile :
