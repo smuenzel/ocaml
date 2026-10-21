@@ -76,7 +76,7 @@ let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _], _) -> fn arg
   | _ ->
-      bind name arg (fun x -> Cpure x)
+      bind name arg (fun x -> fn (Cpure x))
 
 let bind_list name args fn =
   let lets, vars =
@@ -90,9 +90,10 @@ let bind_list name args fn =
       args
     |> List.split
   in
-  List.fold_right
-    (fun f acc -> f acc)
-    lets (fn vars)
+  List.fold_left
+    (fun acc f -> f acc)
+    (fn vars)
+    lets
 
 module Syntax = struct
   let ( let= ) (name, arg) fn = bind name arg fn
@@ -1941,8 +1942,8 @@ let cache_public_method meths tag cache dbg =
   let raise_num = Lambda.next_raise_count () in
   let cconst_int i = Cconst_int (i, dbg) in
   let<== li, li_v = "*li*", typ_int, cconst_int 3 in
-  let= meths = "meths", Cop(mk_load_mut Word_int, [meths], dbg) in
-  let<== hi, hi_v = "*hi*", typ_int, meths in
+  let= hi_init = "hi_init", Cop(mk_load_mut Word_int, [meths], dbg) in
+  let<== hi, hi_v = "*hi*", typ_int, hi_init in
   Csequence(
   ccatch
     (raise_num, [],
@@ -2039,7 +2040,7 @@ let apply_function_body arity =
                         Cconst_int(pos_arity_in_closinfo, dbg())], dbg());
                    Cconst_int(arity, dbg())], dbg()),
    dbg (),
-   (let= clos_field_2 = "clos_field_2", get_field_gen Asttypes.Mutable clos 2 (dbg ()) in
+   (let= clos_field_2 = "clos_field_2", get_field_codepointer Asttypes.Mutable clos 2 (dbg ()) in
    Cop(Capply typ_val,
        clos_field_2
        :: List.map (fun s -> Cvar s) all_args,
