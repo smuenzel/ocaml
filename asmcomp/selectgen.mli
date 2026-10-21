@@ -71,22 +71,28 @@ class virtual selector_generic : object
     (* Must be defined to indicate whether a constant is a suitable
        immediate operand to the given integer test *)
   method virtual select_addressing :
-    Cmm.memory_chunk -> Cmm.expression -> Arch.addressing_mode * Cmm.expression
+    Cmm.memory_chunk -> Cmm.pure_expression -> Arch.addressing_mode * Cmm.pure_expression
     (* Must be defined to select addressing modes *)
   method is_simple_expr: Cmm.expression -> bool
   method effects_of : Cmm.expression -> Effect_and_coeffect.t
     (* Can be overridden to reflect special extcalls known to be pure *)
   method select_operation :
     Cmm.operation ->
-    Cmm.expression list ->
+    Cmm.pure_expression list ->
     Debuginfo.t ->
-    Mach.operation * Cmm.expression list
+    (* CR smuenzel: maybe this should return a regular expression list?? *)
+    Mach.operation * Cmm.pure_expression list
+  method select_pure_operation :
+    Cmm.pure_operation ->
+    Cmm.pure_expression list ->
+    Debuginfo.t ->
+    Mach.operation * Cmm.pure_expression list
     (* Can be overridden to deal with special arithmetic instructions *)
-  method select_condition : Cmm.expression -> Mach.test * Cmm.expression
+  method select_condition : Cmm.pure_expression -> Mach.test * Cmm.pure_expression
     (* Can be overridden to deal with special test instructions *)
   method select_store :
-    bool -> Arch.addressing_mode -> Cmm.expression ->
-                                         Mach.operation * Cmm.expression
+    bool -> Arch.addressing_mode -> Cmm.pure_expression ->
+                                         Mach.operation * Cmm.pure_expression
     (* Can be overridden to deal with special store constant instructions *)
   method regs_for : Cmm.machtype -> Reg.t array
     (* Return an array of fresh registers of the given type.
@@ -108,10 +114,10 @@ class virtual selector_generic : object
        e.g. on a 64-bit platform, passing unboxed 32-bit arguments
        in 32-bit stack slots. *)
   method emit_extcall_args :
-    environment -> Cmm.exttype list -> Cmm.expression list -> Reg.t array * int
+    environment -> Cmm.exttype list -> Cmm.pure_expression list -> Reg.t array * int
     (* Can be overridden to deal with stack-based calling conventions *)
   method emit_stores :
-    environment -> Cmm.expression list -> Reg.t array -> unit
+    environment -> Cmm.pure_expression list -> Reg.t array -> unit
     (* Fill a freshly allocated block.  Can be overridden for architectures
        that do not provide Arch.offset_addressing. *)
 
@@ -137,6 +143,8 @@ class virtual selector_generic : object
   method insert_moves : environment -> Reg.t array -> Reg.t array -> unit
   method emit_expr :
     environment -> Cmm.expression -> Reg.t array option
+  method emit_pure_expr :
+    environment -> Cmm.pure_expression -> Reg.t array option
   method emit_tail : environment -> Cmm.expression -> unit
 end
 

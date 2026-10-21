@@ -76,6 +76,13 @@ let oper_result_type = function
   | Calloc -> typ_val
   | Cstore (_c, _) -> typ_void
   | Cdls_get -> typ_val
+  | Craise _ -> typ_void
+  | Ccheckbound -> typ_void
+  | Copaque -> typ_val
+  | Catomic_fetch_add | Catomic_exchange | Catomic_compare_exchange -> typ_int
+  | Cpoll -> typ_void
+
+let pure_oper_result_type = function
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi |
     Cand | Cor | Cxor | Clsl | Clsr | Casr |
     Ccmpi _ | Ccmpa _ | Ccmpf _ -> typ_int
@@ -84,11 +91,6 @@ let oper_result_type = function
   | Cnegf | Cabsf | Caddf | Csubf | Cmulf | Cdivf -> typ_float
   | Cfloatofint -> typ_float
   | Cintoffloat -> typ_int
-  | Craise _ -> typ_void
-  | Ccheckbound -> typ_void
-  | Copaque -> typ_val
-  | Catomic_fetch_add | Catomic_exchange | Catomic_compare_exchange -> typ_int
-  | Cpoll -> typ_void
 
 (* Infer the size in bytes of the result of an expression whose evaluation
    may be deferred (cf. [emit_parts]). *)
@@ -107,31 +109,40 @@ let size_machtype mty =
 
 let size_expr (env:environment) exp =
   let rec size localenv = function
-      Cconst_int _ | Cconst_natint _ -> Arch.size_int
-    | Cconst_symbol _ ->
-        Arch.size_addr
-    | Cconst_float _ -> Arch.size_float
-    | Cvar id | Cvar_mut id ->
-        begin try
-          V.Map.find id localenv
-        with Not_found ->
-        try
-          let regs = env_find id env in
-          size_machtype (Array.map (fun r -> r.typ) regs)
-        with Not_found ->
-          Misc.fatal_error("Selection.size_expr: unbound var " ^
-                           V.unique_name id)
-        end
-    | Ctuple el ->
-        List.fold_right (fun e sz -> size localenv e + sz) el 0
+    | Cvar_mut id ->
+        size_var localenv id
     | Cop(op, _, _) ->
         size_machtype(oper_result_type op)
     | Clet(id, arg, body) ->
         size (V.Map.add (VP.var id) (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
+    | Cpure e ->
+        size_pure localenv e
     | _ ->
         Misc.fatal_error "Selection.size_expr"
+  and size_pure localenv = function
+      Cconst_int _ | Cconst_natint _ -> Arch.size_int
+    | Cconst_symbol _ ->
+        Arch.size_addr
+    | Cconst_float _ -> Arch.size_float
+    | Cvar id ->
+        size_var localenv id
+    | Ctuple el ->
+        List.fold_right (fun e sz -> size_pure localenv e + sz) el 0
+    | _ ->
+        Misc.fatal_error "Selection.size_pure"
+  and size_var localenv id =
+    begin try
+      V.Map.find id localenv
+    with Not_found ->
+    try
+      let regs = env_find id env in
+      size_machtype (Array.map (fun r -> r.typ) regs)
+    with Not_found ->
+      Misc.fatal_error("Selection.size_expr: unbound var " ^
+                       V.unique_name id)
+    end
   in size V.Map.empty exp
 
 (* Swap the two arguments of an integer comparison *)
@@ -313,15 +324,11 @@ class virtual selector_generic = object (self)
    algorithm in this file rather than a property of the Cmm language.
 *)
 method is_simple_expr = function
-    Cconst_int _ -> true
-  | Cconst_natint _ -> true
-  | Cconst_float _ -> true
-  | Cconst_symbol _ -> true
-  | Cvar _ -> true
-  | Creturn_addr -> true
-  | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, arg, body) | Clet_mut(_id, _, arg, body) ->
+    Cpure _ -> true
+  | Clet(_id, arg, body) ->
     self#is_simple_expr arg && self#is_simple_expr body
+  | Clet_mut(_id, _, _arg, body) ->
+      self#is_simple_expr body
   | Cphantom_let(_var, _defining_expr, body) -> self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args, _) ->
@@ -331,11 +338,9 @@ method is_simple_expr = function
       | Catomic_fetch_add | Catomic_exchange | Catomic_compare_exchange
       | Cpoll -> false
         (* The remaining operations are simple if their args are *)
-      | Cload _ | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor
-      | Cxor | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf
-      | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
-      | Ccmpf _ | Ccheckbound | Cdls_get ->
-          List.for_all self#is_simple_expr args
+      | Cload _
+      | Ccheckbound | Cdls_get ->
+          true
       end
   | Cassign _ | Cifthenelse _ | Cswitch _ | Ccatch _ | Cexit _
   | Ctrywith _ | Cvar_mut _ -> false
@@ -355,18 +360,17 @@ method is_simple_expr = function
 method effects_of exp =
   let module EC = Effect_and_coeffect in
   match exp with
-  | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
-  | Cvar _ | Creturn_addr -> EC.none
+  | Cpure _ -> EC.none
   | Cvar_mut _ -> EC.coeffect_only Coeffect.Read_mutable
-  | Ctuple el -> EC.join_list_map el self#effects_of
-  | Clet (_id, arg, body) | Clet_mut (_id, _, arg, body) ->
+  | Clet (_id, arg, body) ->
     EC.join (self#effects_of arg) (self#effects_of body)
+  | Clet_mut (_id, _, _arg, body) ->
+      self#effects_of body
   | Cphantom_let (_var, _defining_expr, body) -> self#effects_of body
   | Csequence (e1, e2) ->
     EC.join (self#effects_of e1) (self#effects_of e2)
-  | Cifthenelse (cond, _ifso_dbg, ifso, _ifnot_dbg, ifnot, _dbg) ->
-    EC.join (self#effects_of cond)
-      (EC.join (self#effects_of ifso) (self#effects_of ifnot))
+  | Cifthenelse (_cond, _ifso_dbg, ifso, _ifnot_dbg, ifnot, _dbg) ->
+      EC.join (self#effects_of ifso) (self#effects_of ifnot)
   | Cop (op, args, _) ->
     let from_op =
       match op with
@@ -379,12 +383,8 @@ method effects_of exp =
       | Cload {mutability = Asttypes.Immutable} -> EC.none
       | Cload {mutability = Asttypes.Mutable} | Cdls_get ->
           EC.coeffect_only Coeffect.Read_mutable
-      | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor | Cxor
-      | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf | Cabsf
-      | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat | Ccmpf _ ->
-        EC.none
     in
-    EC.join from_op (EC.join_list_map args self#effects_of)
+    from_op
   | Cassign _ | Cswitch _ | Ccatch _ | Cexit _ | Ctrywith _ ->
     EC.arbitrary
 
@@ -404,7 +404,7 @@ method virtual is_immediate_test : integer_comparison -> int -> bool
 (* Selection of addressing modes *)
 
 method virtual select_addressing :
-  Cmm.memory_chunk -> Cmm.expression -> Arch.addressing_mode * Cmm.expression
+  Cmm.memory_chunk -> Cmm.pure_expression -> Arch.addressing_mode * Cmm.pure_expression
 
 (* Default instruction selection for stores (of words) *)
 
@@ -445,6 +445,12 @@ method select_operation op args _dbg =
   | (Cdls_get, _) -> Idls_get, args
   | (Cpoll, _) -> (Ipoll { return_label = None }), args
   | (Calloc, _) -> (Ialloc {bytes = 0; dbginfo = []}), args
+  | (Ccheckbound, _) ->
+    self#select_arith Icheckbound args
+  | _ -> Misc.fatal_error "Selection.select_oper"
+
+method select_pure_operation op args (_dbg : Debuginfo.t) =
+  match (op, args) with
   | (Caddi, _) -> self#select_arith_comm Iadd args
   | (Csubi, _) -> self#select_arith Isub args
   | (Cmuli, _) -> self#select_arith_comm Imul args
@@ -470,9 +476,6 @@ method select_operation op args _dbg =
   | (Cdivf, _) -> (Idivf, args)
   | (Cfloatofint, _) -> (Ifloatofint, args)
   | (Cintoffloat, _) -> (Iintoffloat, args)
-  | (Ccheckbound, _) ->
-    self#select_arith Icheckbound args
-  | _ -> Misc.fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
   | [arg; Cconst_int (n, _)] when self#is_immediate op n ->
@@ -500,25 +503,25 @@ method private select_arith_comp cmp = function
 (* Instruction selection for conditionals *)
 
 method select_condition = function
-  | Cop(Ccmpi cmp, [arg1; Cconst_int (n, _)], _)
+  | Cpure_op(Ccmpi cmp, [arg1; Cconst_int (n, _)], _)
     when self#is_immediate_test (Isigned cmp) n ->
       (Iinttest_imm(Isigned cmp, n), arg1)
-  | Cop(Ccmpi cmp, [Cconst_int (n, _); arg2], _)
+  | Cpure_op(Ccmpi cmp, [Cconst_int (n, _); arg2], _)
     when self#is_immediate_test (Isigned (swap_integer_comparison cmp)) n ->
       (Iinttest_imm(Isigned(swap_integer_comparison cmp), n), arg2)
-  | Cop(Ccmpi cmp, args, _) ->
+  | Cpure_op(Ccmpi cmp, args, _) ->
       (Iinttest(Isigned cmp), Ctuple args)
-  | Cop(Ccmpa cmp, [arg1; Cconst_int (n, _)], _)
+  | Cpure_op(Ccmpa cmp, [arg1; Cconst_int (n, _)], _)
     when self#is_immediate_test (Iunsigned cmp) n ->
       (Iinttest_imm(Iunsigned cmp, n), arg1)
-  | Cop(Ccmpa cmp, [Cconst_int (n, _); arg2], _)
+  | Cpure_op(Ccmpa cmp, [Cconst_int (n, _); arg2], _)
     when self#is_immediate_test (Iunsigned (swap_integer_comparison cmp)) n ->
       (Iinttest_imm(Iunsigned(swap_integer_comparison cmp), n), arg2)
-  | Cop(Ccmpa cmp, args, _) ->
+  | Cpure_op(Ccmpa cmp, args, _) ->
       (Iinttest(Iunsigned cmp), Ctuple args)
-  | Cop(Ccmpf cmp, args, _) ->
+  | Cpure_op(Ccmpf cmp, args, _) ->
       (Ifloattest cmp, Ctuple args)
-  | Cop(Cand, [arg; Cconst_int (1, _)], _) ->
+  | Cpure_op(Cand, [arg; Cconst_int (1, _)], _) ->
       (Ioddtest, arg)
   | arg ->
       (Itruetest, arg)
@@ -589,7 +592,7 @@ method insert_op env op rs rd =
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
-method emit_expr (env:environment) exp =
+method emit_pure_expr (env:environment) exp =
   match exp with
     Cconst_int (n, _dbg) ->
       let r = self#regs_for typ_int in
@@ -613,7 +616,26 @@ method emit_expr (env:environment) exp =
   | Creturn_addr ->
       let r = self#regs_for typ_int in
       Some(self#insert_op env Ireturn_addr [||] r)
-  | Cvar v | Cvar_mut v ->
+  | Cvar v ->
+      begin try
+        Some(env_find v env)
+      with Not_found ->
+        Misc.fatal_error("Selection.emit_expr: unbound var " ^ V.unique_name v)
+      end
+  | Ctuple [] ->
+      Some [||]
+  | Ctuple exp_list ->
+      begin match self#emit_pure_parts_list env exp_list with
+        None -> None
+      | Some(simple_list, ext_env) ->
+          Some(self#emit_tuple ext_env simple_list)
+      end
+
+method emit_expr (env:environment) exp =
+  match exp with
+  | Cpure c ->
+      self#emit_pure_expr env c
+  | Cvar_mut v ->
       begin try
         Some(env_find v env)
       with Not_found ->
@@ -625,7 +647,7 @@ method emit_expr (env:environment) exp =
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
   | Clet_mut(v, k, e1, e2) ->
-      begin match self#emit_expr env e1 with
+      begin match self#emit_pure_expr env e1 with
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let_mut env v k r1) e2
       end
@@ -637,21 +659,13 @@ method emit_expr (env:environment) exp =
           env_find_mut v env
         with Not_found ->
           Misc.fatal_error ("Selection.emit_expr: unbound var " ^ V.name v) in
-      begin match self#emit_expr env e1 with
+      begin match self#emit_pure_expr env e1 with
         None -> None
       | Some r1 ->
           self#insert_moves env r1 rv; Some [||]
       end
-  | Ctuple [] ->
-      Some [||]
-  | Ctuple exp_list ->
-      begin match self#emit_parts_list env exp_list with
-        None -> None
-      | Some(simple_list, ext_env) ->
-          Some(self#emit_tuple ext_env simple_list)
-      end
   | Cop(Craise k, [arg], dbg) ->
-      begin match self#emit_expr env arg with
+      begin match self#emit_pure_expr env arg with
         None -> None
       | Some r1 ->
           let rd = [|Proc.loc_exn_bucket|] in
@@ -660,14 +674,14 @@ method emit_expr (env:environment) exp =
           None
       end
   | Cop(Copaque, args, dbg) ->
-      begin match self#emit_parts_list env args with
+      begin match self#emit_pure_parts_list env args with
         None -> None
       | Some (simple_args, env) ->
          let rs = self#emit_tuple env simple_args in
          Some (self#insert_op_debug env Iopaque dbg rs rs)
       end
   | Cop(op, args, dbg) ->
-      begin match self#emit_parts_list env args with
+      begin match self#emit_pure_parts_list env args with
         None -> None
       | Some(simple_args, env) ->
           let ty = oper_result_type op in
@@ -705,7 +719,7 @@ method emit_expr (env:environment) exp =
               Some rd
           | Ialloc { bytes = _; } ->
               let rd = self#regs_for typ_val in
-              let bytes = size_expr env (Ctuple new_args) in
+              let bytes = size_expr env (Cpure (Ctuple new_args)) in
               assert (bytes mod Arch.size_addr = 0);
               let alloc_words = bytes / Arch.size_addr in
               let op =
@@ -726,7 +740,7 @@ method emit_expr (env:environment) exp =
       end
   | Cifthenelse(econd, _ifso_dbg, eif, _ifnot_dbg, eelse, _dbg) ->
       let (cond, earg) = self#select_condition econd in
-      begin match self#emit_expr env earg with
+      begin match self#emit_pure_expr env earg with
         None -> None
       | Some rarg ->
           let (rif, sif) = self#emit_sequence env eif in
@@ -737,7 +751,7 @@ method emit_expr (env:environment) exp =
           r
       end
   | Cswitch(esel, index, ecases, _dbg) ->
-      begin match self#emit_expr env esel with
+      begin match self#emit_pure_expr env esel with
         None -> None
       | Some rsel ->
           let rscases =
@@ -788,7 +802,7 @@ method emit_expr (env:environment) exp =
         [||] [||];
       r
   | Cexit (nfail,args) ->
-      begin match self#emit_parts_list env args with
+      begin match self#emit_pure_parts_list env args with
         None -> None
       | Some (simple_list, ext_env) ->
           let src = self#emit_tuple ext_env simple_list in
@@ -886,9 +900,11 @@ method private emit_parts (env:environment) ~effects_after exp =
   in
   (* Even though some expressions may look like they can be deferred from
      the (co)effect analysis, it may be forbidden to move them. *)
+  (*
   if may_defer_evaluation && self#is_simple_expr exp then
     Some (exp, env)
   else begin
+     *)
     match self#emit_expr env exp with
       None -> None
     | Some r ->
@@ -907,8 +923,22 @@ method private emit_parts (env:environment) ~effects_after exp =
             Some (Cvar id, env_add (VP.create id) tmp env)
           end
         end
-  end
+  (* end *)
 
+method private emit_pure_parts_list (env:environment) exp_list =
+  let module EC = Effect_and_coeffect in
+  List.fold_left (fun results_and_env exp ->
+      match results_and_env with
+      | None -> None
+      | Some (result, env) ->
+          (* CR smuenzel: probably should have a real pure emitter*)
+          match self#emit_parts env ~effects_after:EC.none (Cpure exp) with
+          | None -> None
+          | Some (exp_result, env) -> Some (exp_result :: result, env))
+    (Some ([], env))
+    (List.rev exp_list)
+
+(*
 method private emit_parts_list (env:environment) exp_list =
   let module EC = Effect_and_coeffect in
   let exp_list_right_to_left, _effect =
@@ -930,6 +960,7 @@ method private emit_parts_list (env:environment) exp_list =
           | Some (exp_result, env) -> Some (exp_result :: result, env))
     (Some ([], env))
     exp_list_right_to_left
+   *)
 
 method private emit_tuple_not_flattened env exp_list =
   let rec emit_list = function
@@ -937,7 +968,7 @@ method private emit_tuple_not_flattened env exp_list =
   | exp :: rem ->
       (* Again, force right-to-left evaluation *)
       let loc_rem = emit_list rem in
-      match self#emit_expr env exp with
+      match self#emit_pure_expr env exp with
         None -> assert false  (* should have been caught in emit_parts *)
       | Some loc_exp -> loc_exp :: loc_rem
   in
@@ -973,7 +1004,7 @@ method emit_stores env data regs_addr =
   List.iter
     (fun e ->
       let (op, arg) = self#select_store false !a e in
-      match self#emit_expr env arg with
+      match self#emit_pure_expr env arg with
         None -> assert false
       | Some regs ->
           match op with
@@ -988,7 +1019,7 @@ method emit_stores env data regs_addr =
               done
           | _ ->
               self#insert env (Iop op) (Array.append regs regs_addr) [||];
-              a := Arch.offset_addressing !a (size_expr env e))
+              a := Arch.offset_addressing !a (size_expr env (Cpure e)))
     data
 
 (* Same, but in tail position *)
@@ -1009,14 +1040,14 @@ method emit_tail (env:environment) exp =
       | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
       end
   | Clet_mut (v, k, e1, e2) ->
-     begin match self#emit_expr env e1 with
+     begin match self#emit_pure_expr env e1 with
        None -> ()
      | Some r1 -> self#emit_tail (self#bind_let_mut env v k r1) e2
      end
   | Cphantom_let (_var, _defining_expr, body) ->
       self#emit_tail env body
   | Cop((Capply ty) as op, args, dbg) ->
-      begin match self#emit_parts_list env args with
+      begin match self#emit_pure_parts_list env args with
         None -> ()
       | Some(simple_args, env) ->
           let (new_op, new_args) = self#select_operation op simple_args dbg in
@@ -1068,7 +1099,7 @@ method emit_tail (env:environment) exp =
       end
   | Cifthenelse(econd, _ifso_dbg, eif, _ifnot_dbg, eelse, _dbg) ->
       let (cond, earg) = self#select_condition econd in
-      begin match self#emit_expr env earg with
+      begin match self#emit_pure_expr env earg with
         None -> ()
       | Some rarg ->
           self#insert env
@@ -1077,7 +1108,7 @@ method emit_tail (env:environment) exp =
                       rarg [||]
       end
   | Cswitch(esel, index, ecases, _dbg) ->
-      begin match self#emit_expr env esel with
+      begin match self#emit_pure_expr env esel with
         None -> ()
       | Some rsel ->
           let cases =
@@ -1129,11 +1160,9 @@ method emit_tail (env:environment) exp =
           self#insert env Ireturn loc [||]
       end
   | Cop _
-  | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
-  | Cvar _ | Cvar_mut _
-  | Creturn_addr
+  | Cpure _
+  | Cvar_mut _
   | Cassign _
-  | Ctuple _
   | Cexit _ ->
     self#emit_return env exp
 
