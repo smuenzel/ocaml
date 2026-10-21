@@ -114,28 +114,7 @@ let location d =
   if not !Clflags.locations then ""
   else Debuginfo.to_string d
 
-let operation d = function
-  | Capply _ty -> "app" ^ location d
-  | Cextcall(lbl, _ty_res, _ty_args, _alloc) ->
-      Printf.sprintf "extcall \"%s\"%s" lbl (location d)
-  | Cload {memory_chunk; mutability; is_atomic} ->
-      let op =
-        ["load"]
-        @ (match mutability with
-         | Asttypes.Immutable -> []
-         | Asttypes.Mutable -> ["mut"])
-        @ (if is_atomic then ["atomic"] else [])
-      in
-      Printf.sprintf "%s %s" (String.concat "_" op) (chunk memory_chunk)
-  | Calloc -> "alloc" ^ location d
-  | Cstore (c, init) ->
-    let init =
-      match init with
-      | Lambda.Heap_initialization -> "(heap-init)"
-      | Lambda.Root_initialization -> "(root-init)"
-      | Lambda.Assignment -> ""
-    in
-    Printf.sprintf "store %s%s" (chunk c) init
+let pure_operation = function
   | Caddi -> "+"
   | Csubi -> "-"
   | Cmuli -> "*"
@@ -161,6 +140,29 @@ let operation d = function
   | Cfloatofint -> "floatofint"
   | Cintoffloat -> "intoffloat"
   | Ccmpf c -> Printf.sprintf "%sf" (float_comparison c)
+
+let operation d = function
+  | Capply _ty -> "app" ^ location d
+  | Cextcall(lbl, _ty_res, _ty_args, _alloc) ->
+      Printf.sprintf "extcall \"%s\"%s" lbl (location d)
+  | Cload {memory_chunk; mutability; is_atomic} ->
+      let op =
+        ["load"]
+        @ (match mutability with
+         | Asttypes.Immutable -> []
+         | Asttypes.Mutable -> ["mut"])
+        @ (if is_atomic then ["atomic"] else [])
+      in
+      Printf.sprintf "%s %s" (String.concat "_" op) (chunk memory_chunk)
+  | Calloc -> "alloc" ^ location d
+  | Cstore (c, init) ->
+    let init =
+      match init with
+      | Lambda.Heap_initialization -> "(heap-init)"
+      | Lambda.Root_initialization -> "(root-init)"
+      | Lambda.Assignment -> ""
+    in
+    Printf.sprintf "store %s%s" (chunk c) init
   | Craise k -> Lambda.raise_kind k ^ location d
   | Ccheckbound -> "checkbound" ^ location d
   | Copaque -> "opaque"
@@ -170,15 +172,37 @@ let operation d = function
   | Cdls_get -> "dls_get"
   | Cpoll -> "poll"
 
-let rec expr ppf = function
+let rec pure_expr ppf = function
   | Cconst_int (n, _dbg) -> fprintf ppf "%i" n
   | Cconst_natint (n, _dbg) ->
     fprintf ppf "%s" (Nativeint.to_string n)
   | Cconst_float (n, _dbg) -> fprintf ppf "%F" n
   | Cconst_symbol (s, _dbg) -> fprintf ppf "\"%s\"" s
   | Cvar id -> V.print ppf id
-  | Cvar_mut id -> fprintf ppf "!%a" V.print id
+  | Ctuple el ->
+      let tuple ppf el =
+       let first = ref true in
+       List.iter
+        (fun e ->
+          if !first then first := false else fprintf ppf "@ ";
+          pure_expr ppf e)
+        el in
+      fprintf ppf "@[<1>[%a]@]" tuple el
+  | Cpure_op(op, el, _dbg) ->
+      fprintf ppf "@[<2>(%s" (pure_operation op);
+      List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
+      fprintf ppf ")@]"
+  | Cpure_let(id, def, body) ->
+     fprintf ppf
+      "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
+      VP.print id pure_expr def pure_expr body
+  | Cpure_ifthenelse(e1, e2, e3) ->
+      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" pure_expr e1 pure_expr e2 pure_expr e3
   | Creturn_addr -> fprintf ppf "return_addr"
+
+let rec expr ppf = function
+  | Cpure e -> pure_expr ppf e
+  | Cvar_mut id -> fprintf ppf "!%a" V.print id
   | Clet(id, def, (Clet(_, _, _) as body)) ->
       let print_binding id ppf def =
         fprintf ppf "@[<2>%a@ %a@]"
@@ -198,7 +222,7 @@ let rec expr ppf = function
   | Clet_mut(id, kind, def, body) ->
     fprintf ppf
       "@[<2>(let_mut@ @[<2>%a: %a@ %a@]@ %a)@]"
-      VP.print id machtype kind expr def sequence body
+      VP.print id machtype kind pure_expr def sequence body
   | Cphantom_let(var, def, (Cphantom_let(_, _, _) as body)) ->
       let print_binding var ppf def =
         fprintf ppf "@[<2>%a@ %a@]" VP.print var
@@ -219,19 +243,10 @@ let rec expr ppf = function
       phantom_defining_expr_opt def
       sequence body
   | Cassign(id, exp) ->
-      fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" V.print id expr exp
-  | Ctuple el ->
-      let tuple ppf el =
-       let first = ref true in
-       List.iter
-        (fun e ->
-          if !first then first := false else fprintf ppf "@ ";
-          expr ppf e)
-        el in
-      fprintf ppf "@[<1>[%a]@]" tuple el
+      fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" V.print id pure_expr exp
   | Cop(op, el, dbg) ->
       fprintf ppf "@[<2>(%s" (operation dbg op);
-      List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
+      List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
       begin match op with
       | Capply mty -> fprintf ppf "@ %a" machtype mty
       | Cextcall(_, ty_res, ty_args, _) ->
@@ -242,7 +257,7 @@ let rec expr ppf = function
   | Csequence(e1, e2) ->
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" sequence e1 sequence e2
   | Cifthenelse(e1, _e2_dbg, e2, _e3_dbg, e3, _dbg) ->
-      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" expr e1 expr e2 expr e3
+      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" pure_expr e1 expr e2 expr e3
   | Cswitch(e1, index, cases, _dbg) ->
       let print_case i ppf =
         for j = 0 to Array.length index - 1 do
@@ -252,7 +267,7 @@ let rec expr ppf = function
        for i = 0 to Array.length cases - 1 do
         fprintf ppf "@ @[<2>%t@ %a@]" (print_case i) sequence (fst cases.(i))
        done in
-      fprintf ppf "@[<v 0>@[<2>(switch@ %a@ @]%t)@]" expr e1 print_cases
+      fprintf ppf "@[<v 0>@[<2>(switch@ %a@ @]%t)@]" pure_expr e1 print_cases
   | Ccatch(flag, handlers, e1) ->
       let print_handler ppf (i, ids, e2, _dbg) =
         fprintf ppf "(%d%a)@ %a"
@@ -275,7 +290,7 @@ let rec expr ppf = function
         print_handlers handlers
   | Cexit (i, el) ->
       fprintf ppf "@[<2>(exit %d" i;
-      List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
+      List.iter (fun e -> fprintf ppf "@ %a" pure_expr e) el;
       fprintf ppf ")@]"
   | Ctrywith(e1, id, e2, _dbg) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"

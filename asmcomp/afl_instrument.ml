@@ -17,8 +17,8 @@
 open Lambda
 open Cmm
 
-module V = Backend_var
-module VP = Backend_var.With_provenance
+open Cmm_helpers.Syntax
+
 
 let afl_area_ptr dbg = Cconst_symbol ("caml_afl_area_ptr", dbg)
 let afl_prev_loc dbg = Cconst_symbol ("caml_afl_prev_loc", dbg)
@@ -38,33 +38,44 @@ let rec with_afl_logging b dbg =
        docs/technical_details.txt in afl-fuzz source for a full
        description of what's going on. *)
     let cur_location = Random.int afl_map_size in
-    let cur_pos = V.create_local "pos" in
-    let afl_area = V.create_local "shared_mem" in
     let op oper args = Cop (oper, args, dbg) in
-    Clet(VP.create afl_area,
-      op (Cload ({memory_chunk=Word_int;
-                  mutability=Asttypes.Mutable;
-                  is_atomic=false})) [afl_area_ptr dbg],
-      Clet(VP.create cur_pos, op Cxor [op (Cload {memory_chunk=Word_int;
-                                                  mutability=Asttypes.Mutable;
-                                                  is_atomic=false})
-        [afl_prev_loc dbg]; Cconst_int (cur_location, dbg)],
-      Csequence(
-        op (Cstore(Byte_unsigned, Assignment))
-          [op Cadda [Cvar afl_area; Cvar cur_pos];
-            op Cadda [op (Cload {memory_chunk=Byte_unsigned;
-                                 mutability=Asttypes.Mutable;
-                                 is_atomic=false})
-                        [op Cadda [Cvar afl_area; Cvar cur_pos]];
-                      Cconst_int (1, dbg)]],
-        op (Cstore(Word_int, Assignment))
-          [afl_prev_loc dbg; Cconst_int (cur_location lsr 1, dbg)]))) in
+    let opp oper args = Cpure_op (oper, args, dbg) in
+    let= afl_area =
+      "shared_mem",
+      Cop (Cload ({memory_chunk=Word_int;
+                   mutability=Asttypes.Mutable;
+                   is_atomic=false}), [afl_area_ptr dbg], dbg)
+    in
+    let= prev_loc =
+      "prev_location",
+      Cop (Cload ({memory_chunk=Word_int;
+                   mutability=Asttypes.Mutable;
+                   is_atomic=false}), [afl_prev_loc dbg], dbg)
+    in
+    let= cur_pos =
+      "pos",
+      Cpure (opp Cxor [prev_loc; Cconst_int (cur_location, dbg)])
+    in
+    let= cur_value =
+      "cur_value",
+      Cop (Cload ({memory_chunk=Byte_unsigned;
+                   mutability=Asttypes.Mutable;
+                   is_atomic=false}),
+           [opp Cadda [afl_area; cur_pos]], dbg)
+    in
+    Csequence(
+      op (Cstore(Byte_unsigned, Assignment))
+        [opp Cadda [afl_area; cur_pos];
+         opp Cadda [cur_value;
+                   Cconst_int (1, dbg)]],
+      op (Cstore(Word_int, Assignment))
+        [afl_prev_loc dbg; Cconst_int (cur_location lsr 1, dbg)]) in
   Csequence(instrumentation, instrument b)
 
 and instrument = function
   (* these cases add logging, as they may be targets of conditional branches *)
   | Cifthenelse (cond, t_dbg, t, f_dbg, f, dbg) ->
-     Cifthenelse (instrument cond, t_dbg, with_afl_logging t t_dbg,
+     Cifthenelse (cond, t_dbg, with_afl_logging t t_dbg,
        f_dbg, with_afl_logging f f_dbg, dbg)
   | Ctrywith (e, ex, handler, dbg) ->
      Ctrywith (instrument e, ex, with_afl_logging handler dbg, dbg)
@@ -75,17 +86,16 @@ and instrument = function
            handler, handler_dbg)
          handlers
      in
-     Cswitch (instrument e, cases, handlers, dbg)
+     Cswitch (e, cases, handlers, dbg)
 
   (* these cases add no logging, but instrument subexpressions *)
   | Clet (v, e, body) -> Clet (v, instrument e, instrument body)
   | Clet_mut (v, k, e, body) ->
-    Clet_mut (v, k, instrument e, instrument body)
+    Clet_mut (v, k, e, instrument body)
   | Cphantom_let (v, defining_expr, body) ->
     Cphantom_let (v, defining_expr, instrument body)
-  | Cassign (v, e) -> Cassign (v, instrument e)
-  | Ctuple es -> Ctuple (List.map instrument es)
-  | Cop (op, es, dbg) -> Cop (op, List.map instrument es, dbg)
+  | Cassign (v, e) -> Cassign (v, e)
+  | Cop (op, es, dbg) -> Cop (op, es, dbg)
   | Csequence (e1, e2) -> Csequence (instrument e1, instrument e2)
   | Ccatch (isrec, cases, body) ->
      let cases =
@@ -93,12 +103,11 @@ and instrument = function
          cases
      in
      Ccatch (isrec, cases, instrument body)
-  | Cexit (ex, args) -> Cexit (ex, List.map instrument args)
+  | Cexit (ex, args) -> Cexit (ex, args)
 
   (* these are base cases and have no logging *)
-  | Cconst_int _ | Cconst_natint _ | Cconst_float _
-  | Cconst_symbol _ | Creturn_addr
-  | Cvar _ | Cvar_mut _ as c -> c
+  | Cpure _
+  | Cvar_mut _ as c -> c
 
 let instrument_function c dbg =
   with_afl_logging c dbg

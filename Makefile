@@ -245,6 +245,7 @@ asmcomp_SOURCES = \
   asmcomp/cmm_helpers.mli asmcomp/cmm_helpers.ml \
   asmcomp/afl_instrument.mli asmcomp/afl_instrument.ml \
   asmcomp/thread_sanitizer.mli asmcomp/thread_sanitizer.ml \
+	asmcomp/cmm_reducer.ml asmcomp/cmm_reducer.mli \
   asmcomp/cmmgen.mli asmcomp/cmmgen.ml \
   asmcomp/cmm_invariants.mli asmcomp/cmm_invariants.ml \
   asmcomp/interval.mli asmcomp/interval.ml \
