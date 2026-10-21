@@ -21,6 +21,8 @@ open Cmm
 module V = Backend_var
 module VP = Backend_var.With_provenance
 
+open Cmm_helpers.Syntax
+
 type read_or_write =
   | Read
   | Write
@@ -145,19 +147,14 @@ let wrap_entry_exit expr =
       in
       List.fold_left (fun acc (id, arg) -> Clet (id, arg, acc)) tail args
     | ( Cop
-          ( ( Calloc | Caddi | Csubi | Cmuli | Cdivi | Cmodi | Cand | Cmulhi
-            | Cor | Cxor | Clsl | Clsr | Casr | Caddv | Cadda | Cnegf | Cabsf
-            | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
+          ( ( Calloc
             | Ccheckbound | Copaque | Cdls_get | Cpoll | Capply _ | Cextcall _
-            | Cload _ | Cstore _ | Ccmpi _ | Ccmpa _ | Ccmpf _ | Craise _
+            | Cload _ | Cstore _ | Craise _
             | Catomic_fetch_add | Catomic_exchange | Catomic_compare_exchange ),
             _,
             _ )
-      | Cconst_int (_, _)
-      | Cconst_natint (_, _)
-      | Cconst_float (_, _)
-      | Cconst_symbol (_, _)
-      | Cvar _ | Cvar_mut _ | Ctuple _ | Creturn_addr ) as expr ->
+      | Cpure _
+      | Cvar_mut _ ) as expr ->
       let id = VP.create (V.create_local "res") in
       Clet (id, expr, Csequence (call_exit, Cvar (VP.var id)))
   in

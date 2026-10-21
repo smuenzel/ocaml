@@ -198,11 +198,11 @@ let rec pure_expr ppf = function
       VP.print id pure_expr def pure_expr body
   | Cpure_ifthenelse(e1, e2, e3) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" pure_expr e1 pure_expr e2 pure_expr e3
+  | Creturn_addr -> fprintf ppf "return_addr"
 
 let rec expr ppf = function
   | Cpure e -> pure_expr ppf e
   | Cvar_mut id -> fprintf ppf "!%a" V.print id
-  | Creturn_addr -> fprintf ppf "return_addr"
   | Clet(id, def, (Clet(_, _, _) as body)) ->
       let print_binding id ppf def =
         fprintf ppf "@[<2>%a@ %a@]"

@@ -191,7 +191,6 @@ and expression =
   | Cexit of int * pure_expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
-  | Creturn_addr (** Return address saved in the current call frame *)
   | Cpure of pure_expression
 
 and pure_expression =
@@ -205,6 +204,7 @@ and pure_expression =
   | Cpure_let of
       Backend_var.With_provenance.t * pure_expression * pure_expression
   | Cpure_ifthenelse of pure_expression * pure_expression * pure_expression
+  | Creturn_addr (** Return address saved in the current call frame *)
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi

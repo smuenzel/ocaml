@@ -107,7 +107,6 @@ and instrument = function
 
   (* these are base cases and have no logging *)
   | Cpure _
-  | Creturn_addr
   | Cvar_mut _ as c -> c
 
 let instrument_function c dbg =

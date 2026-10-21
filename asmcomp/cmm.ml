@@ -188,7 +188,6 @@ type expression =
   | Cexit of int * pure_expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
-  | Creturn_addr
   | Cpure of pure_expression
 
 and pure_expression =
@@ -202,6 +201,7 @@ and pure_expression =
   | Cpure_let of
       Backend_var.With_provenance.t * pure_expression * pure_expression
   | Cpure_ifthenelse of pure_expression * pure_expression * pure_expression
+  | Creturn_addr
 
 and pure_operation =
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
@@ -278,8 +278,7 @@ let iter_shallow_tail f = function
       true
   | Cassign _
   | Cvar_mut _
-  | Cop _
-  | Creturn_addr ->
+  | Cop _ ->
       false
   | Cpure _ ->
       false
@@ -312,7 +311,6 @@ let rec map_tail f = function
       cmm
   | Cvar_mut _
   | Cassign _
-  | Creturn_addr
   | Cop _ as c ->
       f c
   | Cpure _ as c ->
@@ -347,7 +345,6 @@ let map_shallow f = function
   | Ctrywith (e1, id, e2, dbg) ->
       Ctrywith (f e1, id, f e2, dbg)
   | Cvar_mut _
-  | Creturn_addr
   | Cpure _
     as c ->
       c
@@ -389,8 +386,6 @@ let rec map_all_pure_expressions f c =
       let ea' = Array.map (fun (e, dbg) -> map_all_pure_expressions f e, dbg) ea in
       if Array.for_all2 (fun (e, _) (e', _) -> e == e') ea ea' && e == e' then c
       else Cswitch(e', ia, ea', dbg)
-  | Creturn_addr ->
-      Creturn_addr
   | Cvar_mut _ -> c
   | Ccatch (rf, hl, body) ->
       let map_h (n, ids, handler, dbg) = (n, ids, map_all_pure_expressions f handler, dbg) in
