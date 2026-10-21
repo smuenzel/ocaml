@@ -34,6 +34,8 @@ module Syntax : sig
   val ( let<=> ) : (string * expression list) -> (pure_expression list -> expression) -> expression
 end
 
+val cleanup_cmm : expression -> expression
+
 (** Headers *)
 
 (** A null header with GC bits set to black *)
