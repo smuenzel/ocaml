@@ -2792,16 +2792,16 @@ asmcomp/CSEgen.cmi : \
     parsing/asttypes.cmi
 asmcomp/afl_instrument.cmo : \
     lambda/lambda.cmi \
+    asmcomp/cmm_helpers.cmi \
     asmcomp/cmm.cmi \
     utils/clflags.cmi \
-    middle_end/backend_var.cmi \
     parsing/asttypes.cmi \
     asmcomp/afl_instrument.cmi
 asmcomp/afl_instrument.cmx : \
     lambda/lambda.cmx \
+    asmcomp/cmm_helpers.cmx \
     asmcomp/cmm.cmx \
     utils/clflags.cmx \
-    middle_end/backend_var.cmx \
     parsing/asttypes.cmx \
     asmcomp/afl_instrument.cmi
 asmcomp/afl_instrument.cmi : \

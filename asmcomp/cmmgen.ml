@@ -795,7 +795,7 @@ and transl_catch env nfail ids body handler dbg =
   in
   let env_body = add_notify_catch nfail report env in
   let body = transl env_body body in
-  let new_env, rewrite, ids =
+  let new_env, rewrite, _unboxed_ids =
     List.fold_right
       (fun (id, kind, u) (env, rewrite, ids) ->
          match !u with
@@ -813,6 +813,7 @@ and transl_catch env nfail ids body handler dbg =
   in
   ignore rewrite;
   ignore new_env;
+  let ids = List.map (fun (id, kind, _) -> id, machtype_of_value_kind kind) ids in
   (* CR smuenzel: needs fixing *)
   (*
   if env == new_env then
@@ -1654,6 +1655,7 @@ let transl_function f =
       Afl_instrument.instrument_function (transl env body) f.dbg
     else
       transl env body in
+  let cmm_body = cleanup_cmm cmm_body in
   let cmm_body =
     if Config.tsan then Thread_sanitizer.instrument cmm_body else cmm_body
   in
