@@ -14,14 +14,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR smuenzel: this needs work to be able to use ANF cmm*)
+
 [@@@warning "@4"]
 
 open Asttypes
 open Cmm
 module V = Backend_var
 module VP = Backend_var.With_provenance
-
-open Cmm_helpers.Syntax
 
 type read_or_write =
   | Read
@@ -87,7 +87,7 @@ let wrap_entry_exit expr =
       Clet_mut (v, typ, e, insert_call_exit is_tail body)
     | Cphantom_let (v, e, body) ->
       Cphantom_let (v, e, insert_call_exit is_tail body)
-    | Cassign (v, body) -> Cassign (v, insert_call_exit is_tail body)
+    | Cassign _ as expr -> expr
     | Csequence (op1, op2) -> Csequence (op1, insert_call_exit is_tail op2)
     | Cifthenelse (cond, t_dbg, t, f_dbg, f, dbg_none) ->
       Cifthenelse
@@ -134,18 +134,13 @@ let wrap_entry_exit expr =
          before the call, but after evaluating the arguments (from right to
          left). *)
       let fun_ = List.hd args in
-      let args =
-        List.map (fun e -> VP.create (V.create_local "arg"), e) (List.tl args)
-      in
-      let tail =
-        Csequence
-          ( call_exit,
-            Cop
-              ( Capply fn,
-                fun_ :: List.map (fun (id, _) -> Cvar (VP.var id)) args,
-                dbg_none ) )
-      in
-      List.fold_left (fun acc (id, arg) -> Clet (id, arg, acc)) tail args
+      let args = List.tl args in
+      Csequence
+        ( call_exit,
+          Cop
+            ( Capply fn,
+              fun_ :: args,
+              dbg_none ) )
     | ( Cop
           ( ( Calloc
             | Ccheckbound | Copaque | Cdls_get | Cpoll | Capply _ | Cextcall _
@@ -156,7 +151,7 @@ let wrap_entry_exit expr =
       | Cpure _
       | Cvar_mut _ ) as expr ->
       let id = VP.create (V.create_local "res") in
-      Clet (id, expr, Csequence (call_exit, Cvar (VP.var id)))
+      Clet (id, expr, Csequence (call_exit, Cpure (Cvar (VP.var id))))
   in
   Csequence (call_entry, insert_call_exit true expr)
 
@@ -167,20 +162,15 @@ let instrument body =
           load_op),
           [loc],
           dbginfo ) ->
-      (* Emit a call to [__tsan_readN] before the load *)
-      let loc_id = VP.create (V.create_local "loc") in
-      let loc_exp = Cvar (VP.var loc_id) in
-      Clet
-        ( loc_id,
-          aux loc,
-          Csequence
-            ( Cmm_helpers.return_unit dbg_none
-                (Cop
-                   ( Cextcall
-                       (select_function Read memory_chunk, typ_void, [], false),
-                     [loc_exp],
-                     dbg_none )),
-              Cop (load_op, [loc_exp], dbginfo) ) )
+        (* Emit a call to [__tsan_readN] before the load *)
+        Csequence
+          ( Cmm_helpers.return_unit dbg_none
+              (Cop
+                 ( Cextcall
+                     (select_function Read memory_chunk, typ_void, [], false),
+                   [loc],
+                   dbg_none )),
+            Cop (load_op, [loc], dbginfo) )
     | Cop
         ( Cload { memory_chunk; mutability = Mutable; is_atomic = true },
           [loc],
@@ -193,7 +183,7 @@ let instrument body =
               ret_typ,
               [],
               false ),
-          [aux loc; TSan_memory_order.seq_cst],
+          [loc; TSan_memory_order.seq_cst],
           dbginfo )
     | Cop
         (Cload { memory_chunk = _; mutability = Mutable; is_atomic = _ }, _, _)
@@ -215,10 +205,7 @@ let instrument body =
         let args = [loc_exp; v_exp] in
         Clet
           ( v_id,
-            aux v,
-            Clet
-              ( loc_id,
-                aux loc,
+            aux (Cpure v),
                 Csequence
                   ( Cmm_helpers.return_unit dbg_none
                       (Cop
@@ -227,10 +214,10 @@ let instrument body =
                                typ_void,
                                [],
                                false ),
-                           [loc_exp],
+                           [loc],
                            dbg_none )),
                     Cop (Cstore (memory_chunk, init_or_assn), args, dbginfo) )
-              ) )
+              )
       | Heap_initialization | Root_initialization ->
         (* Initializing writes need not be instrumented as they are always
            domain-safe *)
@@ -239,22 +226,17 @@ let instrument body =
       invalid_arg "instrument: wrong number of arguments for operation Cstore"
     | Cop ((Cload { mutability = Immutable; _ } as op), es, dbg_none) ->
       (* Loads of immutable location require no instrumentation *)
-      Cop (op, List.map aux es, dbg_none)
+      Cop (op, es, dbg_none)
     | Cop (Craise kind, [arg], dbg) ->
       (* Call a routine that will call [__tsan_func_exit] for every function
          about to be exited due to the exception *)
-      let arg_id = VP.create (V.create_local "raise_arg") in
-      let arg_exp = Cvar (VP.var arg_id) in
-      Clet
-        ( arg_id,
-          aux arg,
-          Csequence
-            (Cmm_helpers.return_unit dbg_none
-               (Cop (Capply typ_int,
-                     [Cconst_symbol ("caml_tsan_exit_on_raise_asm", dbg_none);
-                      Cconst_int (0, dbg_none)],
-                     dbg_none)),
-             Cop (Craise kind, [arg_exp], dbg)))
+      Csequence
+        (Cmm_helpers.return_unit dbg_none
+           (Cop (Capply typ_int,
+                 [Cconst_symbol ("caml_tsan_exit_on_raise_asm", dbg_none);
+                  Cconst_int (0, dbg_none)],
+                 dbg_none)),
+         Cop (Craise kind, [arg], dbg))
     | Cop (Craise _, ([] | _ :: _ :: _), _) ->
       invalid_arg "instrument: wrong number of arguments for operation Craise"
     | Cop (Catomic_fetch_add, [loc; incr], dbginfo) ->
@@ -262,25 +244,15 @@ let instrument body =
          [__tsan_atomic64_fetch_add]. OCaml values are word-sized, so we use
          the 64-bit variant (on 64-bit platforms) with sequential consistency
          to match the semantics of the native atomic fetch-add. *)
-      let loc_id = VP.create (V.create_local "loc") in
-      let loc_exp = Cvar (VP.var loc_id) in
-      let incr_id = VP.create (V.create_local "incr") in
-      let incr_exp = Cvar (VP.var incr_id) in
-      Clet
-        ( incr_id,
-          aux incr,
-          Clet
-            ( loc_id,
-              aux loc,
-              Cop
-                ( Cextcall
-                    ( Printf.sprintf "__tsan_atomic%d_fetch_add"
-                        Sys.word_size,
-                      typ_val,
-                      [],
-                      false ),
-                  [loc_exp; incr_exp; TSan_memory_order.seq_cst],
-                  dbginfo ) ) )
+      Cop
+        ( Cextcall
+            ( Printf.sprintf "__tsan_atomic%d_fetch_add"
+                Sys.word_size,
+              typ_val,
+              [],
+              false ),
+          [loc; incr; TSan_memory_order.seq_cst],
+          dbginfo )
     | Cop (Catomic_fetch_add, _, _) ->
       invalid_arg
         "instrument: wrong number of arguments for operation Catomic_fetch_add"
@@ -290,19 +262,16 @@ let instrument body =
       invalid_arg
         "instrument: native atomic exchange/compare-exchange under TSan"
     | Cop
-        ( (( Capply _ | Caddi | Calloc | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
-           | Cand | Cor | Cxor | Clsl | Clsr | Casr | Caddv | Cadda | Cnegf
-           | Cabsf | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat
-           | Ccheckbound | Copaque | Cdls_get | Cpoll | Cextcall _ | Ccmpi _
-           | Ccmpa _ | Ccmpf _ ) as op),
+        ( (( Capply _ | Calloc
+           | Ccheckbound | Copaque | Cdls_get | Cpoll | Cextcall _
+           ) as op),
           es,
           dbg_none ) ->
-      Cop (op, List.map aux es, dbg_none)
+      Cop (op, es, dbg_none)
     | Clet (v, e, body) -> Clet (v, aux e, aux body)
-    | Clet_mut (v, k, e, body) -> Clet_mut (v, k, aux e, aux body)
+    | Clet_mut (v, k, e, body) -> Clet_mut (v, k, e, aux body)
     | Cphantom_let (v, e, body) -> Cphantom_let (v, e, aux body)
-    | Cassign (v, e) -> Cassign (v, aux e)
-    | Ctuple es -> Ctuple (List.map aux es)
+    | Cassign (v, e) -> Cassign (v, e)
     | Csequence (c1, c2) -> Csequence (aux c1, aux c2)
     | Ccatch (isrec, cases, body) ->
       let cases =
@@ -311,9 +280,9 @@ let instrument body =
           cases
       in
       Ccatch (isrec, cases, aux body)
-    | Cexit (ex, args) -> Cexit (ex, List.map aux args)
+    | Cexit (ex, args) -> Cexit (ex, args)
     | Cifthenelse (cond, t_dbg, t, f_dbg, f, dbg_none) ->
-      Cifthenelse (aux cond, t_dbg, aux t, f_dbg, aux f, dbg_none)
+      Cifthenelse (cond, t_dbg, aux t, f_dbg, aux f, dbg_none)
     | Ctrywith (e, ex, handler, dbg_none) ->
       Ctrywith (aux e, ex, aux handler, dbg_none)
     | Cswitch (e, cases, handlers, dbg_none) ->
@@ -321,10 +290,9 @@ let instrument body =
         handlers
         |> Array.map (fun (handler, handler_dbg) -> aux handler, handler_dbg)
       in
-      Cswitch (aux e, cases, handlers, dbg_none)
+      Cswitch (e, cases, handlers, dbg_none)
     (* no instrumentation *)
-    | ( Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
-      | Cvar _ | Cvar_mut _ | Creturn_addr ) as c ->
+    | ( Cpure _ | Cvar_mut _ ) as c ->
       c
   in
   body |> aux |> wrap_entry_exit
