@@ -75,7 +75,8 @@ let bind name arg fn =
 let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _], _) -> fn arg
-  | _ -> bind name arg (fun x -> fn (Cpure x))
+  | _ ->
+      bind name arg (fun x -> Cpure x)
 
 let bind_list name args fn =
   let lets, vars =
@@ -95,7 +96,10 @@ let bind_list name args fn =
 
 module Syntax = struct
   let ( let= ) (name, arg) fn = bind name arg fn
-  let ( let=$ ) (name, arg) fn = bind name arg (fun x -> Cpure (fn x))
+  let ( let== ) (name, arg) fn = bind_pure name arg fn
+  let ( let=$ ) (name, arg) fn =
+    let= x = (name, arg) in
+    Cpure (fn x)
 end
 open Syntax
 
@@ -384,31 +388,31 @@ let mk_compare_ints dbg a1 a2 =
   | Cconst_natint (c1, _), Cconst_int (c2, _) ->
      int_const dbg Nativeint.(compare c1 (of_int c2))
   | a1, a2 -> begin
-      bind_pure "int_cmp" a2 (fun a2 ->
-        bind_pure "int_cmp" a1 (fun a1 ->
-          let op1 = Cpure_op(Ccmpi(Cgt), [a1; a2], dbg) in
-          let op2 = Cpure_op(Ccmpi(Clt), [a1; a2], dbg) in
-          tag_int(sub_int op1 op2 dbg) dbg))
+      let== a2 = ("int_cmp", a2) in
+      let== a1 = ("int_cmp", a1) in
+      let op1 = Cpure_op (Ccmpi Cgt, [ a1; a2 ], dbg) in
+      let op2 = Cpure_op (Ccmpi Clt, [ a1; a2 ], dbg) in
+      tag_int (sub_int op1 op2 dbg) dbg
     end
 
 let mk_compare_floats dbg a1 a2 =
-  bind_pure "float_cmp" a2 (fun a2 ->
-    bind_pure "float_cmp" a1 (fun a1 ->
-      let op1 = Cpure_op(Ccmpf(CFgt), [a1; a2], dbg) in
-      let op2 = Cpure_op(Ccmpf(CFlt), [a1; a2], dbg) in
-      let op3 = Cpure_op(Ccmpf(CFeq), [a1; a1], dbg) in
-      let op4 = Cpure_op(Ccmpf(CFeq), [a2; a2], dbg) in
-      (* If both operands a1 and a2 are not NaN, then op3 = op4 = 1,
-         and the result is op1 - op2.
-         If at least one of the operands is NaN,
-         then op1 = op2 = 0, and the result is op3 - op4,
-         which orders NaN before other values.
-         To detect if the operand is NaN, we use the property:
-         for all x, NaN is not equal to x, even if x is NaN.
-         Therefore, op3 is 0 if and only if a1 is NaN,
-         and op4 is 0 if and only if a2 is NaN.
-         See also caml_float_compare_unboxed in runtime/floats.c  *)
-      tag_int (add_int (sub_int op1 op2 dbg) (sub_int op3 op4 dbg) dbg) dbg))
+  let== a2 = ("float_cmp", a2) in
+  let== a1 = ("float_cmp", a1) in
+  let op1 = Cpure_op (Ccmpf CFgt, [ a1; a2 ], dbg) in
+  let op2 = Cpure_op (Ccmpf CFlt, [ a1; a2 ], dbg) in
+  let op3 = Cpure_op (Ccmpf CFeq, [ a1; a1 ], dbg) in
+  let op4 = Cpure_op (Ccmpf CFeq, [ a2; a2 ], dbg) in
+  (* If both operands a1 and a2 are not NaN, then op3 = op4 = 1,
+           and the result is op1 - op2.
+           If at least one of the operands is NaN,
+           then op1 = op2 = 0, and the result is op3 - op4,
+           which orders NaN before other values.
+           To detect if the operand is NaN, we use the property:
+           for all x, NaN is not equal to x, even if x is NaN.
+           Therefore, op3 is 0 if and only if a1 is NaN,
+           and op4 is 0 if and only if a2 is NaN.
+           See also caml_float_compare_unboxed in runtime/floats.c  *)
+  tag_int (add_int (sub_int op1 op2 dbg) (sub_int op3 op4 dbg) dbg) dbg
 
 let create_loop body dbg =
   let cont = Lambda.next_raise_count () in
@@ -525,22 +529,16 @@ let rec div_int c1 c2 is_safe dbg =
               t = c1 + t
               res = shift-right-signed(c1 + t, l)
         *)
-        Cpure (Cpure_op(Casr, [bind_pure "dividend" c1 (fun c1 ->
-            let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
-            let t =
-              lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg
-            in
-            add_int c1 t dbg);
+        Cpure (Cpure_op(Casr, [(let== c1 = ("dividend", c1) in
+                               let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
+                               let t =
+                                 lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg
+                               in
+                               add_int c1 t dbg);
            Cconst_int (l, dbg)], dbg))
       else if n < 0 then
-        bind "pos"
-          (div_int c1 (Cconst_int (-n, dbg)) is_safe dbg)
-          (fun pos ->
-             Cpure
-               (sub_int (Cconst_int (0, dbg))
-                  pos
-                  dbg)
-          )
+        let= pos = ("pos", div_int c1 (Cconst_int (-n, dbg)) is_safe dbg) in
+        Cpure (sub_int (Cconst_int (0, dbg)) pos dbg)
       else begin
         let (m, p) = divimm_parameters (Nativeint.of_int n) in
         (* Algorithm:
@@ -550,14 +548,11 @@ let rec div_int c1 c2 is_safe dbg =
               res = t + sign-bit(c1)
         *)
         Cpure
-          (bind_pure "dividend" c1 (fun c1 ->
-               let t = Cpure_op(Cmulhi, [c1; natint_const_untagged dbg m], dbg) in
-               let t = if m < 0n then Cpure_op(Caddi, [t; c1], dbg) else t in
-               let t =
-                 if p > 0 then Cpure_op(Casr, [t; Cconst_int (p, dbg)], dbg) else t
-               in
-               add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1, dbg)) dbg) dbg)
-          )
+          (let== c1 = ("dividend", c1) in
+          let t = Cpure_op (Cmulhi, [ c1; natint_const_untagged dbg m ], dbg) in
+          let t = if m < 0n then Cpure_op (Caddi, [ t; c1 ], dbg) else t in
+          let t = if p > 0 then Cpure_op (Casr, [ t; Cconst_int (p, dbg) ], dbg) else t in
+          add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1, dbg)) dbg) dbg)
       end
   | (c1, c2) when !Clflags.unsafe || is_safe = Lambda.Unsafe ->
       Cpure(Cpure_op(Cdivi, [c1; c2], dbg))
@@ -589,12 +584,12 @@ let mod_int c1 c2 is_safe dbg =
               t = bit-and(t, -n)
               res = c1 - t
         *)
-        Cpure (bind_pure "dividend" c1 (fun c1 ->
-            let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
-            let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
-            let t = add_int c1 t dbg in
-            let t = Cpure_op(Cand, [t; Cconst_int (-n, dbg)], dbg) in
-            sub_int c1 t dbg))
+        Cpure (let== c1 = ("dividend", c1) in
+              let t = asr_int c1 (Cconst_int (l - 1, dbg)) dbg in
+              let t = lsr_int t (Cconst_int (Nativeint.size - l, dbg)) dbg in
+              let t = add_int c1 t dbg in
+              let t = Cpure_op (Cand, [ t; Cconst_int (-n, dbg) ], dbg) in
+              sub_int c1 t dbg)
       else
         bind "dividend" (Cpure c1) (fun c1 ->
           bind "div_int" (div_int c1 c2 is_safe dbg) (fun div ->
@@ -1456,17 +1451,17 @@ let unaligned_set_64 ptr idx newval dbg =
                     dbg))))
 
 let max_or_zero a dbg =
-  bind_pure "size" a (fun a ->
-    (* equivalent to
-       Cifthenelse(Cop(Ccmpi Cle, [a; cconst_int 0]), cconst_int 0, a)
+  let== a = ("size", a) in
+  (* equivalent to
+         Cifthenelse(Cop(Ccmpi Cle, [a; cconst_int 0]), cconst_int 0, a)
 
-       if a is positive, sign is 0 hence sign_negation is full of 1
-                         so sign_negation&a = a
-       if a is negative, sign is full of 1 hence sign_negation is 0
-                         so sign_negation&a = 0 *)
-    let sign = Cpure_op(Casr, [a; Cconst_int (size_int * 8 - 1, dbg)], dbg) in
-    let sign_negation = Cpure_op(Cxor, [sign; Cconst_int (-1, dbg)], dbg) in
-    Cpure_op(Cand, [sign_negation; a], dbg))
+         if a is positive, sign is 0 hence sign_negation is full of 1
+                           so sign_negation&a = a
+         if a is negative, sign is full of 1 hence sign_negation is 0
+                           so sign_negation&a = 0 *)
+  let sign = Cpure_op (Casr, [ a; Cconst_int ((size_int * 8) - 1, dbg) ], dbg) in
+  let sign_negation = Cpure_op (Cxor, [ sign; Cconst_int (-1, dbg) ], dbg) in
+  Cpure_op (Cand, [ sign_negation; a ], dbg)
 
 let check_bound safety access_size dbg length a2 k =
   match (safety : Lambda.is_safe) with
