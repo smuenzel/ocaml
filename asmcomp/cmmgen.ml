@@ -449,8 +449,8 @@ let rec transl env e =
       let<=> args = "args", List.map (transl env) args in
       generic_apply (mut_from_env env clos) clos args dbg
   | Usend(kind, met, obj, args, dbg) ->
-      let= met = "met", transl env met in
       let= obj = "obj", transl env obj in
+      let= met = "met", transl env met in
       let<=> args = "args", List.map (transl env) args in
       send kind met obj args dbg
   | Ulet(str, kind, id, exp, body) ->
@@ -500,9 +500,9 @@ let rec transl env e =
              plain words, so this is the same equality the boolean would have
              been built from, only spelled once. *)
           let= expected = "expected", transl env oldval in
-          let= ptr = "ptr", transl env ptr in
-          let= ofs = "ofs", transl env ofs in
           let= newval = "newval", transl env newval in
+          let= ofs = "ofs", transl env ofs in
+          let= ptr = "ptr", transl env ptr in
           let= atomic_result =
             "atomic_result",
             Cop(Catomic_compare_exchange,
@@ -562,7 +562,6 @@ let rec transl env e =
       | (Pbigarrayset(unsafe, _num_dims, elt_kind, layout), arg1 :: argl) ->
           let (argidx, argnewval) = split_last argl in
           let=arg1 = "arg1", transl env arg1 in
-          let<=> argidx = "argidx", List.map (transl env) argidx in
           let= argnewval =
             "argnewval",
             (match elt_kind with
@@ -585,6 +584,7 @@ let rec transl env e =
                 Cpure (ignore_high_bit_int (untag_int argnewval dbg))
             | Pbigarray_unknown -> assert false)
           in
+          let<=> argidx = "argidx", List.map (transl env) argidx in
           return_unit dbg (bigarray_set unsafe elt_kind layout
                              arg1
                              argidx
