@@ -207,6 +207,7 @@ and pure_expression =
   | Creturn_addr (** Return address saved in the current call frame *)
 
 and pure_operation =
+  (* CR smuenzel: investigate whether divi/modi should be pure or not *)
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
   | Ccmpi of integer_comparison

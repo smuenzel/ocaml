@@ -680,7 +680,8 @@ let rec transl env e =
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
       let cargs = List.map (transl env) args in
-      (* CR smuenzel: does this notify_catch still work? *)
+      (* CR smuenzel: does this notify_catch still work?
+         Probably not, need to rewrite *)
       notify_catch nfail env cargs;
       let<=> cargs = "cargs", cargs in
       Cexit (nfail, cargs)
