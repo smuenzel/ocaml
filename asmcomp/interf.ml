@@ -105,8 +105,8 @@ let build_graph fundecl =
     | Iop(Itailcall_ind) -> ()
     | Iop(Itailcall_imm _) -> ()
     | Iop(Iatomic_exchange | Iatomic_compare_exchange) ->
-        (* Every result, including the amd64 scratch, must differ from every
-           argument. The address in particular is still needed after the old
+        (* Every result must differ from every argument.
+           The address in particular is still needed after the old
            value has been loaded, and an LL/SC loop re-reads all of them.
            Where a backend deliberately ties a result to an argument they are
            the same register by now, and add_interf ignores that. *)

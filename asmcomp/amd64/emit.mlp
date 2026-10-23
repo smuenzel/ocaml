@@ -201,6 +201,7 @@ let reg64 = function
 
 let arg env i n = reg env i.arg.(n)
 let res env i n = reg env i.res.(n)
+let tmp env i n = reg env i.tmp.(n)
 
 (* Output a reference to the lower 8, 16 or 32 bits of a register *)
 
@@ -472,6 +473,7 @@ let emit_instr env fallthrough i =
   let res32 i n = emit_subreg env reg_low_32_name DWORD i.res.(n) in
   let arg = arg env in
   let res = res env in
+  let tmp = tmp env in
   emit_debug_info i.dbg;
   match i.desc with
   | Lend -> ()
@@ -779,16 +781,16 @@ let emit_instr env fallthrough i =
       (* arg.(0)  address of the atomic
          res.(0)  new value going in, old value coming out (tied to arg.(1))
          arg.(2)  address of caml_num_domains_running
-         res.(1)  scratch, single-domain path only
+         tmp.(0)  scratch, single-domain path only
 
          With one domain we can get away with a plain load and store. xchg on
          memory always locks, even without the prefix, so it's only used when
          other domains are running. *)
       split_on_domains (arg64 i 2)
         ~single:(fun () ->
-          I.mov (mem64 QWORD 0 (arg64 i 0)) (res i 1);
+          I.mov (mem64 QWORD 0 (arg64 i 0)) (tmp i 0);
           I.mov (res i 0) (mem64 QWORD 0 (arg64 i 0));
-          I.mov (res i 1) (res i 0))
+          I.mov (tmp i 0) (res i 0))
         ~multi:(fun () -> I.xchg (res i 0) (mem64 QWORD 0 (arg64 i 0)))
   | Lop (Iatomic_compare_exchange) ->
       (* arg.(0)  address of the atomic
@@ -796,9 +798,9 @@ let emit_instr env fallthrough i =
          arg.(2)  new value
          arg.(3)  address of caml_num_domains_running
          res.(0)  the value we found, also rax
-         res.(1)  scratch, single-domain path only
+         tmp.(0)  scratch, single-domain path only
 
-         With one domain, load into res.(1), store the new value if it
+         With one domain, load into tmp.(0), store the new value if it
          matches, then hand the loaded value back in res.(0). Otherwise lock
          cmpxchg does it all. If the values match it leaves rax alone, and if
          not it loads what it found into rax, so either way rax is the
@@ -806,12 +808,12 @@ let emit_instr env fallthrough i =
       split_on_domains (arg64 i 3)
         ~single:(fun () ->
           let lbl_stored = new_label() in
-          I.mov (mem64 QWORD 0 (arg64 i 0)) (res i 1);
-          I.cmp (res i 1) (arg i 1);
+          I.mov (mem64 QWORD 0 (arg64 i 0)) (tmp i 0);
+          I.cmp (tmp i 0) (arg i 1);
           I.jne (label lbl_stored);
           I.mov (arg i 2) (mem64 QWORD 0 (arg64 i 0));
           def_label lbl_stored;
-          I.mov (res i 1) (res i 0))
+          I.mov (tmp i 0) (res i 0))
         ~multi:(fun () ->
           I.lock_cmpxchg (arg i 2) (mem64 QWORD 0 (arg64 i 0)))
   | Lop (Ireturn_addr) ->

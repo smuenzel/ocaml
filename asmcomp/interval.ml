@@ -36,6 +36,7 @@ type t =
 type kind =
     Result
   | Argument
+  | Temporary
   | Live
 
 type result =
@@ -74,10 +75,15 @@ let remove_expired_ranges i pos =
 
 let update_interval_position intervals pos kind reg =
   let i = intervals.(reg.stamp) in
-  let on = pos lsl 1 in
+  let on = pos * 2 in
   let off = on + 1 in
-  let rbegin = (match kind with Result -> off | _ -> on) in
-  let rend = (match kind with Argument -> on | _ -> off) in
+  let rbegin, rend =
+    match kind with
+    | Result -> off, off
+    | Argument -> on, on
+    | Temporary -> on - 1, on (* force tmp <> arg *)
+    | Live -> on, off
+  in
   if i.iend = 0 then begin
     i.ibegin <- rbegin;
     i.reg <- reg;
@@ -100,7 +106,7 @@ let update_interval_position_by_set intervals regs pos kind =
 
 let update_interval_position_by_instr intervals instr pos =
   update_interval_position_by_array intervals instr.arg pos Argument;
-  update_interval_position_by_array intervals instr.tmp pos Argument;
+  update_interval_position_by_array intervals instr.tmp pos Temporary;
   update_interval_position_by_array intervals instr.res pos Result;
   update_interval_position_by_set intervals instr.live pos Live
 
