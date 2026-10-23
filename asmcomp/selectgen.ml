@@ -535,10 +535,10 @@ method regs_for tys = Reg.createv tys
 val mutable instr_seq = dummy_instr
 
 method insert_debug _env desc dbg arg res =
-  instr_seq <- instr_cons_debug desc arg res dbg instr_seq
+  instr_seq <- instr_cons desc ~arg ~res ~dbg instr_seq
 
 method insert _env desc arg res =
-  instr_seq <- instr_cons desc arg res instr_seq
+  instr_seq <- instr_cons desc ~arg ~res instr_seq
 
 method extract_onto o =
   let rec extract res i =
@@ -815,8 +815,7 @@ method emit_expr (env:environment) exp =
       let r = join env r1 s1 r2 s2 in
       self#insert env
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
-                             (s2#extract)))
+                  instr_cons (Iop Imove) ~arg:[| Proc.loc_exn_bucket |] ~res:rv s2#extract))
         [||] [||];
       r
 
@@ -1119,7 +1118,7 @@ method emit_tail (env:environment) exp =
       let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert env
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
+                  instr_cons (Iop Imove) ~arg:[| Proc.loc_exn_bucket |] ~res:rv s2))
         [||] [||];
       begin match opt_r1 with
         None -> ()
@@ -1164,8 +1163,9 @@ method emit_fundecl ~future_funcnames f =
     if Polling.requires_prologue_poll ~future_funcnames
          ~fun_name:f.Cmm.fun_name body
       then
-        instr_cons_debug
-          (Iop(Ipoll { return_label = None })) [||] [||] f.Cmm.fun_dbg body
+        instr_cons
+          (Iop (Ipoll { return_label = None }))
+          ~arg:[||] ~res:[||] ~dbg:f.Cmm.fun_dbg body
     else
       body
     in

@@ -22,7 +22,7 @@ open Mach
 let insert_move src dst next =
   if src.loc = dst.loc
   then next
-  else instr_cons (Iop Imove) [|src|] [|dst|] next
+  else instr_cons (Iop Imove) ~arg:[| src |] ~res:[| dst |] next
 
 let insert_moves src dst next =
   let rec insmoves i =
@@ -107,25 +107,27 @@ method private reload i =
       let newarg = self#reload_test tst i.arg in
       insert_moves i.arg newarg
         (instr_cons
-          (Iifthenelse(tst, self#reload ifso, self#reload ifnot)) newarg [||]
-          (self#reload i.next))
+          (Iifthenelse (tst, self#reload ifso, self#reload ifnot))
+          ~arg:newarg ~res:[||] (self#reload i.next))
   | Iswitch(index, cases) ->
       let newarg = self#makeregs i.arg in
       insert_moves i.arg newarg
-        (instr_cons (Iswitch(index, Array.map (self#reload) cases)) newarg [||]
-          (self#reload i.next))
+        (instr_cons
+          (Iswitch (index, Array.map self#reload cases))
+          ~arg:newarg ~res:[||] (self#reload i.next))
   | Icatch(rec_flag, handlers, body) ->
       let new_handlers = List.map
           (fun (nfail, handler) -> nfail, self#reload handler)
           handlers in
       instr_cons
-        (Icatch(rec_flag, new_handlers, self#reload body)) [||] [||]
-        (self#reload i.next)
+        (Icatch (rec_flag, new_handlers, self#reload body))
+        ~arg:[||] ~res:[||] (self#reload i.next)
   | Iexit i ->
-      instr_cons (Iexit i) [||] [||] dummy_instr
+      instr_cons (Iexit i) ~arg:[||] ~res:[||] dummy_instr
   | Itrywith(body, handler) ->
-      instr_cons (Itrywith(self#reload body, self#reload handler)) [||] [||]
-        (self#reload i.next)
+      instr_cons
+        (Itrywith (self#reload body, self#reload handler))
+        ~arg:[||] ~res:[||] (self#reload i.next)
 
 method fundecl f num_stack_slots =
   redo_regalloc <- false;
