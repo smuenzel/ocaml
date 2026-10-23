@@ -534,11 +534,8 @@ method regs_for tys = Reg.createv tys
 
 val mutable instr_seq = dummy_instr
 
-method insert_debug _env desc dbg arg res =
-  instr_seq <- instr_cons_debug desc arg res dbg instr_seq
-
-method insert _env desc arg res =
-  instr_seq <- instr_cons desc arg res instr_seq
+method insert _env desc ?tmp ?dbg arg res =
+  instr_seq <- instr_cons desc ~arg ~res ?tmp ?dbg instr_seq
 
 method extract_onto o =
   let rec extract res i =
@@ -579,12 +576,9 @@ method insert_move_results env loc res stacksize =
    to insert moves before and after the operation, i.e. for two-address
    instructions, or instructions using dedicated registers. *)
 
-method insert_op_debug env op dbg rs rd =
-  self#insert_debug env (Iop op) dbg rs rd;
+method insert_op env op ?tmp ?dbg rs rd =
+  self#insert env (Iop op) ?tmp ?dbg rs rd;
   rd
-
-method insert_op env op rs rd =
-  self#insert_op_debug env op Debuginfo.none rs rd
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
@@ -656,7 +650,7 @@ method emit_expr (env:environment) exp =
       | Some r1 ->
           let rd = [|Proc.loc_exn_bucket|] in
           self#insert env (Iop Imove) r1 rd;
-          self#insert_debug env  (Iraise k) dbg rd [||];
+          self#insert env (Iraise k) ~dbg rd [||];
           None
       end
   | Cop(Copaque, args, dbg) ->
@@ -664,7 +658,7 @@ method emit_expr (env:environment) exp =
         None -> None
       | Some (simple_args, env) ->
          let rs = self#emit_tuple env simple_args in
-         Some (self#insert_op_debug env Iopaque dbg rs rs)
+         Some (self#insert_op env Iopaque ~dbg rs rs)
       end
   | Cop(op, args, dbg) ->
       begin match self#emit_parts_list env args with
@@ -680,7 +674,7 @@ method emit_expr (env:environment) exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments (Reg.typv rarg) in
               let loc_res = Proc.loc_results (Reg.typv rd) in
               self#insert_move_args env rarg loc_arg stack_ofs;
-              self#insert_debug env (Iop new_op) dbg
+              self#insert env (Iop new_op) ~dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
@@ -690,7 +684,7 @@ method emit_expr (env:environment) exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments (Reg.typv r1) in
               let loc_res = Proc.loc_results (Reg.typv rd) in
               self#insert_move_args env r1 loc_arg stack_ofs;
-              self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
+              self#insert env (Iop new_op) ~dbg loc_arg loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
           | Iextcall r ->
@@ -698,8 +692,8 @@ method emit_expr (env:environment) exp =
                 self#emit_extcall_args env r.ty_args new_args in
               let rd = self#regs_for ty in
               let loc_res =
-                self#insert_op_debug env
-                  (Iextcall {r with stack_ofs = stack_ofs}) dbg
+                self#insert_op env
+                  (Iextcall {r with stack_ofs = stack_ofs}) ~dbg
                   loc_arg (Proc.loc_external_results (Reg.typv rd)) in
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
@@ -711,13 +705,13 @@ method emit_expr (env:environment) exp =
               let op =
                 Ialloc { bytes; dbginfo = [{alloc_words; alloc_dbg = dbg}] }
               in
-              self#insert_debug env (Iop op) dbg [||] rd;
+              self#insert env (Iop op) ~dbg [||] rd;
               self#emit_stores env new_args rd;
               Some rd
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
-              Some (self#insert_op_debug env op dbg r1 rd)
+              Some (self#insert_op env op ~dbg r1 rd)
       end
   | Csequence(e1, e2) ->
       begin match self#emit_expr env e1 with
@@ -815,8 +809,7 @@ method emit_expr (env:environment) exp =
       let r = join env r1 s1 r2 s2 in
       self#insert env
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
-                             (s2#extract)))
+                  instr_cons (Iop Imove) ~arg:[| Proc.loc_exn_bucket |] ~res:rv s2#extract))
         [||] [||];
       r
 
@@ -1028,13 +1021,13 @@ method emit_tail (env:environment) exp =
               if stack_ofs = 0 then begin
                 let call = Iop (Itailcall_ind) in
                 self#insert_moves env rarg loc_arg;
-                self#insert_debug env call dbg
+                self#insert env call ~dbg
                             (Array.append [|r1.(0)|] loc_arg) [||];
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results (Reg.typv rd) in
                 self#insert_move_args env rarg loc_arg stack_ofs;
-                self#insert_debug env (Iop new_op) dbg
+                self#insert env (Iop new_op) ~dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert env Ireturn loc_res [||]
@@ -1045,17 +1038,17 @@ method emit_tail (env:environment) exp =
               if stack_ofs = 0 then begin
                 let call = Iop (Itailcall_imm { func; }) in
                 self#insert_moves env r1 loc_arg;
-                self#insert_debug env call dbg loc_arg [||];
+                self#insert env call ~dbg loc_arg [||];
               end else if func = !current_function_name then begin
                 let call = Iop (Itailcall_imm { func; }) in
                 let loc_arg' = Proc.loc_parameters (Reg.typv r1) in
                 self#insert_moves env r1 loc_arg';
-                self#insert_debug env call dbg loc_arg' [||];
+                self#insert env call ~dbg loc_arg' [||];
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results (Reg.typv rd) in
                 self#insert_move_args env r1 loc_arg stack_ofs;
-                self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
+                self#insert env (Iop new_op) ~dbg loc_arg loc_res;
                 self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert env Ireturn loc_res [||]
               end
@@ -1119,7 +1112,7 @@ method emit_tail (env:environment) exp =
       let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert env
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
+                  instr_cons (Iop Imove) ~arg:[| Proc.loc_exn_bucket |] ~res:rv s2))
         [||] [||];
       begin match opt_r1 with
         None -> ()
@@ -1164,8 +1157,9 @@ method emit_fundecl ~future_funcnames f =
     if Polling.requires_prologue_poll ~future_funcnames
          ~fun_name:f.Cmm.fun_name body
       then
-        instr_cons_debug
-          (Iop(Ipoll { return_label = None })) [||] [||] f.Cmm.fun_dbg body
+        instr_cons
+          (Iop (Ipoll { return_label = None }))
+          ~arg:[||] ~res:[||] ~dbg:f.Cmm.fun_dbg body
     else
       body
     in

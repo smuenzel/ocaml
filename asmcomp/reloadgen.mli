@@ -15,7 +15,9 @@
 
 class reload_generic : object
   method reload_operation :
-    Mach.operation -> Reg.t array -> Reg.t array -> Reg.t array * Reg.t array
+    Mach.operation ->
+    arg:Reg.t array -> res:Reg.t array -> tmp:Reg.t array ->
+    Reg.t array * Reg.t array * Reg.t array
   method reload_test : Mach.test -> Reg.t array -> Reg.t array
     (* Can be overridden to reflect instructions that can operate
        directly on stack locations *)

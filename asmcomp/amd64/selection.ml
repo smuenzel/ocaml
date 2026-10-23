@@ -81,38 +81,38 @@ let rax = phys_reg 0
 let rcx = phys_reg 5
 let rdx = phys_reg 4
 
-let pseudoregs_for_operation op arg res =
+let pseudoregs_for_operation op ~arg ~res ~tmp =
   match op with
   (* Two-address binary operations: arg.(0) and res.(0) must be the same *)
     Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor) | Iaddf|Isubf|Imulf|Idivf ->
-      ([|res.(0); arg.(1)|], res)
+      ([|res.(0); arg.(1)|], res, tmp)
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   | Iintop_imm((Iadd|Isub|Imul|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _)
   | Iabsf | Inegf
   | Ispecific(Ibswap (32|64)) ->
-      (res, res)
+      (res, res, tmp)
   (* For xchg, args must be a register allowing access to high 8 bit register
      (rax, rbx, rcx or rdx). Keep it simple, just force the argument in rax. *)
   | Ispecific(Ibswap 16) ->
-      ([| rax |], [| rax |])
+      ([| rax |], [| rax |], tmp)
   (* For imulq, first arg must be in rax, rax is clobbered, and result is in
      rdx. *)
   | Iintop(Imulh) ->
-      ([| rax; arg.(1) |], [| rdx |])
+      ([| rax; arg.(1) |], [| rdx |], tmp)
   | Ispecific(Ifloatarithmem(_,_)) ->
       let arg' = Array.copy arg in
       arg'.(0) <- res.(0);
-      (arg', res)
+      (arg', res, tmp)
   (* For shifts with variable shift count, second arg must be in rcx *)
   | Iintop(Ilsl|Ilsr|Iasr) ->
-      ([|res.(0); rcx|], res)
+      ([|res.(0); rcx|], res, tmp)
   (* For div and mod, first arg must be in rax, rdx is clobbered,
      and result is in rax or rdx respectively.
      Keep it simple, just force second argument in rcx. *)
   | Iintop(Idiv) ->
-      ([| rax; rcx |], [| rax |])
+      ([| rax; rcx |], [| rax |], tmp)
   | Iintop(Imod) ->
-      ([| rax; rcx |], [| rdx |])
+      ([| rax; rcx |], [| rdx |], tmp)
   | Icompf cond ->
       (* We need to temporarily store the result of the comparison in a
          float register, but we don't want to clobber any of the inputs
@@ -125,20 +125,21 @@ let pseudoregs_for_operation op arg res =
       let _,is_swapped = float_cond_and_need_swap cond in
       (if is_swapped then [| arg.(0); treg |] else [| treg; arg.(1) |])
     , [| res.(0); treg |]
+    , tmp
   (* Atomic fetch-and-add: res.(0) holds the increment then receives the old
      value. Tying res.(0) to arg.(1) puts the increment in res.(0) directly, so
      no separate mov is needed in emit. arg.(2) is &caml_num_domains_running. *)
   | Iatomic_fetch_add ->
-      ([| arg.(0); res.(0); arg.(2) |], res)
+      ([| arg.(0); res.(0); arg.(2) |], res, tmp)
   (* See the exchange code in emit.mlp for the registers. *)
   | Iatomic_exchange ->
       let treg = Reg.create Int in
-      ([| arg.(0); res.(0); arg.(2) |], [| res.(0); treg |])
+      ([| arg.(0); res.(0); arg.(2) |], [| res.(0) |], [| treg |])
   (* cmpxchg compares against rax and returns its result there. See the
      compare-and-exchange code in emit.mlp for the registers. *)
   | Iatomic_compare_exchange ->
       let treg = Reg.create Int in
-      ([| arg.(0); rax; arg.(2); arg.(3) |], [| rax; treg |])
+      ([| arg.(0); rax; arg.(2); arg.(3) |], [| rax |], [| treg |])
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
@@ -312,15 +313,15 @@ method select_floatarith commutative regular_op mem_op args =
 
 (* Deal with register constraints *)
 
-method! insert_op_debug env op dbg rs rd =
+method! insert_op env op ?(tmp=[||]) ?dbg rs rd =
   try
-    let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
+    let (rsrc, rdst, rtmp) = pseudoregs_for_operation op ~arg:rs ~res:rd ~tmp in
     self#insert_moves env rs rsrc;
-    self#insert_debug env (Iop op) dbg rsrc rdst;
+    self#insert env (Iop op) ~tmp:rtmp ?dbg rsrc rdst;
     self#insert_moves env rdst rd;
     rd
   with Use_default ->
-    super#insert_op_debug env op dbg rs rd
+    super#insert_op env op ~tmp ?dbg rs rd
 
 end
 

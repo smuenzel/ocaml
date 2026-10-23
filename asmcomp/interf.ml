@@ -63,6 +63,15 @@ let build_graph fundecl =
       Reg.Set.iter (add_interf r1) s
     done in
 
+  let add_interf_array v1 v2 =
+    for i = 0 to Array.length v1 - 1 do
+      let r1 = v1.(i) in
+      for j = 0 to Array.length v2 - 1 do
+        let r2 = v2.(j) in
+        add_interf r1 r2
+      done
+    done in
+
   (* Record interferences between elements of an array *)
   let add_interf_self v =
     for i = 0 to Array.length v - 2 do
@@ -84,6 +93,9 @@ let build_graph fundecl =
   let rec interf i =
     let destroyed = Proc.destroyed_at_oper i.desc in
     if Array.length destroyed > 0 then add_interf_set destroyed i.live;
+    add_interf_array i.tmp i.arg;
+    add_interf_self i.tmp;
+    add_interf_set i.tmp i.live;
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
@@ -93,8 +105,8 @@ let build_graph fundecl =
     | Iop(Itailcall_ind) -> ()
     | Iop(Itailcall_imm _) -> ()
     | Iop(Iatomic_exchange | Iatomic_compare_exchange) ->
-        (* Every result, including the amd64 scratch, must differ from every
-           argument. The address in particular is still needed after the old
+        (* Every result must differ from every argument.
+           The address in particular is still needed after the old
            value has been loaded, and an LL/SC loop re-reads all of them.
            Where a backend deliberately ties a result to an argument they are
            the same register by now, and add_interf ignores that. *)
@@ -169,6 +181,7 @@ let build_graph fundecl =
     assert (weight > 0);
     add_spill_cost weight i.arg;
     add_spill_cost weight i.res;
+    add_spill_cost weight i.tmp;
     match i.desc with
       Iend -> ()
     | Ireturn -> ()

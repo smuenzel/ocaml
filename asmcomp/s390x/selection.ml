@@ -47,15 +47,15 @@ let rec select_addr = function
 
 (* Instruction selection *)
 
-let pseudoregs_for_operation op arg res =
+let pseudoregs_for_operation op arg res tmp =
   match op with
   (* Two-address binary operations: arg.(0) and res.(0) must be the same *)
   | Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor)  | Iaddf|Isubf|Imulf|Idivf ->
-      ([|res.(0); arg.(1)|], res)
+      ([|res.(0); arg.(1)|], res, tmp)
   | Ispecific (Imultaddf | Imultsubf) ->
-    ( [| arg.(0); arg.(1); res.(0) |], [| res.(0) |])
+    ( [| arg.(0); arg.(1); res.(0) |], [| res.(0) |], tmp)
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
-  |  Iintop_imm((Imul|Iand|Ior|Ixor), _) -> (res, res)
+  |  Iintop_imm((Imul|Iand|Ior|Ixor), _) -> (res, res, tmp)
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
@@ -137,15 +137,15 @@ method! effects_of e =
       Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
   | e -> super#effects_of e
 
-method! insert_op_debug env op dbg rs rd =
+method! insert_op env op ?(tmp=[||]) ?dbg rs rd =
   try
-    let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
+    let (rsrc, rdst, rtmp) = pseudoregs_for_operation op rs rd tmp in
     self#insert_moves env rs rsrc;
-    self#insert_debug env (Iop op) dbg rsrc rdst;
+    self#insert env (Iop op) ~tmp:rtmp ?dbg rsrc rdst;
     self#insert_moves env rdst rd;
     rd
   with Use_default ->
-    super#insert_op_debug env op dbg rs rd
+    super#insert_op env op ~tmp ?dbg rs rd
 
 end
 

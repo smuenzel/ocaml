@@ -66,57 +66,63 @@ class reload = object (self)
 
 inherit Reloadgen.reload_generic as super
 
-method! reload_operation op arg res =
+method! reload_operation op ~arg ~res ~tmp =
   match op with
   | Iintop(Iadd|Isub|Iand|Ior|Ixor|Icheckbound) ->
+      let tmp = self#makeregs tmp in
       (* One of the two arguments can reside in the stack, but not both *)
       if stackp arg.(0) && stackp arg.(1)
-      then ([|arg.(0); self#makereg arg.(1)|], res)
-      else (arg, res)
+      then ([|arg.(0); self#makereg arg.(1)|], res, tmp)
+      else (arg, res, tmp)
   | Iintop(Icomp _) ->
+      let tmp = self#makeregs tmp in
       (* The result must be a register (PR#11803) *)
       let res = self#makeregs res in
       (* One of the two arguments can reside in the stack, but not both *)
       if stackp arg.(0) && stackp arg.(1)
-      then ([|arg.(0); self#makereg arg.(1)|], res)
-      else (arg, res)
+      then ([|arg.(0); self#makereg arg.(1)|], res, tmp)
+      else (arg, res, tmp)
   | Iintop_imm(Iadd, _) when arg.(0).loc <> res.(0).loc ->
       (* This add will be turned into a lea; args and results must be
          in registers *)
-      super#reload_operation op arg res
+      super#reload_operation op ~arg ~res ~tmp
   | Iintop_imm(Imul, _) ->
+      let tmp = self#makeregs tmp in
       (* The result (= the argument) must be a register (#10626) *)
       if stackp arg.(0)
-      then (let r = self#makereg arg.(0) in ([|r|], [|r|]))
-      else (arg, res)
+      then (let r = self#makereg arg.(0) in ([|r|], [|r|], tmp))
+      else (arg, res, tmp)
   | Iintop_imm(Icomp _, _) ->
       (* The result must be in a register (PR#11803) *)
-      (arg, self#makeregs res)
+      (arg, self#makeregs res, self#makeregs tmp)
   | Iintop(Imulh | Idiv | Imod | Ilsl | Ilsr | Iasr)
   | Iintop_imm(_, _) ->
       (* The argument(s) and results can be either in register or on stack *)
       (* Note: Imulh, Idiv, Imod: arg(0) and res(0) already forced in regs
                Ilsl, Ilsr, Iasr: arg(1) already forced in regs *)
-      (arg, res)
+      (arg, res, self#makeregs tmp)
   | Iintop(Imul) | Iaddf | Isubf | Imulf | Idivf ->
       (* First argument (= result) must be in register, second arg
          can reside in the stack *)
+      let tmp = self#makeregs tmp in
       if stackp arg.(0)
-      then (let r = self#makereg arg.(0) in ([|r; arg.(1)|], [|r|]))
-      else (arg, res)
+      then (let r = self#makereg arg.(0) in ([|r; arg.(1)|], [|r|], tmp))
+      else (arg, res, tmp)
   | Ifloatofint | Iintoffloat ->
       (* Result must be in register, but argument can be on stack *)
-      (arg, (if stackp res.(0) then [| self#makereg res.(0) |] else res))
+      (arg,
+       (if stackp res.(0) then [| self#makereg res.(0) |] else res),
+       self#makeregs tmp)
   | Iconst_int n ->
       if n <= 0x7FFFFFFFn && n >= -0x80000000n
-      then (arg, res)
-      else super#reload_operation op arg res
+      then (arg, res, self#makeregs tmp)
+      else super#reload_operation op ~arg ~res ~tmp
   | Iconst_symbol _ ->
       if !Clflags.pic_code || !Clflags.dlcode || Arch.win64
-      then super#reload_operation op arg res
-      else (arg, res)
+      then super#reload_operation op ~arg ~res ~tmp
+      else (arg, res, self#makeregs tmp)
   | _ -> (* Other operations: all args and results in registers *)
-      super#reload_operation op arg res
+      super#reload_operation op ~arg ~res ~tmp
 
 method! reload_test tst arg =
   match tst with

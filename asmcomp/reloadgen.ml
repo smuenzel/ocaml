@@ -22,7 +22,7 @@ open Mach
 let insert_move src dst next =
   if src.loc = dst.loc
   then next
-  else instr_cons (Iop Imove) [|src|] [|dst|] next
+  else instr_cons (Iop Imove) ~arg:[| src |] ~res:[| dst |] next
 
 let insert_moves src dst next =
   let rec insmoves i =
@@ -57,25 +57,27 @@ method private makereg1 rv =
   newv.(0) <- self#makereg rv.(0);
   newv
 
-method reload_operation op arg res =
+method reload_operation op ~arg ~res ~tmp =
   (* By default, assume that arguments and results must reside
      in hardware registers. For moves, allow one arg or one
      res to be stack-allocated, but do something for
      stack-to-stack moves *)
   match op with
     Imove | Ireload | Ispill ->
+      assert (tmp = [||]);
       begin match arg.(0), res.(0) with
         {loc = Stack s1}, {loc = Stack s2} when s1 <> s2 ->
-          ([| self#makereg arg.(0) |], res)
+          ([| self#makereg arg.(0) |], res, [||])
       | _ ->
-          (arg, res)
+          (arg, res, [||])
       end
   | Iopaque ->
+      assert (tmp = [||]);
       (* arg = result, can be on stack or register *)
       assert (arg.(0).stamp = res.(0).stamp);
-      (arg, res)
+      (arg, res, [||])
   | _ ->
-      (self#makeregs arg, self#makeregs res)
+      (self#makeregs arg, self#makeregs res, self#makeregs tmp)
 
 method reload_test _tst args =
   self#makeregs args
@@ -98,34 +100,37 @@ method private reload i =
       insert_moves i.arg newarg
         {i with arg = newarg; next = self#reload i.next}
   | Iop op ->
-      let (newarg, newres) = self#reload_operation op i.arg i.res in
+      let (newarg, newres, newtmp) =
+        self#reload_operation op ~arg:i.arg ~res:i.res ~tmp:i.tmp in
       insert_moves i.arg newarg
-        {i with arg = newarg; res = newres; next =
+        {i with arg = newarg; res = newres; tmp = newtmp; next =
           (insert_moves newres i.res
             (self#reload i.next))}
   | Iifthenelse(tst, ifso, ifnot) ->
       let newarg = self#reload_test tst i.arg in
       insert_moves i.arg newarg
         (instr_cons
-          (Iifthenelse(tst, self#reload ifso, self#reload ifnot)) newarg [||]
-          (self#reload i.next))
+          (Iifthenelse (tst, self#reload ifso, self#reload ifnot))
+          ~arg:newarg ~res:[||] (self#reload i.next))
   | Iswitch(index, cases) ->
       let newarg = self#makeregs i.arg in
       insert_moves i.arg newarg
-        (instr_cons (Iswitch(index, Array.map (self#reload) cases)) newarg [||]
-          (self#reload i.next))
+        (instr_cons
+          (Iswitch (index, Array.map self#reload cases))
+          ~arg:newarg ~res:[||] (self#reload i.next))
   | Icatch(rec_flag, handlers, body) ->
       let new_handlers = List.map
           (fun (nfail, handler) -> nfail, self#reload handler)
           handlers in
       instr_cons
-        (Icatch(rec_flag, new_handlers, self#reload body)) [||] [||]
-        (self#reload i.next)
+        (Icatch (rec_flag, new_handlers, self#reload body))
+        ~arg:[||] ~res:[||] (self#reload i.next)
   | Iexit i ->
-      instr_cons (Iexit i) [||] [||] dummy_instr
+      instr_cons (Iexit i) ~arg:[||] ~res:[||] dummy_instr
   | Itrywith(body, handler) ->
-      instr_cons (Itrywith(self#reload body, self#reload handler)) [||] [||]
-        (self#reload i.next)
+      instr_cons
+        (Itrywith (self#reload body, self#reload handler))
+        ~arg:[||] ~res:[||] (self#reload i.next)
 
 method fundecl f num_stack_slots =
   redo_regalloc <- false;

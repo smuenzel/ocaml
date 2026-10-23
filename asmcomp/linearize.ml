@@ -19,7 +19,7 @@ open Linear
 (* Cons a simple instruction (arg, res, live empty) *)
 
 let cons_instr d n =
-  { desc = d; next = n; arg = [||]; res = [||];
+  { desc = d; next = n; arg = [||]; res = [||]; tmp = [||];
     dbg = Debuginfo.none; live = Reg.Set.empty }
 
 (* Build an instruction with arg, res, dbg, live taken from
@@ -27,7 +27,7 @@ let cons_instr d n =
 
 let copy_instr d i n =
   { desc = d; next = n;
-    arg = i.Mach.arg; res = i.Mach.res;
+    arg = i.Mach.arg; res = i.Mach.res; tmp = i.Mach.tmp;
     dbg = i.Mach.dbg; live = i.Mach.live }
 
 (*
@@ -291,6 +291,7 @@ let add_prologue first_insn prologue_required =
       next = first_insn;
       arg = [| |];
       res = [| |];
+      tmp = [| |];
       dbg = first_insn.dbg;
       live = first_insn.live;
     }
@@ -324,6 +325,7 @@ let add_prologue first_insn prologue_required =
         next = tailrec_entry_point;
         arg = [| |];
         res = [| |];
+        tmp = [| |];
         dbg = tailrec_entry_point.dbg;
         live = Reg.Set.empty;  (* will not be used *)
       }
