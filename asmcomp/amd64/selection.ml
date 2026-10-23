@@ -312,15 +312,15 @@ method select_floatarith commutative regular_op mem_op args =
 
 (* Deal with register constraints *)
 
-method! insert_op_debug env op dbg rs rd =
+method! insert_op env op ?tmp ?dbg rs rd =
   try
     let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
     self#insert_moves env rs rsrc;
-    self#insert_debug env (Iop op) dbg rsrc rdst;
+    self#insert env (Iop op) ?tmp ?dbg rsrc rdst;
     self#insert_moves env rdst rd;
     rd
   with Use_default ->
-    super#insert_op_debug env op dbg rs rd
+    super#insert_op env op ?tmp ?dbg rs rd
 
 end
 
