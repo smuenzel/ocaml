@@ -27,23 +27,26 @@ inherit Reloadgen.reload_generic as super
    temporary result register is the same as the appropriate
    argument register. *)
 
-method! reload_operation op arg res =
+method! reload_operation op ~arg ~res ~tmp =
   match op with
   (* Two-address binary operations: arg.(0) and res.(0) must be the same *)
   | Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor)  | Iaddf|Isubf|Imulf|Idivf ->
+      let tmp = self#makeregs tmp in
       let res = self#makereg res.(0) in
-      ([|res; self#makereg arg.(1)|], [|res|])
+      ([|res; self#makereg arg.(1)|], [|res|], tmp)
   (* Three-address ternary operations: arg.(2) and res.(0) must be the same *)
   | Ispecific(Imultaddf|Imultsubf) ->
+      let tmp = self#makeregs tmp in
       let res = self#makereg res.(0) in
-      ([|self#makereg arg.(0); self#makereg arg.(1); res|], [|res|])
+      ([|self#makereg arg.(0); self#makereg arg.(1); res|], [|res|], tmp)
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   |  Iintop_imm((Imul|Iand|Ior|Ixor), _) ->
+      let tmp = self#makeregs tmp in
       let res = self#makereg res.(0) in
-      ([|res|], [|res|])
+      ([|res|], [|res|], tmp)
   (* Other instructions are regular *)
   | _ ->
-      super#reload_operation op arg res
+      super#reload_operation op ~arg ~res ~tmp
 
 end
 

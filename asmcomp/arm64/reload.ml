@@ -22,18 +22,19 @@ class reload = object (self)
 
 inherit Reloadgen.reload_generic as super
 
-method! reload_operation op arg res =
+method! reload_operation op ~arg ~res ~tmp =
   match op with
   | Ispecific Imove32 ->
+      let tmp = self#makeregs tmp in
       (* Like Imove: argument or result can be on stack but not both *)
       begin match arg.(0), res.(0) with
       | {loc = Stack s1}, {loc = Stack s2} when s1 <> s2 ->
-          ([| self#makereg arg.(0) |], res)
+          ([| self#makereg arg.(0) |], res, tmp)
       | _ ->
-          (arg, res)
+          (arg, res, tmp)
       end
    | _ ->
-      super#reload_operation op arg res
+      super#reload_operation op ~arg ~res ~tmp
 
 end
 
