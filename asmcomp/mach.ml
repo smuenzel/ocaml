@@ -127,6 +127,11 @@ let instr_cons desc ~arg ~res ?(tmp=[||]) ?(dbg = Debuginfo.none) next =
   { desc; next; arg; res; tmp; dbg; live = Reg.Set.empty
   }
 
+let instr_recons ?desc i next =
+  match desc with
+  | None -> { i with next; live = Reg.Set.empty }
+  | Some desc -> { i with desc; next; live = Reg.Set.empty }
+
 let rec instr_iter f i =
   match i.desc with
     Iend -> ()

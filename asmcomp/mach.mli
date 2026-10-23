@@ -78,7 +78,8 @@ type instruction =
     next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
-    tmp : Reg.t array; (** temporary, cannot be the same as any [arg] *)
+    tmp : Reg.t array; (** temporary, cannot be the same as any [arg],
+                           but can be the same as [res] *)
     dbg: Debuginfo.t;
     mutable live: Reg.Set.t
   }
@@ -109,6 +110,8 @@ val end_instr: unit -> instruction
 val instr_cons:
   instruction_desc -> arg:Reg.t array -> res:Reg.t array -> ?tmp:Reg.t array ->
   ?dbg:Debuginfo.t -> instruction -> instruction
+val instr_recons:
+  ?desc:instruction_desc -> instruction -> instruction -> instruction
 val instr_iter: (instruction -> unit) -> instruction -> unit
 
 val operation_is_pure : operation -> bool

@@ -22,6 +22,7 @@ type instruction =
     mutable next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
+    tmp: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t }
 
@@ -82,11 +83,12 @@ let rec end_instr =
     next = end_instr;
     arg = [||];
     res = [||];
+    tmp = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty }
 
 (* Cons an instruction (live, debug empty) *)
 
-let instr_cons d a r n =
-  { desc = d; next = n; arg = a; res = r;
+let instr_cons desc ~arg ~res ~tmp next =
+  { desc; next; arg; res; tmp;
     dbg = Debuginfo.none; live = Reg.Set.empty }

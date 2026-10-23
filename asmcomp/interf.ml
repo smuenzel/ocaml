@@ -94,6 +94,8 @@ let build_graph fundecl =
     let destroyed = Proc.destroyed_at_oper i.desc in
     if Array.length destroyed > 0 then add_interf_set destroyed i.live;
     add_interf_array i.tmp i.arg;
+    add_interf_self i.tmp;
+    add_interf_set i.tmp i.live;
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
@@ -179,6 +181,7 @@ let build_graph fundecl =
     assert (weight > 0);
     add_spill_cost weight i.arg;
     add_spill_cost weight i.res;
+    add_spill_cost weight i.tmp;
     match i.desc with
       Iend -> ()
     | Ireturn -> ()

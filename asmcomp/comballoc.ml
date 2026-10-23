@@ -68,11 +68,10 @@ let rec combine i allocstate =
   | Iop(Icall_ind | Icall_imm _ | Iextcall _ |
         Itailcall_ind | Itailcall_imm _ | Ipoll _) ->
       let newnext = combine_restart i.next in
-      (instr_cons i.desc ~arg:i.arg ~res:i.res ~dbg:i.dbg newnext,
-       allocstate)
+      (instr_recons i newnext, allocstate)
   | Iop _ ->
       let (newnext, s') = combine i.next allocstate in
-      (instr_cons i.desc ~arg:i.arg ~res:i.res ~dbg:i.dbg newnext, s')
+      (instr_recons i newnext, s')
   | Iifthenelse(test, ifso, ifnot) ->
       let newifso = combine_restart ifso in
       let newifnot = combine_restart ifnot in

@@ -136,12 +136,13 @@ let rec rename i sub =
           let newr = Reg.clone i.res.(0) in
           let (new_next, sub_next) =
             rename i.next (Some(Reg.Map.add oldr newr s)) in
-          (instr_cons i.desc ~arg:i.arg ~res:[| newr |] new_next,
+          (instr_cons i.desc ~arg:i.arg ~res:[| newr |] ~tmp:i.tmp ~dbg:i.dbg new_next,
            sub_next)
       end
   | Iop _ ->
       let (new_next, sub_next) = rename i.next sub in
       (instr_cons i.desc ~arg:(subst_regs i.arg sub) ~res:(subst_regs i.res sub)
+         ~tmp:(subst_regs i.tmp sub)
          ~dbg:i.dbg new_next,
        sub_next)
   | Iifthenelse(tst, ifso, ifnot) ->
@@ -179,7 +180,7 @@ let rec rename i sub =
       let (new_next, sub_next) = rename i.next merged_subst in
       let new_handlers = List.map2 (fun (nfail, _) (handler, _) ->
           (nfail, handler)) handlers res in
-      (instr_cons (Icatch (rec_flag, new_handlers, new_body)) ~arg:[||] ~res:[||] new_next,
+      (instr_recons ~desc:(Icatch (rec_flag, new_handlers, new_body)) i new_next,
        sub_next)
   | Iexit nfail ->
       let r = find_exit_subst nfail in
@@ -190,7 +191,7 @@ let rec rename i sub =
       let (new_handler, sub_handler) = rename handler sub in
       let (new_next, sub_next) =
         rename i.next (merge_substs sub_body sub_handler i.next) in
-      (instr_cons (Itrywith (new_body, new_handler)) ~arg:[||] ~res:[||] new_next,
+      (instr_recons ~desc:(Itrywith (new_body, new_handler)) i new_next,
        sub_next)
   | Iraise k ->
       (instr_cons (Iraise k) ~arg:(subst_regs i.arg sub) ~res:[||] ~dbg:i.dbg i.next,

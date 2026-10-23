@@ -125,9 +125,10 @@ class virtual selector_generic : object
   method extract_onto : Mach.instruction -> Mach.instruction
   method extract : Mach.instruction
   method insert :
-    environment -> Mach.instruction_desc -> Reg.t array -> Reg.t array -> unit
+    environment -> Mach.instruction_desc -> ?tmp:Reg.t array ->
+    Reg.t array -> Reg.t array -> unit
   method insert_debug :
-    environment -> Mach.instruction_desc -> Debuginfo.t ->
+    environment -> Mach.instruction_desc -> Debuginfo.t -> ?tmp:Reg.t array ->
       Reg.t array -> Reg.t array -> unit
   method insert_move : environment -> Reg.t -> Reg.t -> unit
   method insert_move_args :
