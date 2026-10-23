@@ -177,8 +177,9 @@ let rec reload (t : reload_data) i before =
   | Iop op ->
       let new_before =
         (* Quick check to see if the register pressure is below the maximum *)
+        (* CR smuenzel: cardinal is not O(1)*)
         if !Clflags.use_linscan ||
-           (Reg.Set.cardinal i.live + Array.length i.res <=
+           (Reg.Set.cardinal i.live + Array.length i.res + Array.length i.tmp <=
             Proc.safe_register_pressure op)
         then before
         else add_superpressure_regs t op i.live i.res before in
