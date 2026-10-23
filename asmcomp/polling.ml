@@ -188,7 +188,7 @@ let potentially_recursive_tailcall ~future_funcnames funbody =
 *)
 
 let add_poll i =
-  Mach.instr_cons_debug (Iop (Ipoll { return_label = None })) [||] [||] i.dbg i
+  Mach.instr_cons (Iop (Ipoll { return_label = None })) ~arg:[||] ~res:[||] ~dbg:i.dbg i
 
 let instr_body handler_safe i =
   let add_unsafe_handler ube (k, _) =
