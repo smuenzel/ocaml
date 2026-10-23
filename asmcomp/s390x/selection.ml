@@ -137,15 +137,15 @@ method! effects_of e =
       Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
   | e -> super#effects_of e
 
-method! insert_op_debug env op dbg rs rd =
+method! insert_op ?dbg env op ~arg:rs ~res:rd =
   try
     let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
     self#insert_moves env rs rsrc;
-    self#insert_debug env (Iop op) dbg rsrc rdst;
+    self#insert env (Iop op) ?dbg ~arg:rsrc ~res:rdst;
     self#insert_moves env rdst rd;
     rd
   with Use_default ->
-    super#insert_op_debug env op dbg rs rd
+    super#insert_op env op ?dbg ~arg:rs ~res:rd
 
 end
 

@@ -120,13 +120,19 @@ let end_instr () =
     live = Reg.Set.empty
   }
 
-let instr_cons d a r n =
-  { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty
+let instr_cons ?(dbg=Debuginfo.none) desc ~arg ~res next =
+  { desc; next; arg; res;
+    dbg; live = Reg.Set.empty
   }
 
-let instr_cons_debug d a r dbg n =
-  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty }
+let instr_recons ?dbg ?desc ?arg ?res i next =
+  { desc = Option.value ~default:i.desc desc;
+    next = next;
+    arg = Option.value ~default:i.arg arg;
+    res = Option.value ~default:i.res res;
+    dbg = Option.value ~default:i.dbg dbg;
+    live = Reg.Set.empty
+  }
 
 let rec instr_iter f i =
   match i.desc with
