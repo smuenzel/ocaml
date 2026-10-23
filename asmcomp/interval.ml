@@ -100,6 +100,7 @@ let update_interval_position_by_set intervals regs pos kind =
 
 let update_interval_position_by_instr intervals instr pos =
   update_interval_position_by_array intervals instr.arg pos Argument;
+  update_interval_position_by_array intervals instr.tmp pos Argument;
   update_interval_position_by_array intervals instr.res pos Result;
   update_interval_position_by_set intervals instr.live pos Live
 

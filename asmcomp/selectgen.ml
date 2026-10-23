@@ -534,11 +534,11 @@ method regs_for tys = Reg.createv tys
 
 val mutable instr_seq = dummy_instr
 
-method insert_debug _env desc dbg arg res =
-  instr_seq <- instr_cons desc ~arg ~res ~dbg instr_seq
+method insert_debug _env desc dbg ?tmp arg res =
+  instr_seq <- instr_cons desc ~arg ~res ?tmp ~dbg instr_seq
 
-method insert _env desc arg res =
-  instr_seq <- instr_cons desc ~arg ~res instr_seq
+method insert _env desc ?tmp arg res =
+  instr_seq <- instr_cons desc ~arg ~res ?tmp instr_seq
 
 method extract_onto o =
   let rec extract res i =
