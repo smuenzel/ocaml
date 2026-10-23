@@ -104,8 +104,9 @@ let test tst ppf arg =
   | Ieventest -> fprintf ppf "%a & 1 == 0" reg arg.(0)
   | Ioddtest -> fprintf ppf "%a & 1 == 1" reg arg.(0)
 
-let operation op arg ppf res =
+let operation op ~arg ppf ~res ~tmp =
   if Array.length res > 0 then fprintf ppf "%a := " regs res;
+  if Array.length tmp > 0 then fprintf ppf "(tmp %a) " regs tmp;
   match op with
   | Imove -> regs ppf arg
   | Ispill -> fprintf ppf "%a (spill)" regs arg
@@ -180,7 +181,7 @@ let rec instr ppf i =
   begin match i.desc with
   | Iend -> ()
   | Iop op ->
-      operation op i.arg ppf i.res
+      operation op ~arg:i.arg ppf ~res:i.res ~tmp:i.tmp
   | Ireturn ->
       fprintf ppf "return %a" regs i.arg
   | Iifthenelse(tst, ifso, ifnot) ->

@@ -93,9 +93,10 @@ let record_use t regv =
 (* Check if the register pressure overflows the maximum pressure allowed
    at that point. If so, spill enough registers to lower the pressure. *)
 
-let add_superpressure_regs t op live_regs res_regs spilled =
+let add_superpressure_regs t op live_regs ~res_regs ~tmp_regs spilled =
   let max_pressure = Proc.max_register_pressure op in
   let regs = Reg.add_set_array live_regs res_regs in
+  let regs = Reg.add_set_array regs tmp_regs in
   (* Compute the pressure in each register class *)
   let pressure = Array.make Proc.num_register_classes 0 in
   Reg.Set.iter
@@ -182,7 +183,9 @@ let rec reload (t : reload_data) i before =
            (Reg.Set.cardinal i.live + Array.length i.res + Array.length i.tmp <=
             Proc.safe_register_pressure op)
         then before
-        else add_superpressure_regs t op i.live i.res before in
+        else add_superpressure_regs
+            t op i.live ~res_regs:i.res ~tmp_regs:i.tmp before
+      in
       let after =
         Reg.diff_set_array (Reg.diff_set_array new_before i.arg) i.res in
       let (new_next, finally) = reload t i.next after in
