@@ -309,6 +309,139 @@ let add_spills t regset i =
     (fun r i -> instr_cons (Iop Ispill) [|r|] [|spill_reg t r|] i)
     regset i
 
+let rec rev_instr acc i =
+  match i.desc with
+  | Iend -> i, acc
+  | _ -> rev_spill (i :: acc) i.next
+
+let rev_spill (t : spill_data) i finally =
+  let rec loop t ~new_next ~after = function
+    | [] -> (new_next, after)
+    | i :: prev_i ->
+        match i.desc with
+        | Iend -> assert false
+        | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+            loop t
+              ~new_next:i
+              ~after:Reg.Set.empty
+              prev_i
+        | Iop Ireload ->
+            let before1 = Reg.diff_set_array after i.res in
+            loop t
+              ~new_next:(instr_cons i.desc i.arg i.res new_next)
+              ~after:(Reg.add_set_array before1 i.res)
+              prev_i
+        | Iop op ->
+            let before1 = Reg.diff_set_array after i.res in
+            let before =
+              if operation_can_raise op
+              then Reg.Set.union before1 t.spill_at_raise
+              else before1 in
+            let new_next =
+              instr_cons_debug i.desc i.arg i.res i.dbg
+                (add_spills
+                   t.spill_env (Reg.inter_set_array after i.res) new_next),
+              before in
+            loop t
+              ~new_next
+              ~after:before
+              prev_i
+        | Iifthenelse(test, ifso, ifnot) ->
+            let at_join = after in
+            let (new_ifso, before_ifso) = rev_spill t ifso at_join in
+            let (new_ifnot, before_ifnot) = rev_spill t ifnot at_join in
+            if
+              t.inside_arm || t.inside_catch
+            then
+              loop t
+                ~new_next:(instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
+                             i.arg i.res new_next)
+                ~after:(Reg.Set.union before_ifso before_ifnot)
+            else begin
+              let destroyed = List.assq i t.destroyed_at_fork in
+              let spill_ifso_branch =
+                Reg.Set.diff (Reg.Set.diff before_ifso before_ifnot) destroyed
+              and spill_ifnot_branch =
+                Reg.Set.diff (Reg.Set.diff before_ifnot before_ifso) destroyed in
+              loop t
+                ~new_next:(instr_cons
+                             (Iifthenelse(test,
+                                          add_spills t.spill_env spill_ifso_branch new_ifso,
+                                          add_spills t.spill_env spill_ifnot_branch new_ifnot))
+                             i.arg i.res new_next)
+                ~after:
+                  (Reg.Set.diff (Reg.Set.diff (Reg.Set.union before_ifso before_ifnot)
+                                   spill_ifso_branch)
+                     spill_ifnot_branch)
+            end
+        | Iswitch(index, cases) ->
+            let at_join = after in
+            let saved_inside_arm = t.inside_arm in
+            t.inside_arm <- true ;
+            let before = ref Reg.Set.empty in
+            let new_cases =
+              Array.map
+                (fun c ->
+                   let (new_c, before_c) = rev_spill t c at_join in
+                   before := Reg.Set.union !before before_c;
+                   new_c)
+                cases in
+            t.inside_arm <- saved_inside_arm ;
+            loop t
+              ~next_next:(instr_cons (Iswitch(index, new_cases)) i.arg i.res new_next)
+              ~after:!before
+        | Icatch(rec_flag, handlers, body) ->
+            let at_join = after in
+            let saved_inside_catch = t.inside_catch in
+            t.inside_catch <- true ;
+            let rec fixpoint () =
+              let res =
+                List.map (fun (_, handler) -> rev_spill t handler at_join) handlers in
+              let update changed (k, _handler) (_new_handler, before_handler) =
+                if Reg.Set.equal before_handler (get_spill_at_exit t k)
+                then changed
+                else (set_spill_at_exit t k before_handler; true) in
+              let changed =
+                List.fold_left2 update false handlers res in
+              if rec_flag = Cmm.Recursive && changed
+              then fixpoint ()
+              else res
+            in
+            let res = fixpoint () in
+            t.inside_catch <- saved_inside_catch ;
+            let (new_body, before) = rev_spill t body at_join in
+            let new_handlers = List.map2
+                (fun (nfail, _) (new_handler, _) -> (nfail, new_handler))
+                handlers res in
+            loop t
+              ~new_next:(instr_cons (Icatch(rec_flag, new_handlers, new_body))
+                           i.arg i.res new_next)
+              ~after:before
+        | Iexit nfail ->
+            loop t
+              ~new_next:i
+              ~after:(get_spill_at_exit t nfail)
+        | Itrywith(body, handler) ->
+            let at_join = after in
+            let (new_handler, before_handler) = rev_spill t handler at_join in
+            let saved_spill_at_raise = t.spill_at_raise in
+            t.spill_at_raise <- before_handler;
+            let (new_body, before_body) = spill t body at_join in
+            t.spill_at_raise <- saved_spill_at_raise;
+            loop t
+              ~new_next:(instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next)
+              ~after:before_body
+        | Iraise _ ->
+            loop t
+              ~new_next:i
+              ~after:t.spill_at_raise
+  in
+  let new_next, prev_i = rev_instr [] i in
+  loop t ~new_next ~after:finally ~prev_i
+
+let spill = rev_spill
+
+(* {[
 let rec spill (t : spill_data) i finally =
   match i.desc with
     Iend ->
@@ -409,6 +542,7 @@ let rec spill (t : spill_data) i finally =
        before_body)
   | Iraise _ ->
       (i, t.spill_at_raise)
+   ]}*)
 
 (* Entry point *)
 
