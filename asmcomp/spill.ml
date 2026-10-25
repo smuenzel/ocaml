@@ -158,22 +158,21 @@ let get_reload_at_exit t k =
 let set_reload_at_exit t k s =
   Hashtbl.replace t.reload_at_exit k s
 
-let rec reload (t : reload_data) i before =
+let rec reload_rev t acc i before =
   t.current_date <- succ t.current_date;
   record_use t i.arg;
   record_use t i.res;
   match i.desc with
-    Iend ->
-      (i, before)
+  | Iend -> before, (i, before) :: acc
+  | Iexit nfail ->
+      set_reload_at_exit t nfail
+                         (Reg.Set.union (get_reload_at_exit t nfail) before);
+      Reg.Set.empty, (i, Reg.Set.empty) :: acc
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
-      (add_reloads t.spill_env (Reg.inter_set_array before i.arg) i,
-       Reg.Set.empty)
+      reload_rev t ((i, before) :: acc) i.next Reg.Set.empty
   | Iop(Icall_ind | Icall_imm _ | Iextcall { alloc = true; }) ->
       (* All regs live across must be spilled *)
-      let (new_next, finally) = reload t i.next i.live in
-      (add_reloads t.spill_env (Reg.inter_set_array before i.arg)
-                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
-       finally)
+      reload_rev t ((i, before) :: acc) i.next i.live
   | Iop op ->
       let new_before =
         (* Quick check to see if the register pressure is below the maximum *)
@@ -184,10 +183,7 @@ let rec reload (t : reload_data) i before =
         else add_superpressure_regs t op i.live i.res before in
       let after =
         Reg.diff_set_array (Reg.diff_set_array new_before i.arg) i.res in
-      let (new_next, finally) = reload t i.next after in
-      (add_reloads t.spill_env (Reg.inter_set_array new_before i.arg)
-                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
-       finally)
+      reload_rev t ((i, new_before) :: acc) i.next after
   | Iifthenelse(test, ifso, ifnot) ->
       let at_fork = Reg.diff_set_array before i.arg in
       let date_fork = t.current_date in
@@ -196,14 +192,8 @@ let rec reload (t : reload_data) i before =
       t.current_date <- date_fork;
       let (new_ifnot, after_ifnot) = reload t ifnot at_fork in
       t.current_date <- Int.max date_ifso t.current_date;
-      let (new_next, finally) =
-        reload t i.next (Reg.Set.union after_ifso after_ifnot) in
-      let new_i =
-        instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
-        i.arg i.res new_next in
-      t.destroyed_at_fork <- (new_i, at_fork) :: t.destroyed_at_fork;
-      (add_reloads t.spill_env (Reg.inter_set_array before i.arg) new_i,
-       finally)
+      let i = instr_cons_debug (Iifthenelse(test, new_ifso, new_ifnot)) i.arg i.res i.dbg i.next in
+      reload_rev t ((i, before) :: acc) i.next (Reg.Set.union after_ifso after_ifnot)
   | Iswitch(index, cases) ->
       let at_fork = Reg.diff_set_array before i.arg in
       let date_fork = t.current_date in
@@ -219,11 +209,8 @@ let rec reload (t : reload_data) i before =
             new_c)
           cases in
       t.current_date <- !date_join;
-      let (new_next, finally) = reload t i.next !after_cases in
-      (add_reloads t.spill_env (Reg.inter_set_array before i.arg)
-                   (instr_cons (Iswitch(index, new_cases))
-                               i.arg i.res new_next),
-       finally)
+      let i = instr_cons (Iswitch(index, new_cases)) i.arg i.res i.next in
+      reload_rev t ((i, before) :: acc) i.next !after_cases
   | Icatch(rec_flag, handlers, body) ->
       let (new_body, after_body) = reload t body before in
       let rec fixpoint () =
@@ -254,17 +241,11 @@ let rec reload (t : reload_data) i before =
       let union = List.fold_left
           (fun acc (_, after_handler) -> Reg.Set.union acc after_handler)
           after_body res in
-      let (new_next, finally) = reload t i.next union in
       let new_handlers = List.map2
           (fun (nfail, _) (new_handler, _) -> nfail, new_handler)
           handlers res in
-      (instr_cons
-         (Icatch(rec_flag, new_handlers, new_body)) i.arg i.res new_next,
-       finally)
-  | Iexit nfail ->
-      set_reload_at_exit t nfail
-                         (Reg.Set.union (get_reload_at_exit t nfail) before);
-      (i, Reg.Set.empty)
+      let i = instr_cons (Icatch(rec_flag, new_handlers, new_body)) i.arg i.res i.next in
+      reload_rev t ((i, before) :: acc) i.next union
   | Itrywith(body, handler) ->
       let (new_body, after_body) = reload t body before in
       (* All registers live at the beginning of the handler are destroyed,
@@ -273,13 +254,47 @@ let rec reload (t : reload_data) i before =
         Reg.Set.remove Proc.loc_exn_bucket
                        (Reg.add_set_array handler.live handler.arg) in
       let (new_handler, after_handler) = reload t handler before_handler in
-      let (new_next, finally) =
-        reload t i.next (Reg.Set.union after_body after_handler) in
-      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
-       finally)
+      let i = instr_cons_debug (Itrywith(new_body, new_handler)) i.arg i.res i.dbg i.next in
+      reload_rev t ((i, before) :: acc) i.next (Reg.Set.union after_body after_handler)
   | Iraise _ ->
-      (add_reloads
-         t.spill_env (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
+      Reg.Set.empty, (i, before) :: acc
+and reload_rev_stage2 (t : reload_data) ~new_next = function
+  | [] -> new_next
+  | (i, before)::rest ->
+      match i.desc with
+      | Iend | Iexit _ ->
+          reload_rev_stage2 t rest ~new_next:i
+      | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+          reload_rev_stage2 t rest
+            ~new_next:(add_reloads t.spill_env (Reg.inter_set_array before i.arg)
+                         (instr_cons_debug i.desc i.arg i.res i.dbg new_next))
+      | Iop _ ->
+          reload_rev_stage2 t rest
+            ~new_next:(add_reloads t.spill_env (Reg.inter_set_array before i.arg)
+                         (instr_cons_debug i.desc i.arg i.res i.dbg new_next))
+      | Iifthenelse _ ->
+          let new_i = instr_cons_debug i.desc i.arg i.res i.dbg new_next in
+          let at_fork = Reg.diff_set_array before i.arg in
+          t.destroyed_at_fork <- (new_i, at_fork) :: t.destroyed_at_fork;
+          reload_rev_stage2 t rest
+            ~new_next:(add_reloads t.spill_env (Reg.inter_set_array before i.arg) new_i)
+      | Iswitch _ ->
+          reload_rev_stage2 t rest
+            ~new_next:(add_reloads t.spill_env (Reg.inter_set_array before i.arg)
+                         (instr_cons_debug i.desc i.arg i.res i.dbg new_next))
+      | Icatch _ ->
+          reload_rev_stage2 t rest
+            ~new_next:(instr_cons_debug i.desc i.arg i.res i.dbg new_next)
+      | Itrywith _ ->
+          reload_rev_stage2 t rest
+          ~new_next:(instr_cons_debug i.desc i.arg i.res i.dbg new_next)
+      | Iraise _ ->
+          reload_rev_stage2 t rest
+            ~new_next:(add_reloads
+                         t.spill_env (Reg.inter_set_array before i.arg) i)
+and reload (t : reload_data) i before =
+  let finally, rev_instr = reload_rev t [] i before in
+  reload_rev_stage2 t ~new_next:(end_instr ()) rev_instr, finally
 
 (* Second pass: add spill instructions based on what we've decided to reload.
    That is, any register that may be reloaded in the future must be spilled
