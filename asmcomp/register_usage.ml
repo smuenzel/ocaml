@@ -12,6 +12,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Registry = struct
+  type t = Reg.t array Misc.Stdlib.String.Tbl.t
+
+  let (registry : t) = Misc.Stdlib.String.Tbl.create 17
+
+  let reset () = Misc.Stdlib.String.Tbl.clear registry
+
+  let add name regs =
+    Misc.Stdlib.String.Tbl.replace registry name regs
+
+  let add_from_cmx map =
+    List.iter
+      (fun (name,regs) ->
+         let regs =
+           Array.map
+             Proc.phys_reg
+             regs
+         in
+         add name regs
+      ) map
+
+  let destroyed_in_function name =
+    Misc.Stdlib.String.Tbl.find_opt registry name
+end
+
 let add_register_array acc instr_array =
   Array.fold_left
     (fun acc reg ->
@@ -31,20 +56,22 @@ let add_register_array acc instr_array =
 let destroyed_at_function_entry =
   Reg.Set.of_list (Array.to_list Proc.destroyed_at_function_entry)
 
-let all_registers_destroyed ~destroyed_in_function (fundecl : Mach.fundecl) =
+let destroyed_at_oper : Mach.instruction_desc -> Reg.t array = function
+  | Iop (Icall_imm { func }) as desc ->
+      begin match Registry.destroyed_in_function func with
+      | Some regs -> regs
+      | None ->
+          Proc.destroyed_at_oper desc
+      end
+  | desc ->
+      Proc.destroyed_at_oper desc
+
+let all_registers_destroyed (fundecl : Mach.fundecl) =
   Mach.instr_fold
     (fun acc instr ->
        let acc = add_register_array acc instr.res in
-       match instr.desc with
-       | Iop (Icall_imm { func }) ->
-           begin match destroyed_in_function func with
-           | Some regs ->
-               Reg.Set.union acc regs
-           | None ->
-               add_register_array acc (Proc.destroyed_at_oper instr.desc)
-           end
-       | _ ->
-           add_register_array acc (Proc.destroyed_at_oper instr.desc)
+       add_register_array acc (destroyed_at_oper instr.desc)
     )
     destroyed_at_function_entry
     fundecl.fun_body
+

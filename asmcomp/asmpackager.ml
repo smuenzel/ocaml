@@ -243,7 +243,7 @@ let build_package_cmx members cmxfile =
       ui_export_info;
       ui_for_pack = None;
       ui_need_stdlib;
-      ui_register_usage = Misc.Stdlib.String.Map.empty
+      ui_register_usage = [];
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
@@ -275,6 +275,7 @@ let package_files ~ppf_dump initial_env files targetcmx ~backend =
   Location.input_name := targetcmx;
   (* Set the name of the current compunit *)
   Compilenv.reset ?packname:!Clflags.for_package
+    ~cmx_import_register_usage:Register_usage.Registry.add_from_cmx
     (Unit_info.Artifact.modname cmi);
   Misc.try_finally (fun () ->
       let coercion = Typemod.package_units initial_env files cmi in

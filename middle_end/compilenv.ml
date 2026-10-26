@@ -90,7 +90,7 @@ let current_unit =
     ui_export_info = default_ui_export_info;
     ui_for_pack = None;
     ui_need_stdlib = false;
-    ui_register_usage = Misc.Stdlib.String.Map.empty
+    ui_register_usage = [];
   }
 
 let linuxlike_mangling = match Config.system with
@@ -120,7 +120,10 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
 let current_unit_linkage_name () =
   Linkage_name.create (make_symbol ~unitname:current_unit.ui_symbol None)
 
-let reset ?packname name =
+let cmx_import_register_usage_fn = ref (fun _ -> ())
+
+let reset ?packname ?(cmx_import_register_usage = fun _ -> ()) name =
+  cmx_import_register_usage_fn := cmx_import_register_usage;
   let packname =
     Option.map
       (Misc.replace_substring ~before:"."
@@ -144,6 +147,7 @@ let reset ?packname name =
   Hashtbl.clear exported_constants;
   structured_constants := structured_constants_empty;
   current_unit.ui_export_info <- default_ui_export_info;
+  current_unit.ui_register_usage <- [];
   merged_environment := Export_info.empty;
   Hashtbl.clear export_infos_table;
   let compilation_unit =
@@ -222,6 +226,9 @@ let get_global_info global_ident = (
              | Some p1, p2 ->
                raise (Error (Mismatching_for_pack
                                (filename, p1, current_unit.ui_name, p2))));
+            (*
+            Register_usage.Registry.add_from_cmx ui.ui_register_usage;
+               *)
             (Some ui, Some crc)
           with Not_found ->
             let warn = Warnings.No_cmx_file modname in

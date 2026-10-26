@@ -310,7 +310,7 @@ method private cse n i =
       begin match self#class_of_operation op with
       | (Op_pure | Op_checkbound | Op_load _) as op_class ->
           let (n1, varg) = valnum_regs n i.arg in
-          let n2 = set_unknown_regs n1 (Proc.destroyed_at_oper i.desc) in
+          let n2 = set_unknown_regs n1 (Register_usage.destroyed_at_oper i.desc) in
           begin match find_equation op_class n1 (op, varg) with
           | Some vres ->
               (* This operation was computed earlier. *)
@@ -340,13 +340,13 @@ method private cse n i =
       | Op_store false | Op_other ->
           (* An initializing store or an "other" operation do not invalidate
              any equations, but we do not know anything about the results. *)
-         let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+         let n1 = set_unknown_regs n (Register_usage.destroyed_at_oper i.desc) in
          let n2 = set_unknown_regs n1 i.res in
          {i with next = self#cse n2 i.next}
       | Op_store true ->
           (* A non-initializing store can invalidate
              anything we know about prior mutable loads. *)
-         let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+         let n1 = set_unknown_regs n (Register_usage.destroyed_at_oper i.desc) in
          let n2 = set_unknown_regs n1 i.res in
          let n3 = self#kill_loads n2 in
          {i with next = self#cse n3 i.next}
@@ -354,11 +354,11 @@ method private cse n i =
   (* For control structures, we set the numbering to empty at every
      join point, but propagate the current numbering across fork points. *)
   | Iifthenelse(test, ifso, ifnot) ->
-     let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+     let n1 = set_unknown_regs n (Register_usage.destroyed_at_oper i.desc) in
       {i with desc = Iifthenelse(test, self#cse n1 ifso, self#cse n1 ifnot);
               next = self#cse empty_numbering i.next}
   | Iswitch(index, cases) ->
-     let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+     let n1 = set_unknown_regs n (Register_usage.destroyed_at_oper i.desc) in
       {i with desc = Iswitch(index, Array.map (self#cse n1) cases);
               next = self#cse empty_numbering i.next}
   | Icatch(rec_flag, handlers, body) ->

@@ -13,5 +13,13 @@
 (**************************************************************************)
 
 val all_registers_destroyed :
-  destroyed_in_function:(string -> Reg.Set.t option) -> Mach.fundecl ->
+  Mach.fundecl ->
   Reg.Set.t
+
+val destroyed_at_oper : Mach.instruction_desc -> Reg.t array
+
+module Registry : sig
+  val reset : unit -> unit
+  val add_from_cmx : (string * int array) list -> unit
+  val destroyed_in_function : string -> Reg.t array option
+end

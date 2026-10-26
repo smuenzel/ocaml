@@ -36,7 +36,7 @@ type export_info =
   | Flambda of Export_info.t
 
 type register_usage_info =
-  int array Stdlib.String.Map.t
+  (string * int array) list
 
 type unit_infos =
   { mutable ui_name: modname;             (* Name of unit implemented *)

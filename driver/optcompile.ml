@@ -98,12 +98,16 @@ let clambda i backend Typedtree.{structure; coercion; _} =
 
 (* Emit assembly directly from Linear IR *)
 let emit i =
-  Compilenv.reset ?packname:!Clflags.for_package (Unit_info.modname i.target);
+  Register_usage.Registry.reset ();
+  Compilenv.reset ?packname:!Clflags.for_package (Unit_info.modname i.target)
+    ~cmx_import_register_usage:Register_usage.Registry.add_from_cmx;
   Asmgen.compile_implementation_linear i.target
 
 let implementation ~backend ~start_from ~source_file ~output_prefix =
   let backend info typed =
+    Register_usage.Registry.reset ();
     Compilenv.reset ?packname:!Clflags.for_package
+      ~cmx_import_register_usage:Register_usage.Registry.add_from_cmx
       (Unit_info.modname info.target);
     if Config.flambda
     then flambda info backend typed

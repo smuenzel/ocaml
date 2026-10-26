@@ -240,6 +240,7 @@ asmcomp_SOURCES = \
   asmcomp/reg.mli asmcomp/reg.ml \
   asmcomp/mach.mli asmcomp/mach.ml \
   asmcomp/proc.mli asmcomp/proc.ml \
+	asmcomp/register_usage.mli asmcomp/register_usage.ml \
   asmcomp/strmatch.mli asmcomp/strmatch.ml \
   asmcomp/cmmgen_state.mli asmcomp/cmmgen_state.ml \
   asmcomp/cmm_helpers.mli asmcomp/cmm_helpers.ml \
@@ -280,7 +281,6 @@ asmcomp_SOURCES = \
   asmcomp/asmlink.mli asmcomp/asmlink.ml \
   asmcomp/asmlibrarian.mli asmcomp/asmlibrarian.ml \
   asmcomp/asmpackager.mli asmcomp/asmpackager.ml \
-	asmcomp/register_usage.mli asmcomp/register_usage.ml \
   driver/opterrors.mli driver/opterrors.ml \
   driver/optcompile.mli driver/optcompile.ml \
   driver/optmaindriver.mli driver/optmaindriver.ml
