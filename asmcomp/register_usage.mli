@@ -17,6 +17,7 @@ val destroyed_at_oper : Mach.instruction_desc -> Reg.t array
 val fundecl : Mach.fundecl -> Mach.fundecl
 
 val max_register_pressure : Mach.operation -> int array
+val safe_register_pressure : Mach.operation -> int
 
 module Registry : sig
   val reset : unit -> unit

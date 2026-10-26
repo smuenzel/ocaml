@@ -226,9 +226,7 @@ let get_global_info global_ident = (
              | Some p1, p2 ->
                raise (Error (Mismatching_for_pack
                                (filename, p1, current_unit.ui_name, p2))));
-            (*
-            Register_usage.Registry.add_from_cmx ui.ui_register_usage;
-               *)
+            !cmx_import_register_usage_fn ui.ui_register_usage;
             (Some ui, Some crc)
           with Not_found ->
             let warn = Warnings.No_cmx_file modname in

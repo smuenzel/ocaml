@@ -168,8 +168,13 @@ let rec reload (t : reload_data) i before =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads t.spill_env (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
+  | Iop(Icall_imm _) when !Clflags.use_linscan ->
+      (* All regs live across must be spilled *)
+      let (new_next, finally) = reload t i.next i.live in
+      (add_reloads t.spill_env (Reg.inter_set_array before i.arg)
+                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
+       finally)
   | Iop(Icall_ind | Iextcall { alloc = true; }) ->
-      (* CR smuenzel: is this true on all arches? *)
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload t i.next i.live in
       (add_reloads t.spill_env (Reg.inter_set_array before i.arg)
@@ -180,7 +185,7 @@ let rec reload (t : reload_data) i before =
         (* Quick check to see if the register pressure is below the maximum *)
         if !Clflags.use_linscan ||
            (Reg.Set.cardinal i.live + Array.length i.res <=
-            Proc.safe_register_pressure op)
+            Register_usage.safe_register_pressure op)
         then before
         else add_superpressure_regs t op i.live i.res before in
       let after =

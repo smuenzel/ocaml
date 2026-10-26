@@ -89,7 +89,7 @@ let add_register_array acc instr_array =
     acc
     instr_array
 
-let destroyed_transistive fname : Mach.instruction_desc -> Reg.t array = function
+let destroyed_transitive fname : Mach.instruction_desc -> Reg.t array = function
   | Iop (Icall_imm { func }) | Iop (Itailcall_imm { func }) when func = fname ->
       [||]
   | Iop (Itailcall_imm { func }) ->
@@ -107,7 +107,7 @@ let all_registers_destroyed (fundecl : Mach.fundecl) =
     Mach.instr_fold
       (fun acc instr ->
          let acc = add_register_array acc instr.res in
-         add_register_array acc (destroyed_transistive fundecl.fun_name instr.desc)
+         add_register_array acc (destroyed_transitive fundecl.fun_name instr.desc)
       )
       destroyed_at_function_entry
       fundecl.fun_body
@@ -139,3 +139,7 @@ let max_register_pressure op =
   | _ ->
       default
 
+let safe_register_pressure op =
+  match op with
+  | Mach.Icall_imm _ -> 0
+  | _ -> Proc.safe_register_pressure op

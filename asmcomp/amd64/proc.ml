@@ -305,7 +305,7 @@ let destroyed_at_alloc_or_poll =
     (* CR smuenzel: Should this include r10? *)
     [| r11 |]
 
-let destroyed_at_function_entry = destroyed_by_plt_stub
+let destroyed_at_function_entry = [| r10; r11 |]
 
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
