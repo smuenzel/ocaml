@@ -77,8 +77,8 @@ let add_register_array acc instr_array =
   Array.fold_left
     (fun acc reg ->
        match reg.Reg.loc with
-       | Reg _ ->
-           Reg.Set.add reg acc
+       | Reg i ->
+           Reg.Set.add (Proc.phys_reg i) acc
        | Stack _ ->
            acc
        | Unknown ->
@@ -89,15 +89,28 @@ let add_register_array acc instr_array =
     acc
     instr_array
 
+let destroyed_transistive fname : Mach.instruction_desc -> Reg.t array = function
+  | Iop (Icall_imm { func }) | Iop (Itailcall_imm { func }) when func = fname ->
+      [||]
+  | Iop (Itailcall_imm { func }) ->
+      begin match Registry.destroyed_in_function func with
+      | Some regs -> regs
+      | None -> Proc.destroyed_at_oper (Iop (Icall_imm { func }))
+      end
+  | Iop Itailcall_ind ->
+      Proc.destroyed_at_oper (Iop Icall_ind)
+  | desc ->
+      destroyed_at_oper desc
+
 let all_registers_destroyed (fundecl : Mach.fundecl) =
   let set =
-  Mach.instr_fold
-    (fun acc instr ->
-       let acc = add_register_array acc instr.res in
-       add_register_array acc (destroyed_at_oper instr.desc)
-    )
-    destroyed_at_function_entry
-    fundecl.fun_body
+    Mach.instr_fold
+      (fun acc instr ->
+         let acc = add_register_array acc instr.res in
+         add_register_array acc (destroyed_transistive fundecl.fun_name instr.desc)
+      )
+      destroyed_at_function_entry
+      fundecl.fun_body
   in
   Array.of_list (Reg.Set.to_list set)
 

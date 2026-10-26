@@ -302,9 +302,10 @@ let destroyed_at_alloc_or_poll =
   if X86_proc.use_plt then
     destroyed_by_plt_stub
   else
+    (* CR smuenzel: Should this include r10? *)
     [| r11 |]
 
-let destroyed_at_function_entry = destroyed_at_alloc_or_poll
+let destroyed_at_function_entry = destroyed_by_plt_stub
 
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->

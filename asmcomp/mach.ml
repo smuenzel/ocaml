@@ -141,7 +141,7 @@ let rec instr_fold f acc i =
           let acc = instr_fold f acc ifnot in
           instr_fold f acc i.next
       | Iswitch(_index, cases) ->
-          let acc = Array.fold_left f acc cases in
+          let acc = Array.fold_left (instr_fold f) acc cases in
           instr_fold f acc i.next
       | Icatch(_, handlers, body) ->
           let acc = instr_fold f acc body in
