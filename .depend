@@ -3516,6 +3516,13 @@ asmcomp/reg.cmx : \
 asmcomp/reg.cmi : \
     asmcomp/cmm.cmi \
     middle_end/backend_var.cmi
+asmcomp/register_usage.cmo : \
+    asmcomp/register_usage.cmi
+asmcomp/register_usage.cmx : \
+    asmcomp/register_usage.cmi
+asmcomp/register_usage.cmi : \
+    asmcomp/reg.cmi \
+    asmcomp/mach.cmi
 asmcomp/reload.cmi : \
     asmcomp/mach.cmi
 asmcomp/reloadgen.cmo : \

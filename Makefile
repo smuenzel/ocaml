@@ -280,6 +280,7 @@ asmcomp_SOURCES = \
   asmcomp/asmlink.mli asmcomp/asmlink.ml \
   asmcomp/asmlibrarian.mli asmcomp/asmlibrarian.ml \
   asmcomp/asmpackager.mli asmcomp/asmpackager.ml \
+	asmcomp/register_usage.mli asmcomp/register_usage.ml \
   driver/opterrors.mli driver/opterrors.ml \
   driver/optcompile.mli driver/optcompile.ml \
   driver/optmaindriver.mli driver/optmaindriver.ml

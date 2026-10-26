@@ -304,6 +304,8 @@ let destroyed_at_alloc_or_poll =
   else
     [| r11 |]
 
+let destroyed_at_function_entry = destroyed_at_alloc_or_poll
+
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
       all_phys_regs
