@@ -2815,6 +2815,7 @@ asmcomp/asmgen.cmo : \
     asmcomp/selection.cmi \
     asmcomp/scheduling.cmi \
     asmcomp/reload.cmi \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     utils/profile.cmi \
     asmcomp/proc.cmi \
@@ -2860,6 +2861,7 @@ asmcomp/asmgen.cmx : \
     asmcomp/selection.cmx \
     asmcomp/scheduling.cmx \
     asmcomp/reload.cmx \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     utils/profile.cmx \
     asmcomp/proc.cmx \
@@ -3553,8 +3555,8 @@ asmcomp/reloadgen.cmi : \
     asmcomp/reg.cmi \
     asmcomp/mach.cmi
 asmcomp/schedgen.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
-    asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/linear.cmi \
     asmcomp/cmm.cmi \
@@ -3562,8 +3564,8 @@ asmcomp/schedgen.cmo : \
     asmcomp/arch.cmi \
     asmcomp/schedgen.cmi
 asmcomp/schedgen.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
-    asmcomp/proc.cmx \
     asmcomp/mach.cmx \
     asmcomp/linear.cmx \
     asmcomp/cmm.cmx \
@@ -3617,6 +3619,7 @@ asmcomp/selection.cmi : \
     asmcomp/mach.cmi \
     asmcomp/cmm.cmi
 asmcomp/spill.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
     asmcomp/mach.cmi \
@@ -3624,6 +3627,7 @@ asmcomp/spill.cmo : \
     utils/clflags.cmi \
     asmcomp/spill.cmi
 asmcomp/spill.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
     asmcomp/mach.cmx \

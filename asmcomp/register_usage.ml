@@ -118,3 +118,24 @@ let fundecl fundecl =
   let destroyed = all_registers_destroyed fundecl in
   Registry.add_from_current_unit fundecl.Mach.fun_name destroyed;
   fundecl
+
+let max_register_pressure op =
+  let default = Proc.max_register_pressure op in
+  match op with
+  | Mach.Icall_imm { func }->
+      begin match Registry.destroyed_in_function func with
+      | Some regs ->
+          let ar = Array.copy default in
+          Array.iter
+            (fun reg ->
+               let class_ = Proc.register_class reg in
+               ar.(class_) <- ar.(class_) - 1
+            )
+            regs;
+          ar
+      | None ->
+          Array.map (fun _ -> 0) default
+      end
+  | _ ->
+      default
+

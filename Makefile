@@ -240,7 +240,7 @@ asmcomp_SOURCES = \
   asmcomp/reg.mli asmcomp/reg.ml \
   asmcomp/mach.mli asmcomp/mach.ml \
   asmcomp/proc.mli asmcomp/proc.ml \
-	asmcomp/register_usage.mli asmcomp/register_usage.ml \
+  asmcomp/register_usage.mli asmcomp/register_usage.ml \
   asmcomp/strmatch.mli asmcomp/strmatch.ml \
   asmcomp/cmmgen_state.mli asmcomp/cmmgen_state.ml \
   asmcomp/cmm_helpers.mli asmcomp/cmm_helpers.ml \

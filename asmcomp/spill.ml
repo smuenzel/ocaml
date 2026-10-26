@@ -94,7 +94,7 @@ let record_use t regv =
    at that point. If so, spill enough registers to lower the pressure. *)
 
 let add_superpressure_regs t op live_regs res_regs spilled =
-  let max_pressure = Proc.max_register_pressure op in
+  let max_pressure = Register_usage.max_register_pressure op in
   let regs = Reg.add_set_array live_regs res_regs in
   (* Compute the pressure in each register class *)
   let pressure = Array.make Proc.num_register_classes 0 in
@@ -168,7 +168,8 @@ let rec reload (t : reload_data) i before =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads t.spill_env (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind | Icall_imm _ | Iextcall { alloc = true; }) ->
+  | Iop(Icall_ind | Iextcall { alloc = true; }) ->
+      (* CR smuenzel: is this true on all arches? *)
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload t i.next i.live in
       (add_reloads t.spill_env (Reg.inter_set_array before i.arg)
