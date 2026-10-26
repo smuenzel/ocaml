@@ -265,7 +265,14 @@ let print_cmx_infos (ui, crc) =
      | None -> "no"
      | Some pack -> "YES: " ^ pack);
   printf
-    "Requires caml_standard_library_nat: %a\n" yesno_of_bool ui.ui_need_stdlib
+    "Requires caml_standard_library_nat: %a\n" yesno_of_bool ui.ui_need_stdlib;
+  printf "Register usage:\n";
+  List.iter
+    (fun (fn, regs) ->
+       printf "  %s:" fn;
+       Array.iter (fun reg -> printf " %i" reg) regs;
+       printf "\n"
+    ) ui.ui_register_usage
 
 let print_cmxa_infos (lib : Cmx_format.library_infos) =
   printf "Extra C object files:";
