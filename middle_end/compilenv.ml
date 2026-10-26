@@ -89,7 +89,9 @@ let current_unit =
     ui_force_link = false;
     ui_export_info = default_ui_export_info;
     ui_for_pack = None;
-    ui_need_stdlib = false }
+    ui_need_stdlib = false;
+    ui_register_usage = Misc.Stdlib.String.Map.empty
+  }
 
 let linuxlike_mangling = match Config.system with
   | "macosx"

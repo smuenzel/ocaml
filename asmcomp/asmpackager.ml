@@ -243,6 +243,7 @@ let build_package_cmx members cmxfile =
       ui_export_info;
       ui_for_pack = None;
       ui_need_stdlib;
+      ui_register_usage = Misc.Stdlib.String.Map.empty
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
