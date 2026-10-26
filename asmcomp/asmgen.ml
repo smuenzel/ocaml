@@ -259,6 +259,7 @@ let end_gen_implementation ?toplevel ~ppf_dump
            if not (Primitive.native_name_is_external prim) then None
            else Some (Primitive.native_name prim))
           !Translmod.primitive_declarations));
+  Compilenv.set_register_usage (Register_usage.Registry.in_current_unit ());
   emit_end_assembly ()
 
 type middle_end =

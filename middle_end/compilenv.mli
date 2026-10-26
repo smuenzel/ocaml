@@ -100,6 +100,8 @@ val approx_for_global: Compilation_unit.t -> Export_info.t option
         (* Loads the exported information declaring the compilation_unit
            flambda-only *)
 
+val set_register_usage: (string * int array) list -> unit
+
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit
 val need_send_fun: int -> unit

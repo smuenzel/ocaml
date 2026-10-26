@@ -220,6 +220,9 @@ let build_package_cmx members cmxfile =
   let ui_need_stdlib =
     List.exists (function {ui_need_stdlib; _} -> ui_need_stdlib) units
   in
+  let ui_register_usage =
+    List.concat_map (fun info -> info.ui_register_usage) (ui :: units);
+  in
   Export_info_for_pack.clear_import_state ();
   let pkg_infos =
     { ui_name = ui.ui_name;
@@ -243,7 +246,7 @@ let build_package_cmx members cmxfile =
       ui_export_info;
       ui_for_pack = None;
       ui_need_stdlib;
-      ui_register_usage = Register_usage.Registry.in_current_unit ();
+      ui_register_usage;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 

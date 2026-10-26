@@ -157,6 +157,9 @@ let reset ?packname ?(cmx_import_register_usage = fun _ -> ()) name =
   in
   Compilation_unit.set_current compilation_unit
 
+let set_register_usage register_usage =
+  current_unit.ui_register_usage <- register_usage
+
 let current_unit_infos () =
   current_unit
 
