@@ -243,7 +243,7 @@ let build_package_cmx members cmxfile =
       ui_export_info;
       ui_for_pack = None;
       ui_need_stdlib;
-      ui_register_usage = [];
+      ui_register_usage = Register_usage.Registry.in_current_unit ();
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 

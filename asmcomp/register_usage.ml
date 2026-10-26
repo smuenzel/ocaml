@@ -17,7 +17,15 @@ module Registry = struct
 
   let (registry : t) = Misc.Stdlib.String.Tbl.create 17
 
-  let reset () = Misc.Stdlib.String.Tbl.clear registry
+  let current_unit = ref Misc.Stdlib.String.Map.empty
+
+  let reset () =
+    Misc.Stdlib.String.Tbl.clear registry;
+    current_unit := Misc.Stdlib.String.Map.empty
+
+  let add_from_current_unit name regs =
+    Misc.Stdlib.String.Tbl.replace registry name regs;
+    current_unit := Misc.Stdlib.String.Map.add name regs !current_unit
 
   let add name regs =
     Misc.Stdlib.String.Tbl.replace registry name regs
@@ -35,7 +43,35 @@ module Registry = struct
 
   let destroyed_in_function name =
     Misc.Stdlib.String.Tbl.find_opt registry name
+
+  let in_current_unit () =
+    let elts = Misc.Stdlib.String.Map.bindings !current_unit in
+    List.map
+      (fun (name,regs) ->
+         let regs = Array.to_list regs in
+         let regs = List.filter_map
+             (fun reg ->
+                match reg.Reg.loc with
+                | Reg.Unknown | Reg.Stack _ -> None
+                | Reg.Reg r -> Some r
+             ) regs
+         in
+         (name,Array.of_list regs)
+      ) elts
 end
+
+let destroyed_at_function_entry =
+  Reg.Set.of_list (Array.to_list Proc.destroyed_at_function_entry)
+
+let destroyed_at_oper : Mach.instruction_desc -> Reg.t array = function
+  | Iop (Icall_imm { func }) as desc ->
+      begin match Registry.destroyed_in_function func with
+      | Some regs -> regs
+      | None ->
+          Proc.destroyed_at_oper desc
+      end
+  | desc ->
+      Proc.destroyed_at_oper desc
 
 let add_register_array acc instr_array =
   Array.fold_left
@@ -53,20 +89,8 @@ let add_register_array acc instr_array =
     acc
     instr_array
 
-let destroyed_at_function_entry =
-  Reg.Set.of_list (Array.to_list Proc.destroyed_at_function_entry)
-
-let destroyed_at_oper : Mach.instruction_desc -> Reg.t array = function
-  | Iop (Icall_imm { func }) as desc ->
-      begin match Registry.destroyed_in_function func with
-      | Some regs -> regs
-      | None ->
-          Proc.destroyed_at_oper desc
-      end
-  | desc ->
-      Proc.destroyed_at_oper desc
-
 let all_registers_destroyed (fundecl : Mach.fundecl) =
+  let set =
   Mach.instr_fold
     (fun acc instr ->
        let acc = add_register_array acc instr.res in
@@ -74,4 +98,10 @@ let all_registers_destroyed (fundecl : Mach.fundecl) =
     )
     destroyed_at_function_entry
     fundecl.fun_body
+  in
+  Array.of_list (Reg.Set.to_list set)
 
+let fundecl fundecl =
+  let destroyed = all_registers_destroyed fundecl in
+  Registry.add_from_current_unit fundecl.Mach.fun_name destroyed;
+  fundecl

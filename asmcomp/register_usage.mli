@@ -12,14 +12,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val all_registers_destroyed :
-  Mach.fundecl ->
-  Reg.Set.t
-
 val destroyed_at_oper : Mach.instruction_desc -> Reg.t array
+
+val fundecl : Mach.fundecl -> Mach.fundecl
 
 module Registry : sig
   val reset : unit -> unit
   val add_from_cmx : (string * int array) list -> unit
   val destroyed_in_function : string -> Reg.t array option
+  val in_current_unit : unit -> (string * int array) list
 end
