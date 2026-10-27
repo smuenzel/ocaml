@@ -151,6 +151,12 @@ let destroyed_transitive fname : Mach.instruction_desc -> _ = function
       end
   | Iop Itailcall_ind ->
       Proc.destroyed_at_oper (Iop Icall_ind), []
+  | Itrywith _ ->
+      (* The handler can be reached through code that is not part of any
+         function's register set: caml_raise_exn calling caml_stash_backtrace,
+         C code raising, asynchronous exceptions. Execution then continues
+         normally and can return to our caller. *)
+      Proc.destroyed_at_raise, []
   | Iop (Icall_imm { func }) ->
       begin match Registry.destroyed_in_function func with
       | Some regs -> regs, []
