@@ -141,6 +141,8 @@ let win64 =
   | "win64" | "mingw64" | "cygwin" -> true
   | _                   -> false
 
+let caml_modify_stub = not win64 && not Config.tsan
+
 (* Specific operations that are pure *)
 
 let operation_is_pure = function

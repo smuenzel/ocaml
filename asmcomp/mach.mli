@@ -111,6 +111,7 @@ val instr_cons:
 val instr_cons_debug:
       instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
         instruction -> instruction
+val instr_fold : ('a -> instruction -> 'a) -> 'a -> instruction -> 'a
 val instr_iter: (instruction -> unit) -> instruction -> unit
 
 val operation_is_pure : operation -> bool

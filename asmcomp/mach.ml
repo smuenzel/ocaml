@@ -128,6 +128,38 @@ let instr_cons d a r n =
 let instr_cons_debug d a r dbg n =
   { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty }
 
+let rec instr_fold f acc i =
+  match i.desc with
+    Iend -> acc
+  | desc ->
+      let acc = f acc i in
+      match desc with
+        Iend -> assert false
+      | Ireturn | Iop Itailcall_ind | Iop(Itailcall_imm _) -> acc
+      | Iifthenelse(_tst, ifso, ifnot) ->
+          let acc = instr_fold f acc ifso in
+          let acc = instr_fold f acc ifnot in
+          instr_fold f acc i.next
+      | Iswitch(_index, cases) ->
+          let acc = Array.fold_left (instr_fold f) acc cases in
+          instr_fold f acc i.next
+      | Icatch(_, handlers, body) ->
+          let acc = instr_fold f acc body in
+          let acc =
+            List.fold_left (fun acc (_n, handler) ->
+                instr_fold f acc handler
+              ) acc handlers
+          in
+          instr_fold f acc i.next
+      | Iexit _ -> acc
+      | Itrywith(body, handler) ->
+          let acc = instr_fold f acc body in
+          let acc = instr_fold f acc handler in
+          instr_fold f acc i.next
+      | Iraise _ -> acc
+      | Iop _ ->
+          instr_fold f acc i.next
+
 let rec instr_iter f i =
   match i.desc with
     Iend -> ()

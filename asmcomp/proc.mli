@@ -51,6 +51,7 @@ val max_register_pressure: Mach.operation -> int array
 val destroyed_at_oper: Mach.instruction_desc -> Reg.t array
 val destroyed_at_raise: Reg.t array
 val destroyed_at_reloadretaddr : Reg.t array
+val destroyed_at_function_entry : Reg.t array
 
 (** For a given register class, the DWARF register numbering for that class.
     Given an allocated register with location [Reg n] and class [reg_class], the

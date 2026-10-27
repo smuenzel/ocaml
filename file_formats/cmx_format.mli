@@ -35,6 +35,9 @@ type export_info =
   | Clambda of Clambda.value_approximation
   | Flambda of Export_info.t
 
+type register_usage_info =
+  (string * int array) list
+
 type unit_infos =
   { mutable ui_name: modname;             (* Name of unit implemented *)
     mutable ui_symbol: string;            (* Prefix for symbols *)
@@ -47,7 +50,9 @@ type unit_infos =
     mutable ui_export_info: export_info;
     mutable ui_force_link: bool;          (* Always linked *)
     mutable ui_for_pack: string option;   (* Part of a pack *)
-    mutable ui_need_stdlib: bool}         (* caml_standard_library_nat needed *)
+    mutable ui_need_stdlib: bool;         (* caml_standard_library_nat needed *)
+    mutable ui_register_usage: register_usage_info;
+  }
 
 (* Each .a library has a matching .cmxa file that provides the following
    infos on the library: *)

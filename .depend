@@ -2774,15 +2774,15 @@ bytecomp/symtable.cmi : \
 asmcomp/CSE.cmi : \
     asmcomp/mach.cmi
 asmcomp/CSEgen.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
-    asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/cmm.cmi \
     parsing/asttypes.cmi \
     asmcomp/CSEgen.cmi
 asmcomp/CSEgen.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
-    asmcomp/proc.cmx \
     asmcomp/mach.cmx \
     asmcomp/cmm.cmx \
     parsing/asttypes.cmx \
@@ -2815,6 +2815,7 @@ asmcomp/asmgen.cmo : \
     asmcomp/selection.cmi \
     asmcomp/scheduling.cmi \
     asmcomp/reload.cmi \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     utils/profile.cmi \
     asmcomp/proc.cmi \
@@ -2860,6 +2861,7 @@ asmcomp/asmgen.cmx : \
     asmcomp/selection.cmx \
     asmcomp/scheduling.cmx \
     asmcomp/reload.cmx \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     utils/profile.cmx \
     asmcomp/proc.cmx \
@@ -2990,6 +2992,7 @@ asmcomp/asmpackager.cmo : \
     typing/typemod.cmi \
     lambda/translmod.cmi \
     lambda/simplif.cmi \
+    asmcomp/register_usage.cmi \
     utils/profile.cmi \
     utils/misc.cmi \
     parsing/location.cmi \
@@ -3016,6 +3019,7 @@ asmcomp/asmpackager.cmx : \
     typing/typemod.cmx \
     lambda/translmod.cmx \
     lambda/simplif.cmx \
+    asmcomp/register_usage.cmx \
     utils/profile.cmx \
     utils/misc.cmx \
     parsing/location.cmx \
@@ -3291,12 +3295,14 @@ asmcomp/emitaux.cmi : \
 asmcomp/emitenv.cmi : \
     asmcomp/linear.cmi
 asmcomp/interf.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/cmm.cmi \
     asmcomp/interf.cmi
 asmcomp/interf.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
     asmcomp/mach.cmx \
@@ -3305,11 +3311,13 @@ asmcomp/interf.cmx : \
 asmcomp/interf.cmi : \
     asmcomp/mach.cmi
 asmcomp/interval.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/interval.cmi
 asmcomp/interval.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
     asmcomp/mach.cmx \
@@ -3516,6 +3524,21 @@ asmcomp/reg.cmx : \
 asmcomp/reg.cmi : \
     asmcomp/cmm.cmi \
     middle_end/backend_var.cmi
+asmcomp/register_usage.cmo : \
+    asmcomp/reg.cmi \
+    asmcomp/proc.cmi \
+    utils/misc.cmi \
+    asmcomp/mach.cmi \
+    asmcomp/register_usage.cmi
+asmcomp/register_usage.cmx : \
+    asmcomp/reg.cmx \
+    asmcomp/proc.cmx \
+    utils/misc.cmx \
+    asmcomp/mach.cmx \
+    asmcomp/register_usage.cmi
+asmcomp/register_usage.cmi : \
+    asmcomp/reg.cmi \
+    asmcomp/mach.cmi
 asmcomp/reload.cmi : \
     asmcomp/mach.cmi
 asmcomp/reloadgen.cmo : \
@@ -3532,8 +3555,8 @@ asmcomp/reloadgen.cmi : \
     asmcomp/reg.cmi \
     asmcomp/mach.cmi
 asmcomp/schedgen.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
-    asmcomp/proc.cmi \
     asmcomp/mach.cmi \
     asmcomp/linear.cmi \
     asmcomp/cmm.cmi \
@@ -3541,8 +3564,8 @@ asmcomp/schedgen.cmo : \
     asmcomp/arch.cmi \
     asmcomp/schedgen.cmi
 asmcomp/schedgen.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
-    asmcomp/proc.cmx \
     asmcomp/mach.cmx \
     asmcomp/linear.cmx \
     asmcomp/cmm.cmx \
@@ -3596,6 +3619,7 @@ asmcomp/selection.cmi : \
     asmcomp/mach.cmi \
     asmcomp/cmm.cmi
 asmcomp/spill.cmo : \
+    asmcomp/register_usage.cmi \
     asmcomp/reg.cmi \
     asmcomp/proc.cmi \
     asmcomp/mach.cmi \
@@ -3603,6 +3627,7 @@ asmcomp/spill.cmo : \
     utils/clflags.cmi \
     asmcomp/spill.cmi
 asmcomp/spill.cmx : \
+    asmcomp/register_usage.cmx \
     asmcomp/reg.cmx \
     asmcomp/proc.cmx \
     asmcomp/mach.cmx \
@@ -7322,6 +7347,7 @@ driver/optcompile.cmo : \
     typing/typedtree.cmi \
     lambda/translmod.cmi \
     lambda/simplif.cmi \
+    asmcomp/register_usage.cmi \
     utils/profile.cmi \
     lambda/printlambda.cmi \
     utils/misc.cmi \
@@ -7339,6 +7365,7 @@ driver/optcompile.cmx : \
     typing/typedtree.cmx \
     lambda/translmod.cmx \
     lambda/simplif.cmx \
+    asmcomp/register_usage.cmx \
     utils/profile.cmx \
     lambda/printlambda.cmx \
     utils/misc.cmx \
