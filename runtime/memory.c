@@ -304,7 +304,9 @@
 */
 
 /* caml_modify_ocaml in amd64.S tests [caml_gc_phase] against zero */
+/* CR smuenzel: not supported on all compiler versions.
 static_assert(Phase_sweep_main == 0, "");
+*/
 
 Caml_inline void write_barrier(
   value obj, intnat field, value old_val, value new_val)
