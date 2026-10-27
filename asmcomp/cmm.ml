@@ -157,15 +157,6 @@ and operation =
       ; is_atomic: bool }
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
-  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
-  | Cand | Cor | Cxor | Clsl | Clsr | Casr
-  | Ccmpi of integer_comparison
-  | Caddv | Cadda
-  | Ccmpa of integer_comparison
-  | Cnegf | Cabsf
-  | Caddf | Csubf | Cmulf | Cdivf
-  | Cfloatofint | Cintoffloat
-  | Ccmpf of float_comparison
   | Craise of Lambda.raise_kind
   | Ccheckbound
   | Copaque
@@ -176,34 +167,53 @@ and operation =
   | Cpoll
 
 type expression =
-    Cconst_int of int * Debuginfo.t
-  | Cconst_natint of nativeint * Debuginfo.t
-  | Cconst_float of float * Debuginfo.t
-  | Cconst_symbol of string * Debuginfo.t
-  | Cvar of Backend_var.t
   | Cvar_mut of Backend_var.t
   | Clet of Backend_var.With_provenance.t * expression * expression
   | Clet_mut of Backend_var.With_provenance.t * machtype
-                * expression * expression
+                * pure_expression * expression
   | Cphantom_let of Backend_var.With_provenance.t
       * phantom_defining_expr option * expression
-  | Cassign of Backend_var.t * expression
-  | Ctuple of expression list
-  | Cop of operation * expression list * Debuginfo.t
+  | Cassign of Backend_var.t * pure_expression
+  | Cop of operation * pure_expression list * Debuginfo.t
   | Csequence of expression * expression
-  | Cifthenelse of expression * Debuginfo.t * expression
+  | Cifthenelse of pure_expression * Debuginfo.t * expression
       * Debuginfo.t * expression * Debuginfo.t
-  | Cswitch of expression * int array * (expression * Debuginfo.t) array
+  | Cswitch of pure_expression * int array * (expression * Debuginfo.t) array
       * Debuginfo.t
   | Ccatch of
       rec_flag
         * (int * (Backend_var.With_provenance.t * machtype) list
           * expression * Debuginfo.t) list
         * expression
-  | Cexit of int * expression list
+  | Cexit of int * pure_expression list
   | Ctrywith of expression * Backend_var.With_provenance.t * expression
       * Debuginfo.t
+  | Cpure of pure_expression
+
+and pure_expression =
+    Cconst_int of int * Debuginfo.t
+  | Cconst_natint of nativeint * Debuginfo.t
+  | Cconst_float of float * Debuginfo.t
+  | Cconst_symbol of string * Debuginfo.t
+  | Cvar of Backend_var.t
+  | Ctuple of pure_expression list
+  | Cpure_op of pure_operation * pure_expression list * Debuginfo.t
+  | Cpure_let of
+      Backend_var.With_provenance.t * pure_expression * pure_expression
+  | Cpure_ifthenelse of pure_expression * pure_expression * pure_expression
   | Creturn_addr
+
+and pure_operation =
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
+  | Cand | Cor | Cxor | Clsl | Clsr | Casr
+  | Ccmpi of integer_comparison
+  | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
+  | Cadda (* pointer addition that produces a [Addr] (derived heap pointer) *)
+  | Ccmpa of integer_comparison
+  | Cnegf | Cabsf
+  | Caddf | Csubf | Cmulf | Cdivf
+  | Cfloatofint | Cintoffloat
+  | Ccmpf of float_comparison
 
 type codegen_option =
   | Reduce_code_size
@@ -266,16 +276,11 @@ let iter_shallow_tail f = function
       true
   | Cexit _ | Cop (Craise _, _, _) ->
       true
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
-  | Cvar_mut _
   | Cassign _
-  | Ctuple _
-  | Cop _
-  | Creturn_addr ->
+  | Cvar_mut _
+  | Cop _ ->
+      false
+  | Cpure _ ->
       false
 
 let rec map_tail f = function
@@ -304,50 +309,96 @@ let rec map_tail f = function
       Ctrywith(map_tail f e1, id, map_tail f e2, dbg)
   | Cexit _ | Cop (Craise _, _, _) as cmm ->
       cmm
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
   | Cvar_mut _
   | Cassign _
-  | Ctuple _
-  | Creturn_addr
   | Cop _ as c ->
+      f c
+  | Cpure _ as c ->
       f c
 
 let map_shallow f = function
   | Clet (id, e1, e2) ->
       Clet (id, f e1, f e2)
   | Clet_mut (id, kind, e1, e2) ->
-      Clet_mut (id, kind, f e1, f e2)
+      Clet_mut (id, kind, e1, f e2)
   | Cphantom_let (id, de, e) ->
       Cphantom_let (id, de, f e)
   | Cassign (id, e) ->
-      Cassign (id, f e)
-  | Ctuple el ->
-      Ctuple (List.map f el)
+      Cassign (id, e)
   | Cop (op, el, dbg) ->
+      Cop (op, el, dbg)
+        (*
       Cop (op, List.map f el, dbg)
+           *)
   | Csequence (e1, e2) ->
       Csequence (f e1, f e2)
   | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
-      Cifthenelse(f cond, ifso_dbg, f ifso, ifnot_dbg, f ifnot, dbg)
+      (* CR smuenzel: map cond?*)
+      Cifthenelse(cond, ifso_dbg, f ifso, ifnot_dbg, f ifnot, dbg)
   | Cswitch (e, ia, ea, dbg) ->
       Cswitch (e, ia, Array.map (fun (e, dbg) -> f e, dbg) ea, dbg)
   | Ccatch (rf, hl, body) ->
       let map_h (n, ids, handler, dbg) = (n, ids, f handler, dbg) in
       Ccatch (rf, List.map map_h hl, f body)
   | Cexit (n, el) ->
-      Cexit (n, List.map f el)
+      Cexit (n, el)
   | Ctrywith (e1, id, e2, dbg) ->
       Ctrywith (f e1, id, f e2, dbg)
-  | Cconst_int _
-  | Cconst_natint _
-  | Cconst_float _
-  | Cconst_symbol _
-  | Cvar _
   | Cvar_mut _
-  | Creturn_addr
+  | Cpure _
     as c ->
       c
+
+let rec map_all_pure_expressions f c =
+  match c with
+  | Cpure pure ->
+      let pure' = f pure in
+      if pure == pure' then c else Cpure pure'
+  | Clet(id, e1, e2) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Clet(id, e1', e2')
+  | Clet_mut(id, kind, e1, e2) ->
+      let e1' = f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Clet_mut(id, kind, e1', e2')
+  | Cphantom_let(id, de, e) ->
+      let e' = map_all_pure_expressions f e in
+      if e == e' then c else Cphantom_let(id, de, e')
+  | Cassign(id, e) ->
+      let e' = f e in
+      if e == e' then c else Cassign(id, e')
+  | Cop (op, el, dbg) ->
+      let el' = List.map f el in
+      if List.for_all2 (fun x y -> x == y) el el' then c else Cop(op, el', dbg)
+  | Csequence (e1, e2) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Csequence(e1', e2')
+  | Cifthenelse(cond, ifso_dbg, ifso, ifnot_dbg, ifnot, dbg) ->
+      let cond' = f cond in
+      let ifso' = map_all_pure_expressions f ifso in
+      let ifnot' = map_all_pure_expressions f ifnot in
+      if cond == cond' && ifso == ifso' && ifnot == ifnot' then c
+      else Cifthenelse(cond', ifso_dbg, ifso', ifnot_dbg, ifnot', dbg)
+  | Cswitch (e, ia, ea, dbg) ->
+      let e' = f e in
+      let ea' = Array.map (fun (e, dbg) -> map_all_pure_expressions f e, dbg) ea in
+      if Array.for_all2 (fun (e, _) (e', _) -> e == e') ea ea' && e == e' then c
+      else Cswitch(e', ia, ea', dbg)
+  | Cvar_mut _ -> c
+  | Ccatch (rf, hl, body) ->
+      let map_h (n, ids, handler, dbg) = (n, ids, map_all_pure_expressions f handler, dbg) in
+      let body' = map_all_pure_expressions f body in
+      let hl' = List.map map_h hl in
+      if body == body' && List.for_all2 (fun (_, _, handler, _) (_, _, handler', _) ->
+          handler == handler') hl hl' then c
+      else Ccatch(rf, hl', body')
+  | Ctrywith (e1, id, e2, dbg) ->
+      let e1' = map_all_pure_expressions f e1 in
+      let e2' = map_all_pure_expressions f e2 in
+      if e1 == e1' && e2 == e2' then c else Ctrywith(e1', id, e2', dbg)
+  | Cexit (n, el) ->
+      let el' = List.map f el in
+      if List.for_all2 (fun x y -> x == y) el el' then c else Cexit(n, el')
+

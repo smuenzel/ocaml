@@ -25,37 +25,37 @@ open Mach
 
 type addressing_expr =
     Asymbol of string
-  | Alinear of expression
-  | Aadd of expression * expression
-  | Ascale of expression * int
-  | Ascaledadd of expression * expression * int
+  | Alinear of pure_expression
+  | Aadd of pure_expression * pure_expression
+  | Ascale of pure_expression * int
+  | Ascaledadd of pure_expression * pure_expression * int
 
 let rec select_addr exp =
   let default = (Alinear exp, 0) in
   match exp with
     Cconst_symbol (s, _) when not !Clflags.dlcode ->
       (Asymbol s, 0)
-  | Cop((Caddi | Caddv | Cadda), [arg; Cconst_int (m, _)], _)
-  | Cop((Caddi | Caddv | Cadda), [Cconst_int (m, _); arg], _) ->
+  | Cpure_op((Caddi | Caddv | Cadda), [arg; Cconst_int (m, _)], _)
+  | Cpure_op((Caddi | Caddv | Cadda), [Cconst_int (m, _); arg], _) ->
       let (a, n) = select_addr arg in
       if Misc.no_overflow_add n m then (a, n + m) else default
-  | Cop(Csubi, [arg; Cconst_int (m, _)], _) ->
+  | Cpure_op(Csubi, [arg; Cconst_int (m, _)], _) ->
       let (a, n) = select_addr arg in
       if Misc.no_overflow_sub n m then (a, n - m) else default
-  | Cop(Clsl, [arg; Cconst_int((1|2|3 as shift), _)], _) ->
+  | Cpure_op(Clsl, [arg; Cconst_int((1|2|3 as shift), _)], _) ->
       begin match select_addr arg with
       | (Alinear e, n) when Misc.no_overflow_lsl n shift ->
           (Ascale(e, 1 lsl shift), n lsl shift)
       | _ -> default
       end
-  | Cop(Cmuli, [arg; Cconst_int((2|4|8 as mult), _)], _)
-  | Cop(Cmuli, [Cconst_int((2|4|8 as mult), _); arg], _) ->
+  | Cpure_op(Cmuli, [arg; Cconst_int((2|4|8 as mult), _)], _)
+  | Cpure_op(Cmuli, [Cconst_int((2|4|8 as mult), _); arg], _) ->
       begin match select_addr arg with
       | (Alinear e, n) when Misc.no_overflow_mul n mult ->
           (Ascale(e, mult), n * mult)
       | _ -> default
       end
-  | Cop((Caddi | Caddv | Cadda), [arg1; arg2], _) ->
+  | Cpure_op((Caddi | Caddv | Cadda), [arg1; arg2], _) ->
       begin match (select_addr arg1, select_addr arg2) with
           ((Alinear e1, n1), (Alinear e2, n2))
           when Misc.no_overflow_add n1 n2 ->
@@ -170,18 +170,18 @@ method is_immediate_test _cmp n = is_immediate n
 
 method! is_simple_expr e =
   match e with
-  | Cop(Cextcall (fn, _, _, _), args, _)
+  | Cop(Cextcall (fn, _, _, _), _args, _)
     when List.mem fn inline_ops ->
       (* inlined ops are simple if their arguments are *)
-      List.for_all self#is_simple_expr args
+      true
   | _ ->
       super#is_simple_expr e
 
 method! effects_of e =
   match e with
-  | Cop(Cextcall(fn, _, _, _), args, _)
+  | Cop(Cextcall(fn, _, _, _), _args, _)
     when List.mem fn inline_ops ->
-      Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
+      Selectgen.Effect_and_coeffect.none
   | _ ->
       super#effects_of e
 
@@ -211,13 +211,13 @@ method! select_store is_assign addr exp =
   | _ ->
       super#select_store is_assign addr exp
 
-method! select_operation op args dbg =
+method! select_pure_operation op args dbg =
   match op with
   (* Recognize the LEA instruction *)
     Caddi | Caddv | Cadda | Csubi ->
-      begin match self#select_addressing Word_int (Cop(op, args, dbg)) with
+      begin match self#select_addressing Word_int (Cpure_op(op, args, dbg)) with
         (Iindexed _, _)
-      | (Iindexed2 0, _) -> super#select_operation op args dbg
+      | (Iindexed2 0, _) -> super#select_pure_operation op args dbg
       | (addr, arg) -> (Ispecific(Ilea addr), [arg])
       end
   (* Recognize float arithmetic with memory. *)
@@ -229,23 +229,49 @@ method! select_operation op args dbg =
       self#select_floatarith true Imulf Ifloatmul args
   | Cdivf ->
       self#select_floatarith false Idivf Ifloatdiv args
+  (* Recognize sign extension *)
+  | Casr ->
+      begin match args with
+        [Cpure_op(Clsl, [k; Cconst_int (32, _)], _); Cconst_int (32, _)] ->
+          (Ispecific Isextend32, [k])
+        | _ -> super#select_pure_operation op args dbg
+      end
+  (* Recognize zero extension *)
+  | Cand ->
+    begin match args with
+    | [arg; Cconst_int (0xffff_ffff, _)]
+    | [arg; Cconst_natint (0xffff_ffffn, _)]
+    | [Cconst_int (0xffff_ffff, _); arg]
+    | [Cconst_natint (0xffff_ffffn, _); arg] ->
+      Ispecific Izextend32, [arg]
+    | _ -> super#select_pure_operation op args dbg
+    end
+  | _ -> super#select_pure_operation op args dbg
+
+method! select_operation op args dbg =
+  match op with
   | Cextcall("sqrt", _, _, false) ->
      begin match args with
+     (* CR smuenzel: can't do this optimization, should we treat loads differently? *)
+     (*
        [Cop(Cload {memory_chunk=(Double as chunk)}, [loc], _dbg)] ->
          let (addr, arg) = self#select_addressing chunk loc in
          (Ispecific(Ifloatsqrtf addr), [arg])
+        *)
      | [arg] ->
          (Ispecific Isqrtf, [arg])
      | _ ->
          assert false
      end
   (* Recognize store instructions *)
-  | Cstore ((Word_int|Word_val as chunk), _init) ->
+  | Cstore ((Word_int|Word_val as _chunk), _init) ->
       begin match args with
+      (*
         [loc; Cop(Caddi, [Cop(Cload _, [loc'], _); Cconst_int (n, _dbg)], _)]
         when loc = loc' && is_immediate n ->
           let (addr, arg) = self#select_addressing chunk loc in
           (Ispecific(Ioffset_loc(n, addr)), [arg])
+         *)
       | _ ->
           super#select_operation op args dbg
       end
@@ -260,23 +286,6 @@ method! select_operation op args dbg =
       (Ispecific Iclz, args)
   | Cextcall("caml_int_ctz_direct", _, _, _) ->
       (Ispecific Ictz, args)
-  (* Recognize sign extension *)
-  | Casr ->
-      begin match args with
-        [Cop(Clsl, [k; Cconst_int (32, _)], _); Cconst_int (32, _)] ->
-          (Ispecific Isextend32, [k])
-        | _ -> super#select_operation op args dbg
-      end
-  (* Recognize zero extension *)
-  | Cand ->
-    begin match args with
-    | [arg; Cconst_int (0xffff_ffff, _)]
-    | [arg; Cconst_natint (0xffff_ffffn, _)]
-    | [Cconst_int (0xffff_ffff, _); arg]
-    | [Cconst_natint (0xffff_ffffn, _); arg] ->
-      Ispecific Izextend32, [arg]
-    | _ -> super#select_operation op args dbg
-    end
   | Catomic_fetch_add ->
       (* Materialise &caml_num_domains_running as a regalloc-managed operand
          (an Iconst_symbol) so the single-domain fast path also works in
@@ -294,8 +303,10 @@ method! select_operation op args dbg =
 
 (* Recognize float arithmetic with mem *)
 
-method select_floatarith commutative regular_op mem_op args =
+method select_floatarith _commutative regular_op _mem_op args =
   match args with
+  (* CR smuenzel: need a scheme for mem ops *)
+  (*
     [arg1; Cop(Cload {memory_chunk=(Double as chunk)}, [loc2], _)] ->
       let (addr, arg2) = self#select_addressing chunk loc2 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
@@ -305,6 +316,7 @@ method select_floatarith commutative regular_op mem_op args =
       let (addr, arg1) = self#select_addressing chunk loc1 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
                  [arg2; arg1])
+     *)
   | [arg1; arg2] ->
       (regular_op, [arg1; arg2])
   | _ ->

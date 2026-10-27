@@ -22,9 +22,9 @@ module V = Backend_var
 module VP = Backend_var.With_provenance
 
 module type I = sig
-  val string_block_length : Cmm.expression -> Cmm.expression
+  val string_block_length : Cmm.pure_expression -> Cmm.expression
   val transl_switch :
-      Debuginfo.t -> Cmm.expression -> int -> int ->
+      Debuginfo.t -> Cmm.pure_expression -> int -> int ->
         (int * Cmm.expression) list -> Cmm.expression ->
           Cmm.expression
 end
@@ -79,7 +79,7 @@ module Make(I:I) = struct
       Cop(Cload {memory_chunk=Word_int;
                  mutability=Asttypes.Mutable;
                  is_atomic=false},
-        [Cop(Cadda,[str;Cconst_int(Arch.size_int*ind, dbg)], dbg)],
+        [ Cpure_op(Cadda,[str;Cconst_int(Arch.size_int*ind, dbg)], dbg)],
         dbg) in
     Clet(id, cell, body)
 
@@ -90,7 +90,7 @@ module Make(I:I) = struct
   let mk_cmp_gen cmp_op id nat ifso ifnot =
     let dbg = Debuginfo.none in
     let test =
-      Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natint (nat, dbg) ], dbg)
+      Cpure_op (Ccmpi cmp_op, [ Cvar id; Cconst_natint (nat, dbg) ], dbg)
     in
     Cifthenelse (test, dbg, ifso, dbg, ifnot, dbg)
 
