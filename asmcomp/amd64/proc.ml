@@ -133,6 +133,7 @@ let phys_reg n =
   if n < 100 then hard_int_reg.(n) else hard_float_reg.(n - 100)
 
 let rax = phys_reg 0
+let rbx = phys_reg 1
 let rdx = phys_reg 4
 let r10 = phys_reg 10
 let r11 = phys_reg 11
@@ -310,6 +311,8 @@ let destroyed_at_function_entry = [| r10; r11 |]
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
       all_phys_regs
+  | Iop(Iextcall { func = "caml_modify" }) ->
+      [| rbx; r10; r11 |]
   | Iop(Iextcall {alloc; stack_ofs; }) ->
       assert (stack_ofs >= 0);
       if alloc || stack_ofs > 0 then all_phys_regs
@@ -348,7 +351,9 @@ let max_register_pressure =
     else [| 13 - int; 16 - float |]
   in
   function
-    Iextcall _ ->
+  | Iextcall { func = "caml_modify" } ->
+      consumes ~int:(1 + num_destroyed_by_plt_stub) ~float:0
+  | Iextcall _ ->
       if win64
       then consumes ~int:5 ~float:6
       else consumes ~int:9 ~float:16
