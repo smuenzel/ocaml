@@ -73,6 +73,10 @@ val print_specific_operation :
 
 val win64 : bool
 
+(* Whether [caml_modify] is called through [caml_modify_ocaml] in amd64.S,
+   which only clobbers rbx, r10 and r11 *)
+val caml_modify_stub : bool
+
 val operation_is_pure : specific_operation -> bool
 
 val operation_can_raise : specific_operation -> bool

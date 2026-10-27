@@ -303,9 +303,10 @@
    RCU dereference. We do not currently have such a document.
 */
 
-Caml_inline
-  __attribute__((target("general-regs-only"), no_caller_saved_registers))
-void write_barrier(
+/* caml_modify_ocaml in amd64.S tests [caml_gc_phase] against zero */
+static_assert(Phase_sweep_main == 0, "");
+
+Caml_inline void write_barrier(
   value obj, intnat field, value old_val, value new_val)
 {
   /* HACK: can't assert when get old C-api style pointers
@@ -332,9 +333,7 @@ CAMLno_tsan /* We remove the ThreadSanitizer instrumentation of memory accesses
                by the compiler and instrument manually, because we want
                ThreadSanitizer to see a plain store here (this is necessary to
                detect data races). */
-CAMLexport CAMLweakdef
-  __attribute__((target("general-regs-only"), no_caller_saved_registers))
-void caml_modify (volatile value *fp, value val)
+CAMLexport CAMLweakdef void caml_modify (volatile value *fp, value val)
 {
 #if defined(WITH_THREAD_SANITIZER) && defined(NATIVE_CODE)
   caml_tsan_func_entry(__builtin_return_address(0));

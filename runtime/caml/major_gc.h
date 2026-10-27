@@ -37,9 +37,7 @@ typedef enum {
 
 extern gc_phase_t caml_gc_phase;
 
-Caml_inline
-  __attribute__((target("general-regs-only"), no_caller_saved_registers))
-int caml_marking_started(void)
+Caml_inline int caml_marking_started(void)
 {
   return caml_gc_phase != Phase_sweep_main;
 }

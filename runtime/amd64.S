@@ -642,6 +642,60 @@ LBL(caml_call_gc):
 CFI_ENDPROC
 END_FUNCTION(caml_call_gc)
 
+/* Using special caml calling convention.
+   code golf by claude */
+/* CF := src is a block inside the minor heaps area, given
+   %rbx = caml_minor_heaps_start and
+   %r11 = (caml_minor_heaps_end - caml_minor_heaps_start) / 2.
+   Subtracting the (page-aligned) start keeps the tag in bit 0; rotating
+   moves it to bit 63, so immediates, and values below the start, compare
+   as huge.  Clobbers tmp. */
+#define YOUNG_CMP(src, tmp)                                            \
+        movq    src, tmp;                                              \
+        subq    %rbx, tmp;                                             \
+        rolq    $63, tmp;               /* == ror 1 */                 \
+        cmpq    %r11, tmp
+
+/* %rdi = field pointer, %rsi = new value.
+   Clobbers only %rbx, %r10, %r11. */
+FUNCTION(caml_modify_ocaml)
+CFI_STARTPROC
+        LEA_VAR(caml_minor_heaps_start, %rbx)
+        movq    (%rbx), %rbx
+        LEA_VAR(caml_minor_heaps_end, %r11)
+        movq    (%r11), %r11
+        subq    %rbx, %r11
+        shrq    $1, %r11
+        YOUNG_CMP(%rdi, %r10)
+        jb      LBL(cmo_store)          /* fp young: no barrier */
+        YOUNG_CMP((%rdi), %r10)
+        jb      LBL(cmo_store)          /* old young: field already remembered */
+        shrq    $63, %r10               /* 1 if old immediate, 0 if block */
+        decl    %r10d                   /* 0 if old immediate, ~0 if block */
+        negq    %rbx
+        addq    %rsi, %rbx              /* new - start */
+        rolq    $63, %rbx
+        cmpq    %r11, %rbx              /* CF := new is young */
+        sbbl    %r11d, %r11d            /* ~0 if new is young, else 0 */
+        LEA_VAR(caml_gc_phase, %rbx)
+        andl    (%rbx), %r10d           /* != 0 iff old is a block && marking */
+        orl     %r11d, %r10d
+        jnz     LBL(cmo_slow)
+LBL(cmo_store):
+        movq    %rsi, (%rdi)
+        ret
+LBL(cmo_slow):
+        ENTER_FUNCTION
+        SAVE_ALL_REGS
+        SWITCH_OCAML_TO_C
+        C_call  (GCALL(caml_modify))
+        SWITCH_C_TO_OCAML
+        RESTORE_ALL_REGS
+        LEAVE_FUNCTION
+        ret
+CFI_ENDPROC
+END_FUNCTION(caml_modify_ocaml)
+
 FUNCTION(caml_alloc1)
 CFI_STARTPROC
         ENTER_FUNCTION

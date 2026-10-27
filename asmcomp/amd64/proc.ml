@@ -311,7 +311,7 @@ let destroyed_at_function_entry = [| r10; r11 |]
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
       all_phys_regs
-  | Iop(Iextcall { func = "caml_modify" }) ->
+  | Iop(Iextcall { func = "caml_modify" }) when caml_modify_stub ->
       [| rbx; r10; r11 |]
   | Iop(Iextcall {alloc; stack_ofs; }) ->
       assert (stack_ofs >= 0);
@@ -351,8 +351,8 @@ let max_register_pressure =
     else [| 13 - int; 16 - float |]
   in
   function
-  | Iextcall { func = "caml_modify" } ->
-      consumes ~int:(1 + num_destroyed_by_plt_stub) ~float:0
+  | Iextcall { func = "caml_modify" } when caml_modify_stub ->
+      consumes ~int:3 ~float:0
   | Iextcall _ ->
       if win64
       then consumes ~int:5 ~float:6

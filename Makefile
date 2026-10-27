@@ -1542,7 +1542,7 @@ runtime/%.bi.$(O): OC_CPPFLAGS = $(OC_BYTECODE_CPPFLAGS) $(ocamlruni_CPPFLAGS)
 $(DEPDIR)/runtime/%.bi.$(D): \
   OC_CPPFLAGS = $(OC_BYTECODE_CPPFLAGS) $(ocamlruni_CPPFLAGS)
 
-runtime/%.bpic.$(O): OC_CFLAGS = $(OC_BYTECODE_CFLAGS) $(SHAREDLIB_CFLAGS) -mtls-dialect=gnu2
+runtime/%.bpic.$(O): OC_CFLAGS = $(OC_BYTECODE_CFLAGS) $(SHAREDLIB_CFLAGS)
 runtime/%.bpic.$(O): OC_CPPFLAGS = $(OC_BYTECODE_CPPFLAGS) $(ocamlrun_CPPFLAGS)
 $(DEPDIR)/runtime/%.bpic.$(D): \
   OC_CPPFLAGS = $(OC_BYTECODE_CPPFLAGS) $(ocamlrun_CPPFLAGS)
@@ -1562,7 +1562,7 @@ runtime/%.ni.$(O): OC_CPPFLAGS = $(OC_NATIVE_CPPFLAGS) $(ocamlruni_CPPFLAGS)
 $(DEPDIR)/runtime/%.ni.$(D): \
   OC_CPPFLAGS = $(OC_NATIVE_CPPFLAGS) $(ocamlruni_CPPFLAGS)
 
-runtime/%.npic.$(O): OC_CFLAGS = $(OC_NATIVE_CFLAGS) $(SHAREDLIB_CFLAGS) -mtls-dialect=gnu2
+runtime/%.npic.$(O): OC_CFLAGS = $(OC_NATIVE_CFLAGS) $(SHAREDLIB_CFLAGS)
 runtime/%.npic.$(O): OC_CPPFLAGS = $(OC_NATIVE_CPPFLAGS) $(ocamlrun_CPPFLAGS)
 $(DEPDIR)/runtime/%.npic.$(D): \
   OC_CPPFLAGS = $(OC_NATIVE_CPPFLAGS) $(ocamlrun_CPPFLAGS)
