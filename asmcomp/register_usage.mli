@@ -21,7 +21,6 @@ val safe_register_pressure : Mach.operation -> int
 
 module Registry : sig
   val reset : unit -> unit
-  val add_from_cmx : (string * int array) list -> unit
-  val destroyed_in_function : string -> Reg.t array option
-  val in_current_unit : unit -> (string * int array) list
+  val add_from_cmx : Cmx_format.register_usage_info -> unit
+  val in_current_unit : unit -> Cmx_format.register_usage_info
 end

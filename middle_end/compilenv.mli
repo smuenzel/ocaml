@@ -30,7 +30,7 @@ val imported_sets_of_closures_table
         (* flambda-only *)
 
 val reset: ?packname:string ->
-  ?cmx_import_register_usage:((string * int array) list -> unit) ->
+  ?cmx_import_register_usage:(Cmx_format.register_usage_info -> unit) ->
   string -> unit
         (* Reset the environment and record the name of the unit being
            compiled (arg).  Optional argument is [-for-pack] prefix. *)
@@ -100,7 +100,7 @@ val approx_for_global: Compilation_unit.t -> Export_info.t option
         (* Loads the exported information declaring the compilation_unit
            flambda-only *)
 
-val set_register_usage: (string * int array) list -> unit
+val set_register_usage: Cmx_format.register_usage_info -> unit
 
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit

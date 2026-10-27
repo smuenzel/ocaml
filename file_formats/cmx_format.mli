@@ -35,8 +35,11 @@ type export_info =
   | Clambda of Clambda.value_approximation
   | Flambda of Export_info.t
 
+(* Registers destroyed by each function, as a bitmask over the allocatable
+   registers (see [Register_usage]). Functions destroying all registers are
+   omitted. *)
 type register_usage_info =
-  (string * int array) list
+  (string * int) list
 
 type unit_infos =
   { mutable ui_name: modname;             (* Name of unit implemented *)
