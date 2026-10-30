@@ -134,17 +134,9 @@ let phys_reg n =
 
 let rax = phys_reg 0
 let rdx = phys_reg 4
-let r10 = phys_reg 10
 let r11 = phys_reg 11
 let rbp = phys_reg 12
 let rxmm15 = phys_reg 115
-
-let destroyed_by_plt_stub =
-  if not X86_proc.use_plt then [| |] else [| r10; r11 |]
-
-let num_destroyed_by_plt_stub = Array.length destroyed_by_plt_stub
-
-let destroyed_by_plt_stub_set = Reg.set_of_array destroyed_by_plt_stub
 
 let stack_slot slot ty =
   Reg.at_location ty (Stack slot)
@@ -170,7 +162,6 @@ let calling_conventions first_int last_int first_float last_float
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end;
-        assert (not (Reg.Set.mem loc.(i) destroyed_by_plt_stub_set))
     | Float ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
@@ -193,16 +184,16 @@ let outgoing ofs =
 let not_supported _ofs = fatal_error "Proc.loc_results: cannot call"
 
 let loc_arguments arg =
-  calling_conventions 0 9 100 109 outgoing (- size_domainstate_args) arg
+  calling_conventions 0 10 100 109 outgoing (- size_domainstate_args) arg
 let loc_parameters arg =
   let (loc, _ofs) =
-    calling_conventions 0 9 100 109 incoming (- size_domainstate_args) arg
+    calling_conventions 0 10 100 109 incoming (- size_domainstate_args) arg
   in loc
 let loc_results res =
   let (loc, _ofs) = calling_conventions 0 0 100 100 not_supported 0 res
   in loc
 
-let max_arguments_for_tailcalls = 10 (* in regs *) + 64 (* in domain state *)
+let max_arguments_for_tailcalls = 11 (* in regs *) + 64 (* in domain state *)
 
 (* C calling conventions under Unix:
      first integer args in rdi, rsi, rdx, rcx, r8, r9
@@ -299,10 +290,7 @@ let destroyed_at_c_call =
        108;109;110;111;112;113;114;115])
 
 let destroyed_at_alloc_or_poll =
-  if X86_proc.use_plt then
-    destroyed_by_plt_stub
-  else
-    [| r11 |]
+  [| r11 |]
 
 let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _) ->
@@ -352,7 +340,7 @@ let max_register_pressure =
   | Iintop(Idiv | Imod) | Iintop_imm((Idiv | Imod), _) ->
       consumes ~int:2 ~float:0
   | Ialloc _ | Ipoll _ ->
-      consumes ~int:(1 + num_destroyed_by_plt_stub) ~float:0
+      consumes ~int:1 ~float:0
   | Iintop(Icomp _) | Iintop_imm((Icomp _), _) ->
       consumes ~int:1 ~float:0
   | Istore(Single, _, _) ->
